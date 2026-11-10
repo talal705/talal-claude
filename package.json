@@ -1,0 +1,42 @@
+{
+  "name": "your-tech-lab",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "services/*"
+  ],
+  "scripts": {
+    "dev": "npm run pc-assets && npm run runtime-assets && npm run dev --workspace=@ytl/web",
+    "build": "npm run pc-assets && npm run runtime-assets && npm run build --workspace=@ytl/web",
+    "start": "npm run start --workspace=@ytl/web",
+    "type-check": "node node_modules/typescript/bin/tsc --noEmit -p apps/web/tsconfig.json",
+    "test": "vitest run",
+    "db:migrate": "node db/migrate.mjs",
+    "check:browser": "node scripts/browser-check.mjs",
+    "check:messages": "node scripts/check-messages.mjs",
+    "check:browser:pc": "node scripts/browser-check-pc.mjs",
+    "check:browser:network": "node scripts/browser-check-network.mjs",
+    "check:browser:tutor-ai": "node scripts/browser-check-tutor-ai.mjs",
+    "check:browser:scene": "node scripts/browser-check-scene.mjs",
+    "check:browser:lesson": "node scripts/browser-check-lesson.mjs",
+    "check:browser:lessons-labs": "node scripts/browser-check-lessons-labs.mjs",
+    "check:browser:build": "node scripts/browser-check-build.mjs",
+    "pc-assets": "node scripts/copy-pc-assets.mjs",
+    "runtime-assets": "node scripts/copy-runtime-assets.mjs",
+    "runner": "node scripts/start-runner.mjs",
+    "dev:local": "node scripts/start-local.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@types/node": "24.19.2",
+    "fake-indexeddb": "6.2.5",
+    "jiti": "2.7.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

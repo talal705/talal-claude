@@ -1,0 +1,345 @@
+{
+  "schema": 2,
+  "catalogId": "fractal-aspect-14-pwm-north",
+  "catalogVersion": "2026.10.31-1",
+  "units": "mm",
+  "bounds": {
+    "size": [
+      140,
+      140,
+      25
+    ],
+    "basis": {
+      "x": "catalog",
+      "y": "catalog",
+      "z": "catalog"
+    }
+  },
+  "solids": [
+    {
+      "id": "frame",
+      "shape": "box",
+      "at": [
+        70,
+        3,
+        12.5
+      ],
+      "size": [
+        140,
+        6,
+        25
+      ],
+      "role": "body",
+      "basis": "catalog",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "frame-top",
+      "shape": "box",
+      "at": [
+        70,
+        137,
+        12.5
+      ],
+      "size": [
+        140,
+        6,
+        25
+      ],
+      "role": "body",
+      "basis": "catalog",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "frame-left",
+      "shape": "box",
+      "at": [
+        3,
+        70,
+        12.5
+      ],
+      "size": [
+        6,
+        128,
+        25
+      ],
+      "role": "body",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "frame-right",
+      "shape": "box",
+      "at": [
+        137,
+        70,
+        12.5
+      ],
+      "size": [
+        6,
+        128,
+        25
+      ],
+      "role": "body",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "corner-1",
+      "shape": "box",
+      "at": [
+        7.8,
+        7.8,
+        12.5
+      ],
+      "size": [
+        15.5,
+        15.5,
+        25
+      ],
+      "role": "body",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "screw-hole-1",
+      "shape": "cylinder",
+      "at": [
+        7.8,
+        7.8,
+        12.5
+      ],
+      "radius": 2.2,
+      "height": 25,
+      "axis": "z",
+      "role": "plate",
+      "basis": "standard",
+      "finish": "rubber"
+    },
+    {
+      "id": "corner-2",
+      "shape": "box",
+      "at": [
+        132.3,
+        7.8,
+        12.5
+      ],
+      "size": [
+        15.5,
+        15.5,
+        25
+      ],
+      "role": "body",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "screw-hole-2",
+      "shape": "cylinder",
+      "at": [
+        132.3,
+        7.8,
+        12.5
+      ],
+      "radius": 2.2,
+      "height": 25,
+      "axis": "z",
+      "role": "plate",
+      "basis": "standard",
+      "finish": "rubber"
+    },
+    {
+      "id": "corner-3",
+      "shape": "box",
+      "at": [
+        7.8,
+        132.3,
+        12.5
+      ],
+      "size": [
+        15.5,
+        15.5,
+        25
+      ],
+      "role": "body",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "screw-hole-3",
+      "shape": "cylinder",
+      "at": [
+        7.8,
+        132.3,
+        12.5
+      ],
+      "radius": 2.2,
+      "height": 25,
+      "axis": "z",
+      "role": "plate",
+      "basis": "standard",
+      "finish": "rubber"
+    },
+    {
+      "id": "corner-4",
+      "shape": "box",
+      "at": [
+        132.3,
+        132.3,
+        12.5
+      ],
+      "size": [
+        15.5,
+        15.5,
+        25
+      ],
+      "role": "body",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "screw-hole-4",
+      "shape": "cylinder",
+      "at": [
+        132.3,
+        132.3,
+        12.5
+      ],
+      "radius": 2.2,
+      "height": 25,
+      "axis": "z",
+      "role": "plate",
+      "basis": "standard",
+      "finish": "rubber"
+    },
+    {
+      "id": "rotor",
+      "shape": "rotor",
+      "at": [
+        70,
+        70,
+        13.5
+      ],
+      "radius": 63,
+      "height": 21,
+      "axis": "z",
+      "role": "fan",
+      "basis": "schematic",
+      "count": 7,
+      "finish": "black_plastic"
+    },
+    {
+      "id": "motor-hub",
+      "shape": "cylinder",
+      "at": [
+        70,
+        70,
+        2
+      ],
+      "radius": 25.2,
+      "height": 4,
+      "axis": "z",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "strut-h",
+      "shape": "box",
+      "at": [
+        70,
+        70,
+        1
+      ],
+      "size": [
+        128,
+        3,
+        2
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "strut-v",
+      "shape": "box",
+      "at": [
+        70,
+        70,
+        1
+      ],
+      "size": [
+        3,
+        128,
+        2
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "lead-exit",
+      "shape": "box",
+      "at": [
+        131,
+        1.5,
+        2
+      ],
+      "size": [
+        10,
+        3,
+        4
+      ],
+      "role": "plug",
+      "basis": "schematic",
+      "finish": "rubber",
+      "label": "4-PIN PWM"
+    }
+  ],
+  "attach": {
+    "main": {
+      "at": [
+        70,
+        70,
+        0
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "mounts": {},
+  "ports": {},
+  "leads": {
+    "fan": {
+      "at": [
+        131,
+        0,
+        2
+      ]
+    }
+  },
+  "zones": {
+    "frame-arrows": {
+      "solids": [
+        "frame",
+        "frame-top",
+        "strut-h",
+        "strut-v"
+      ]
+    },
+    "leads": {
+      "solids": [
+        "lead-exit"
+      ]
+    }
+  },
+  "lights": [],
+  "label": {
+    "en": "Educational model — not manufacturer-accurate",
+    "ar": "نموذج تعليمي، مو مطابق لشكل المنتج الحقيقي"
+  }
+}

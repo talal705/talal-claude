@@ -1,0 +1,165 @@
+{
+  "schema": 2,
+  "catalogId": "generic-monitor",
+  "catalogVersion": "2026.10.31-1",
+  "units": "mm",
+  "bounds": {
+    "size": [
+      540,
+      400,
+      180
+    ],
+    "basis": {
+      "x": "schematic",
+      "y": "schematic",
+      "z": "schematic"
+    }
+  },
+  "solids": [
+    {
+      "id": "stand-base",
+      "shape": "box",
+      "at": [
+        270,
+        4,
+        90
+      ],
+      "size": [
+        220,
+        8,
+        180
+      ],
+      "role": "plate",
+      "basis": "schematic"
+    },
+    {
+      "id": "stand-neck",
+      "shape": "box",
+      "at": [
+        270,
+        48,
+        50
+      ],
+      "size": [
+        40,
+        80,
+        20
+      ],
+      "role": "plate",
+      "basis": "schematic"
+    },
+    {
+      "id": "panel",
+      "shape": "box",
+      "at": [
+        270,
+        240,
+        75
+      ],
+      "size": [
+        540,
+        320,
+        30
+      ],
+      "role": "body",
+      "basis": "schematic"
+    },
+    {
+      "id": "screen",
+      "shape": "box",
+      "at": [
+        270,
+        240,
+        89.5
+      ],
+      "size": [
+        520,
+        296,
+        1
+      ],
+      "role": "screen",
+      "basis": "schematic"
+    },
+    {
+      "id": "hdmi-in",
+      "shape": "box",
+      "at": [
+        232,
+        115,
+        59.3
+      ],
+      "size": [
+        24,
+        10,
+        1.5
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "HDMI-IN"
+    },
+    {
+      "id": "dp-in",
+      "shape": "box",
+      "at": [
+        292,
+        115,
+        59.3
+      ],
+      "size": [
+        24,
+        10,
+        1.5
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "DP-IN"
+    }
+  ],
+  "attach": {},
+  "mounts": {},
+  "ports": {
+    "hdmi-in": {
+      "at": [
+        232,
+        115,
+        58.6
+      ],
+      "facing": [
+        0,
+        0,
+        -1
+      ],
+      "size": [
+        24,
+        10,
+        1.5
+      ],
+      "solid": "hdmi-in"
+    },
+    "dp-in": {
+      "at": [
+        292,
+        115,
+        58.6
+      ],
+      "facing": [
+        0,
+        0,
+        -1
+      ],
+      "size": [
+        24,
+        10,
+        1.5
+      ],
+      "solid": "dp-in"
+    }
+  },
+  "leads": {},
+  "zones": {},
+  "lights": [],
+  "label": {
+    "en": "Educational model — not manufacturer-accurate",
+    "ar": "نموذج تعليمي، مو مطابق لشكل المنتج الحقيقي"
+  }
+}

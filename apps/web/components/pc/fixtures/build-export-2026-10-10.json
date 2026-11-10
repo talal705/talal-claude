@@ -1,0 +1,429 @@
+{
+  "format": "ytl-pc-build",
+  "formatVersion": 1,
+  "exportedAt": "2026-10-13T15:53:00.696Z",
+  "title": "AMD build without RGB, air cooled",
+  "mode": "free",
+  "catalogVersion": "2026.10.10-1",
+  "log": [
+    {
+      "type": "set_rgb_preference",
+      "preference": "without_rgb"
+    },
+    {
+      "type": "add_part",
+      "catalogId": "corsair-4000d-airflow-black"
+    },
+    {
+      "type": "add_part",
+      "catalogId": "asus-tuf-gaming-b550-plus"
+    },
+    {
+      "type": "add_part",
+      "catalogId": "amd-ryzen-5-5600"
+    },
+    {
+      "type": "add_part",
+      "catalogId": "corsair-vengeance-lpx-ddr4-3600-16gb-kit"
+    },
+    {
+      "type": "add_part",
+      "catalogId": "corsair-vengeance-lpx-ddr4-3600-16gb-kit"
+    },
+    {
+      "type": "add_part",
+      "catalogId": "samsung-870-evo-1tb"
+    },
+    {
+      "type": "add_part",
+      "catalogId": "arctic-freezer-36"
+    },
+    {
+      "type": "add_part",
+      "catalogId": "asus-dual-rtx4060-o8g"
+    },
+    {
+      "type": "add_part",
+      "catalogId": "corsair-cx550"
+    },
+    {
+      "type": "add_part",
+      "catalogId": "generic-monitor"
+    },
+    {
+      "type": "add_cable",
+      "catalogId": "generic-sata-data-cable"
+    },
+    {
+      "type": "add_cable",
+      "catalogId": "generic-hdmi-cable"
+    },
+    {
+      "type": "update_bios",
+      "instanceId": "motherboard-2",
+      "version": "3645"
+    },
+    {
+      "type": "mount_part",
+      "instanceId": "motherboard-2",
+      "target": {
+        "hostInstanceId": "case-1",
+        "mountPointId": "motherboard-tray"
+      }
+    },
+    {
+      "type": "set_seating",
+      "instanceId": "motherboard-2",
+      "seating": "seated"
+    },
+    {
+      "type": "set_fasteners",
+      "instanceId": "motherboard-2",
+      "secured": 9
+    },
+    {
+      "type": "mount_part",
+      "instanceId": "cpu-3",
+      "target": {
+        "hostInstanceId": "motherboard-2",
+        "mountPointId": "cpu-socket"
+      }
+    },
+    {
+      "type": "set_seating",
+      "instanceId": "cpu-3",
+      "seating": "seated"
+    },
+    {
+      "type": "set_fasteners",
+      "instanceId": "cpu-3",
+      "secured": 1
+    },
+    {
+      "type": "mount_part",
+      "instanceId": "ram-4",
+      "target": {
+        "hostInstanceId": "motherboard-2",
+        "mountPointId": "dimm-a2"
+      }
+    },
+    {
+      "type": "set_seating",
+      "instanceId": "ram-4",
+      "seating": "seated"
+    },
+    {
+      "type": "mount_part",
+      "instanceId": "ram-5",
+      "target": {
+        "hostInstanceId": "motherboard-2",
+        "mountPointId": "dimm-b2"
+      }
+    },
+    {
+      "type": "set_seating",
+      "instanceId": "ram-5",
+      "seating": "seated"
+    },
+    {
+      "type": "mount_part",
+      "instanceId": "cooling-7",
+      "target": {
+        "hostInstanceId": "motherboard-2",
+        "mountPointId": "cooler-mount"
+      }
+    },
+    {
+      "type": "set_seating",
+      "instanceId": "cooling-7",
+      "seating": "seated"
+    },
+    {
+      "type": "set_fasteners",
+      "instanceId": "cooling-7",
+      "secured": 4
+    },
+    {
+      "type": "mount_part",
+      "instanceId": "gpu-8",
+      "target": {
+        "hostInstanceId": "motherboard-2",
+        "mountPointId": "pcie-x16-1"
+      }
+    },
+    {
+      "type": "set_seating",
+      "instanceId": "gpu-8",
+      "seating": "seated"
+    },
+    {
+      "type": "set_fasteners",
+      "instanceId": "gpu-8",
+      "secured": 2
+    },
+    {
+      "type": "mount_part",
+      "instanceId": "storage-6",
+      "target": {
+        "hostInstanceId": "case-1",
+        "mountPointId": "drive-25-1"
+      }
+    },
+    {
+      "type": "set_seating",
+      "instanceId": "storage-6",
+      "seating": "seated"
+    },
+    {
+      "type": "set_fasteners",
+      "instanceId": "storage-6",
+      "secured": 4
+    },
+    {
+      "type": "mount_part",
+      "instanceId": "psu-9",
+      "target": {
+        "hostInstanceId": "case-1",
+        "mountPointId": "psu-bay"
+      }
+    },
+    {
+      "type": "set_seating",
+      "instanceId": "psu-9",
+      "seating": "seated"
+    },
+    {
+      "type": "set_fasteners",
+      "instanceId": "psu-9",
+      "secured": 4
+    },
+    {
+      "type": "connect_cable_end",
+      "cableId": "psu-9.atx24",
+      "endId": "device",
+      "to": {
+        "kind": "part",
+        "instanceId": "motherboard-2",
+        "portId": "atx-24"
+      }
+    },
+    {
+      "type": "connect_cable_end",
+      "cableId": "psu-9.eps",
+      "endId": "device",
+      "to": {
+        "kind": "part",
+        "instanceId": "motherboard-2",
+        "portId": "eps-1"
+      }
+    },
+    {
+      "type": "connect_cable_end",
+      "cableId": "psu-9.pcie",
+      "endId": "device-1",
+      "to": {
+        "kind": "part",
+        "instanceId": "gpu-8",
+        "portId": "power-8pin"
+      }
+    },
+    {
+      "type": "connect_cable_end",
+      "cableId": "psu-9.sata",
+      "endId": "sata-1",
+      "to": {
+        "kind": "part",
+        "instanceId": "storage-6",
+        "portId": "sata-power"
+      }
+    },
+    {
+      "type": "connect_cable_end",
+      "cableId": "cable-11",
+      "endId": "a",
+      "to": {
+        "kind": "part",
+        "instanceId": "storage-6",
+        "portId": "sata-data"
+      }
+    },
+    {
+      "type": "connect_cable_end",
+      "cableId": "cable-11",
+      "endId": "b",
+      "to": {
+        "kind": "part",
+        "instanceId": "motherboard-2",
+        "portId": "sata-1"
+      }
+    },
+    {
+      "type": "connect_cable_end",
+      "cableId": "cooling-7.fan",
+      "endId": "plug",
+      "to": {
+        "kind": "part",
+        "instanceId": "motherboard-2",
+        "portId": "cpu-fan"
+      }
+    },
+    {
+      "type": "connect_cable_end",
+      "cableId": "case-1.power-switch",
+      "endId": "plug",
+      "to": {
+        "kind": "part",
+        "instanceId": "motherboard-2",
+        "portId": "panel-pwrsw"
+      }
+    },
+    {
+      "type": "connect_cable_end",
+      "cableId": "case-1.front-audio",
+      "endId": "plug",
+      "to": {
+        "kind": "part",
+        "instanceId": "motherboard-2",
+        "portId": "hd-audio"
+      }
+    },
+    {
+      "type": "connect_cable_end",
+      "cableId": "case-1.front-usb3",
+      "endId": "plug",
+      "to": {
+        "kind": "part",
+        "instanceId": "motherboard-2",
+        "portId": "usb3-header"
+      }
+    },
+    {
+      "type": "connect_cable_end",
+      "cableId": "case-1.fan-1",
+      "endId": "plug",
+      "to": {
+        "kind": "part",
+        "instanceId": "motherboard-2",
+        "portId": "cha-fan-1"
+      }
+    },
+    {
+      "type": "connect_cable_end",
+      "cableId": "case-1.fan-2",
+      "endId": "plug",
+      "to": {
+        "kind": "part",
+        "instanceId": "motherboard-2",
+        "portId": "cha-fan-2"
+      }
+    },
+    {
+      "type": "connect_cable_end",
+      "cableId": "cable-12",
+      "endId": "a",
+      "to": {
+        "kind": "part",
+        "instanceId": "monitor-10",
+        "portId": "hdmi-in"
+      }
+    },
+    {
+      "type": "connect_cable_end",
+      "cableId": "cable-12",
+      "endId": "b",
+      "to": {
+        "kind": "part",
+        "instanceId": "gpu-8",
+        "portId": "hdmi-1"
+      }
+    },
+    {
+      "type": "set_cable_tidy",
+      "cableId": "psu-9.atx24",
+      "tidied": true
+    },
+    {
+      "type": "set_cable_tidy",
+      "cableId": "psu-9.eps",
+      "tidied": true
+    },
+    {
+      "type": "set_cable_tidy",
+      "cableId": "psu-9.pcie",
+      "tidied": true
+    },
+    {
+      "type": "set_cable_tidy",
+      "cableId": "psu-9.sata",
+      "tidied": true
+    },
+    {
+      "type": "set_cable_tidy",
+      "cableId": "cable-11",
+      "tidied": true
+    },
+    {
+      "type": "set_cable_tidy",
+      "cableId": "cooling-7.fan",
+      "tidied": true
+    },
+    {
+      "type": "set_cable_tidy",
+      "cableId": "case-1.power-switch",
+      "tidied": true
+    },
+    {
+      "type": "set_cable_tidy",
+      "cableId": "case-1.front-audio",
+      "tidied": true
+    },
+    {
+      "type": "set_cable_tidy",
+      "cableId": "case-1.front-usb3",
+      "tidied": true
+    },
+    {
+      "type": "set_cable_tidy",
+      "cableId": "case-1.fan-1",
+      "tidied": true
+    },
+    {
+      "type": "set_cable_tidy",
+      "cableId": "case-1.fan-2",
+      "tidied": true
+    },
+    {
+      "type": "set_cable_tidy",
+      "cableId": "cable-12",
+      "tidied": true
+    },
+    {
+      "type": "set_side_panel",
+      "open": false
+    },
+    {
+      "type": "set_wall_power",
+      "connected": true
+    },
+    {
+      "type": "set_psu_switch",
+      "on": true
+    },
+    {
+      "type": "press_power"
+    },
+    {
+      "type": "power_off"
+    },
+    {
+      "type": "remove_part",
+      "instanceId": "storage-6"
+    },
+    {
+      "type": "press_power"
+    },
+    {
+      "type": "power_off"
+    }
+  ]
+}

@@ -1,0 +1,427 @@
+{
+  "schema": 2,
+  "catalogId": "asus-tuf-rtx4070tis-o16g-gaming",
+  "catalogVersion": "2026.10.31-1",
+  "units": "mm",
+  "bounds": {
+    "size": [
+      305,
+      138,
+      65
+    ],
+    "basis": {
+      "x": "catalog",
+      "y": "catalog",
+      "z": "catalog"
+    }
+  },
+  "solids": [
+    {
+      "id": "backplate",
+      "shape": "box",
+      "at": [
+        152.5,
+        75,
+        1.5
+      ],
+      "size": [
+        305,
+        126,
+        3
+      ],
+      "role": "backplate",
+      "basis": "schematic",
+      "finish": "black_metal"
+    },
+    {
+      "id": "pcb",
+      "shape": "box",
+      "at": [
+        122,
+        68,
+        3.8
+      ],
+      "size": [
+        244,
+        112,
+        1.6
+      ],
+      "role": "pcb",
+      "basis": "schematic",
+      "finish": "pcb_black"
+    },
+    {
+      "id": "heatsink",
+      "shape": "fins",
+      "at": [
+        152.5,
+        75,
+        30.1
+      ],
+      "size": [
+        293,
+        118,
+        51
+      ],
+      "role": "heatsink",
+      "basis": "schematic",
+      "count": 133,
+      "axis": "x",
+      "finish": "aluminium"
+    },
+    {
+      "id": "heat-pipe-1",
+      "shape": "cylinder",
+      "at": [
+        152.5,
+        26,
+        7
+      ],
+      "radius": 3,
+      "height": 275,
+      "axis": "x",
+      "role": "tube",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "heat-pipe-2",
+      "shape": "cylinder",
+      "at": [
+        152.5,
+        58.7,
+        7
+      ],
+      "radius": 3,
+      "height": 275,
+      "axis": "x",
+      "role": "tube",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "heat-pipe-3",
+      "shape": "cylinder",
+      "at": [
+        152.5,
+        91.3,
+        7
+      ],
+      "radius": 3,
+      "height": 275,
+      "axis": "x",
+      "role": "tube",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "heat-pipe-4",
+      "shape": "cylinder",
+      "at": [
+        152.5,
+        124,
+        7
+      ],
+      "radius": 3,
+      "height": 275,
+      "axis": "x",
+      "role": "tube",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "shroud",
+      "shape": "box",
+      "at": [
+        153.5,
+        74.8,
+        59.8
+      ],
+      "size": [
+        303,
+        125.5,
+        9.5
+      ],
+      "role": "shroud",
+      "basis": "catalog",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "bracket",
+      "shape": "box",
+      "at": [
+        0.8,
+        69,
+        32.5
+      ],
+      "size": [
+        1.5,
+        138,
+        65
+      ],
+      "role": "bracket",
+      "basis": "catalog",
+      "finish": "nickel"
+    },
+    {
+      "id": "bracket-vent",
+      "shape": "fins",
+      "at": [
+        0.8,
+        64,
+        47.1
+      ],
+      "size": [
+        1.6,
+        96,
+        29.3
+      ],
+      "role": "grille",
+      "basis": "schematic",
+      "count": 6,
+      "axis": "y",
+      "finish": "black_metal"
+    },
+    {
+      "id": "edge-connector",
+      "shape": "fins",
+      "at": [
+        58.5,
+        6,
+        3.8
+      ],
+      "size": [
+        89,
+        12,
+        1.6
+      ],
+      "role": "edge_connector",
+      "basis": "standard",
+      "count": 60,
+      "axis": "x",
+      "finish": "gold"
+    },
+    {
+      "id": "fan-1",
+      "shape": "rotor",
+      "at": [
+        56.2,
+        75,
+        62
+      ],
+      "radius": 46.2,
+      "height": 6,
+      "axis": "z",
+      "role": "fan",
+      "basis": "schematic",
+      "count": 11,
+      "finish": "black_plastic"
+    },
+    {
+      "id": "fan-2",
+      "shape": "rotor",
+      "at": [
+        152.5,
+        75,
+        62
+      ],
+      "radius": 46.2,
+      "height": 6,
+      "axis": "z",
+      "role": "fan",
+      "basis": "schematic",
+      "count": 11,
+      "finish": "black_plastic"
+    },
+    {
+      "id": "fan-3",
+      "shape": "rotor",
+      "at": [
+        248.8,
+        75,
+        62
+      ],
+      "radius": 46.2,
+      "height": 6,
+      "axis": "z",
+      "role": "fan",
+      "basis": "schematic",
+      "count": 11,
+      "finish": "black_plastic"
+    },
+    {
+      "id": "power-16pin",
+      "shape": "box",
+      "at": [
+        199.1,
+        133.5,
+        30.5
+      ],
+      "size": [
+        20,
+        9,
+        9
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "POWER-16PIN",
+      "pins": 16,
+      "finish": "black_plastic"
+    },
+    {
+      "id": "hdmi-1",
+      "shape": "box",
+      "at": [
+        0.8,
+        25,
+        23.8
+      ],
+      "size": [
+        1.5,
+        6,
+        15
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "HDMI-1"
+    },
+    {
+      "id": "hdmi-2",
+      "shape": "box",
+      "at": [
+        0.8,
+        78,
+        23.8
+      ],
+      "size": [
+        1.5,
+        6,
+        15
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "HDMI-2"
+    },
+    {
+      "id": "light-shroud-logo",
+      "shape": "box",
+      "at": [
+        85.4,
+        136.5,
+        59.5
+      ],
+      "size": [
+        48.8,
+        3,
+        5
+      ],
+      "role": "light",
+      "basis": "schematic",
+      "finish": "white_plastic"
+    }
+  ],
+  "attach": {
+    "main": {
+      "at": [
+        14,
+        0,
+        3.8
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "mounts": {},
+  "ports": {
+    "power-16pin": {
+      "at": [
+        199.1,
+        138,
+        30.5
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        20,
+        9,
+        9
+      ],
+      "solid": "power-16pin"
+    },
+    "hdmi-1": {
+      "at": [
+        0.1,
+        25,
+        23.8
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        6,
+        15
+      ],
+      "solid": "hdmi-1"
+    },
+    "hdmi-2": {
+      "at": [
+        0.1,
+        78,
+        23.8
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        6,
+        15
+      ],
+      "solid": "hdmi-2"
+    }
+  },
+  "leads": {},
+  "zones": {
+    "power-socket": {
+      "solids": [
+        "power-16pin"
+      ]
+    },
+    "display-outputs": {
+      "solids": [
+        "hdmi-1",
+        "hdmi-2"
+      ]
+    },
+    "slot-edge": {
+      "solids": [
+        "edge-connector",
+        "bracket"
+      ]
+    }
+  },
+  "lights": [
+    {
+      "zone": "shroud-logo",
+      "solids": [
+        "light-shroud-logo"
+      ]
+    }
+  ],
+  "label": {
+    "en": "Educational model — not manufacturer-accurate",
+    "ar": "نموذج تعليمي، مو مطابق لشكل المنتج الحقيقي"
+  }
+}

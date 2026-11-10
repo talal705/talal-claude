@@ -1,0 +1,589 @@
+{
+  "schema": 2,
+  "catalogId": "corsair-rm850x-atx31",
+  "catalogVersion": "2026.10.31-1",
+  "units": "mm",
+  "bounds": {
+    "size": [
+      160,
+      86,
+      150
+    ],
+    "basis": {
+      "x": "catalog",
+      "y": "catalog",
+      "z": "catalog"
+    }
+  },
+  "solids": [
+    {
+      "id": "housing",
+      "shape": "box",
+      "at": [
+        80,
+        42,
+        75
+      ],
+      "size": [
+        160,
+        84,
+        150
+      ],
+      "role": "body",
+      "basis": "catalog",
+      "finish": "black_metal"
+    },
+    {
+      "id": "fan-rotor",
+      "shape": "rotor",
+      "at": [
+        80,
+        83,
+        75
+      ],
+      "radius": 60,
+      "height": 2,
+      "axis": "y",
+      "role": "fan",
+      "basis": "schematic",
+      "count": 9,
+      "finish": "black_plastic"
+    },
+    {
+      "id": "fan-grille",
+      "shape": "cylinder",
+      "at": [
+        80,
+        85,
+        75
+      ],
+      "radius": 63,
+      "height": 2,
+      "axis": "y",
+      "role": "grille",
+      "basis": "schematic",
+      "finish": "black_metal"
+    },
+    {
+      "id": "rear-vent",
+      "shape": "fins",
+      "at": [
+        159.5,
+        43,
+        33.8
+      ],
+      "size": [
+        1,
+        65.4,
+        52.5
+      ],
+      "role": "grille",
+      "basis": "schematic",
+      "count": 12,
+      "axis": "z",
+      "finish": "black_metal"
+    },
+    {
+      "id": "mains-inlet",
+      "shape": "box",
+      "at": [
+        159.3,
+        35.8,
+        86
+      ],
+      "size": [
+        1.5,
+        20,
+        28
+      ],
+      "role": "plug",
+      "basis": "standard",
+      "finish": "black_plastic",
+      "label": "AC"
+    },
+    {
+      "id": "mains-switch",
+      "shape": "box",
+      "at": [
+        159.3,
+        37.1,
+        124
+      ],
+      "size": [
+        1.5,
+        14,
+        20
+      ],
+      "role": "plug",
+      "basis": "schematic",
+      "finish": "black_plastic",
+      "label": "I/O"
+    },
+    {
+      "id": "rating-label",
+      "shape": "box",
+      "at": [
+        80,
+        43,
+        149.8
+      ],
+      "size": [
+        80,
+        34.4,
+        0.5
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "label",
+      "label": "850W"
+    },
+    {
+      "id": "out-atx-1",
+      "shape": "box",
+      "at": [
+        0.8,
+        24,
+        18.2
+      ],
+      "size": [
+        1.5,
+        24,
+        20.3
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "ATX",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "out-cpu-pcie-1",
+      "shape": "box",
+      "at": [
+        0.8,
+        18,
+        40.5
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "CPU/PCIE",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "out-cpu-pcie-2",
+      "shape": "box",
+      "at": [
+        0.8,
+        18,
+        62.8
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "CPU/PCIE",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "out-cpu-pcie-3",
+      "shape": "box",
+      "at": [
+        0.8,
+        18,
+        85.2
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "CPU/PCIE",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "out-cpu-pcie-4",
+      "shape": "box",
+      "at": [
+        0.8,
+        18,
+        107.5
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "CPU/PCIE",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "out-cpu-pcie-5",
+      "shape": "box",
+      "at": [
+        0.8,
+        18,
+        129.8
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "CPU/PCIE",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "out-cpu-pcie-6",
+      "shape": "box",
+      "at": [
+        0.8,
+        48,
+        18.2
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "CPU/PCIE",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "out-cpu-pcie-7",
+      "shape": "box",
+      "at": [
+        0.8,
+        48,
+        40.5
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "CPU/PCIE",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "out-peripheral-1",
+      "shape": "box",
+      "at": [
+        0.8,
+        48,
+        62.8
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "SATA/PATA",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "out-peripheral-2",
+      "shape": "box",
+      "at": [
+        0.8,
+        48,
+        85.2
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "SATA/PATA",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "out-peripheral-3",
+      "shape": "box",
+      "at": [
+        0.8,
+        48,
+        107.5
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "SATA/PATA",
+      "finish": "black_plastic"
+    }
+  ],
+  "attach": {
+    "main": {
+      "at": [
+        0,
+        0,
+        0
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "mounts": {},
+  "ports": {
+    "out-atx-1": {
+      "at": [
+        0.1,
+        24,
+        18.2
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        24,
+        20.3
+      ],
+      "solid": "out-atx-1"
+    },
+    "out-cpu-pcie-1": {
+      "at": [
+        0.1,
+        18,
+        40.5
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "solid": "out-cpu-pcie-1"
+    },
+    "out-cpu-pcie-2": {
+      "at": [
+        0.1,
+        18,
+        62.8
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "solid": "out-cpu-pcie-2"
+    },
+    "out-cpu-pcie-3": {
+      "at": [
+        0.1,
+        18,
+        85.2
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "solid": "out-cpu-pcie-3"
+    },
+    "out-cpu-pcie-4": {
+      "at": [
+        0.1,
+        18,
+        107.5
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "solid": "out-cpu-pcie-4"
+    },
+    "out-cpu-pcie-5": {
+      "at": [
+        0.1,
+        18,
+        129.8
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "solid": "out-cpu-pcie-5"
+    },
+    "out-cpu-pcie-6": {
+      "at": [
+        0.1,
+        48,
+        18.2
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "solid": "out-cpu-pcie-6"
+    },
+    "out-cpu-pcie-7": {
+      "at": [
+        0.1,
+        48,
+        40.5
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "solid": "out-cpu-pcie-7"
+    },
+    "out-peripheral-1": {
+      "at": [
+        0.1,
+        48,
+        62.8
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "solid": "out-peripheral-1"
+    },
+    "out-peripheral-2": {
+      "at": [
+        0.1,
+        48,
+        85.2
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "solid": "out-peripheral-2"
+    },
+    "out-peripheral-3": {
+      "at": [
+        0.1,
+        48,
+        107.5
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        12,
+        20.3
+      ],
+      "solid": "out-peripheral-3"
+    }
+  },
+  "leads": {},
+  "zones": {
+    "rear-switch": {
+      "solids": [
+        "mains-inlet",
+        "mains-switch"
+      ]
+    },
+    "cable-side": {
+      "solids": [
+        "out-atx-1",
+        "out-cpu-pcie-1",
+        "out-cpu-pcie-2",
+        "out-cpu-pcie-3",
+        "out-cpu-pcie-4",
+        "out-cpu-pcie-5",
+        "out-cpu-pcie-6",
+        "out-cpu-pcie-7",
+        "out-peripheral-1",
+        "out-peripheral-2",
+        "out-peripheral-3"
+      ]
+    },
+    "label": {
+      "solids": [
+        "rating-label"
+      ]
+    }
+  },
+  "lights": [],
+  "label": {
+    "en": "Educational model — not manufacturer-accurate",
+    "ar": "نموذج تعليمي، مو مطابق لشكل المنتج الحقيقي"
+  }
+}

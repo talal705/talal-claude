@@ -1,0 +1,149 @@
+{
+  "site": {
+    "name": "Your Tech Lab",
+    "tagline": "Build your PC and explore your network with an assistant that explains problems and helps you fix them."
+  },
+  "nav": {
+    "buildPC": "Build a PC",
+    "networks": "Explore Networks",
+    "myProjects": "My Projects",
+    "settings": "Settings",
+    "language": "العربية",
+    "primary": "Main navigation"
+  },
+  "hero": {
+    "heading": "Your Tech Lab",
+    "subheading": "Build your PC and explore your network with an assistant that explains problems and helps you fix them.",
+    "startBuilding": "Build a PC",
+    "exploreNetworks": "Explore Networks"
+  },
+  "labs": {
+    "pc": {
+      "title": "Build a PC",
+      "description": "Select real components, assemble them step by step, and learn what makes a computer work."
+    },
+    "network": {
+      "title": "Explore Networks",
+      "description": "Connect routers, build cables, configure addresses, and trace packets through your virtual network."
+    }
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "undo": "Undo",
+    "redo": "Redo",
+    "stop": "Stop",
+    "reset": "Reset",
+    "hint": "Hint",
+    "next": "Next",
+    "back": "Back",
+    "loading": "Loading…",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "error": "Something went wrong",
+    "retry": "Try again",
+    "noResults": "Nothing here yet",
+    "close": "Close",
+    "skipToContent": "Skip to content"
+  },
+  "projects": {
+    "title": "My Projects",
+    "subtitle": "Continue Learning",
+    "intro": "Projects you save as a guest are kept on this device, in this browser.",
+    "loading": "Loading your projects…",
+    "filterLabel": "Filter by lab",
+    "filterAll": "All labs",
+    "listLabel": "Saved projects",
+    "empty": {
+      "heading": "No saved projects yet",
+      "body": "When you save work in a lab, it shows up here. Pick a lab to start."
+    },
+    "emptyFiltered": "No saved projects in {lab} yet.",
+    "openLab": "Open {lab}",
+    "unavailable": {
+      "heading": "This browser won't open local storage",
+      "body": "Storage may be blocked or full. Private windows often block it. Nothing was deleted."
+    },
+    "error": {
+      "heading": "Couldn't load your projects",
+      "body": "Something failed while reading them. Nothing was deleted."
+    },
+    "corrupt": {
+      "heading": "{count, plural, one {# saved project can't be read} other {# saved projects can't be read}}",
+      "body": "The saved data is damaged. It was left on this device and not deleted.",
+      "ids": "Record IDs"
+    },
+    "item": {
+      "untitled": "Untitled project",
+      "updated": "Last saved",
+      "revision": "Revision {revision}",
+      "delete": "Delete",
+      "deleteNamed": "Delete project: {title}",
+      "open": "Open",
+      "openNamed": "Open project: {title}"
+    },
+    "confirm": {
+      "heading": "Delete this project?",
+      "body": "The project and its saved snapshots will be removed from this device. You can't undo this.",
+      "confirm": "Delete project",
+      "deleting": "Deleting…",
+      "failed": "Couldn't delete the project. Try again."
+    },
+    "deleted": "Project deleted.",
+    "archived": {
+      "heading": "{count, plural, one {# archived programming project} other {# archived programming projects}}",
+      "body": "Code Studio is no longer part of Your Tech Lab. Projects you made there are kept on this device exactly as you saved them. They can't be opened here, but you can download one as a JSON file or delete it.",
+      "kind": "Archived programming project",
+      "export": "Export as JSON",
+      "exportNamed": "Export as JSON: {title}",
+      "exported": "Downloaded {name}.",
+      "exportFailed": "Couldn't read this project to export it. Nothing was changed."
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "loading": "Loading your settings…",
+    "motion": {
+      "legend": "Motion",
+      "system": "Follow my device",
+      "on": "Reduce motion",
+      "off": "Full motion"
+    },
+    "sound": {
+      "label": "Sound",
+      "hint": "Off until you turn it on."
+    },
+    "robot": {
+      "label": "Show the robot",
+      "hint": "Text help stays when the robot is hidden."
+    },
+    "saved": "Saved on this device.",
+    "notSaved": "Couldn't save this setting. This browser may be blocking storage.",
+    "avatar": {
+      "legend": "Avatar",
+      "none": "No avatar",
+      "boy": "Boy",
+      "man": "Man",
+      "girl": "Girl",
+      "woman": "Woman"
+    },
+    "frameRate": {
+      "legend": "Robot animation",
+      "fps60": "60 frames per second",
+      "fps30": "30 frames per second",
+      "hint": "Steadier on slower devices. Movements take the same time."
+    }
+  },
+  "states": {
+    "notFound": {
+      "heading": "Page not found",
+      "body": "This address doesn't match any page here.",
+      "home": "Back to the home page"
+    },
+    "error": {
+      "heading": "Something went wrong on this page",
+      "body": "Your saved projects were not touched. Try again, or go back to the home page.",
+      "reference": "Error reference"
+    }
+  }
+}

@@ -1,0 +1,171 @@
+{
+  "schema": 2,
+  "catalogId": "samsung-990-pro-1tb",
+  "catalogVersion": "2026.10.31-1",
+  "units": "mm",
+  "bounds": {
+    "size": [
+      80,
+      2.3,
+      22
+    ],
+    "basis": {
+      "x": "catalog",
+      "y": "catalog",
+      "z": "catalog"
+    }
+  },
+  "solids": [
+    {
+      "id": "pcb",
+      "shape": "box",
+      "at": [
+        40,
+        0.4,
+        11
+      ],
+      "size": [
+        80,
+        0.8,
+        22
+      ],
+      "role": "pcb",
+      "basis": "catalog",
+      "finish": "pcb_black"
+    },
+    {
+      "id": "connector-edge",
+      "shape": "fins",
+      "at": [
+        2,
+        0.4,
+        9
+      ],
+      "size": [
+        4,
+        0.8,
+        16
+      ],
+      "role": "edge_connector",
+      "basis": "standard",
+      "count": 30,
+      "axis": "z",
+      "finish": "gold",
+      "label": "M"
+    },
+    {
+      "id": "controller",
+      "shape": "box",
+      "at": [
+        16,
+        1.5,
+        11
+      ],
+      "size": [
+        12,
+        1.5,
+        14
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "memory-1",
+      "shape": "box",
+      "at": [
+        37,
+        1.5,
+        11
+      ],
+      "size": [
+        18,
+        1.5,
+        16
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "memory-2",
+      "shape": "box",
+      "at": [
+        59,
+        1.5,
+        11
+      ],
+      "size": [
+        18,
+        1.5,
+        16
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "label",
+      "shape": "box",
+      "at": [
+        49,
+        2.2,
+        11
+      ],
+      "size": [
+        46,
+        0.1,
+        18
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "label",
+      "label": "1000 GB"
+    },
+    {
+      "id": "screw-notch",
+      "shape": "cylinder",
+      "at": [
+        78.4,
+        0.4,
+        11
+      ],
+      "radius": 1.6,
+      "height": 0.8,
+      "axis": "y",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "gold"
+    }
+  ],
+  "attach": {
+    "main": {
+      "at": [
+        0,
+        0,
+        11
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "mounts": {},
+  "ports": {},
+  "leads": {},
+  "zones": {
+    "connector-edge": {
+      "solids": [
+        "connector-edge"
+      ]
+    }
+  },
+  "lights": [],
+  "label": {
+    "en": "Educational model — not manufacturer-accurate",
+    "ar": "نموذج تعليمي، مو مطابق لشكل المنتج الحقيقي"
+  }
+}

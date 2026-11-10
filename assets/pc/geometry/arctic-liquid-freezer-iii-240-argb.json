@@ -1,0 +1,371 @@
+{
+  "schema": 2,
+  "catalogId": "arctic-liquid-freezer-iii-240-argb",
+  "catalogVersion": "2026.10.31-1",
+  "units": "mm",
+  "bounds": {
+    "size": [
+      371,
+      120,
+      80
+    ],
+    "basis": {
+      "x": "schematic",
+      "y": "schematic",
+      "z": "schematic"
+    }
+  },
+  "solids": [
+    {
+      "id": "radiator-tank-1",
+      "shape": "box",
+      "at": [
+        7,
+        60,
+        19
+      ],
+      "size": [
+        14,
+        120,
+        38
+      ],
+      "role": "radiator",
+      "basis": "schematic",
+      "group": "radiator",
+      "finish": "black_metal"
+    },
+    {
+      "id": "radiator-tank-2",
+      "shape": "box",
+      "at": [
+        258,
+        60,
+        19
+      ],
+      "size": [
+        14,
+        120,
+        38
+      ],
+      "role": "radiator",
+      "basis": "schematic",
+      "group": "radiator",
+      "finish": "black_metal"
+    },
+    {
+      "id": "radiator-core",
+      "shape": "fins",
+      "at": [
+        132.5,
+        60,
+        19
+      ],
+      "size": [
+        237,
+        116,
+        38
+      ],
+      "role": "radiator",
+      "basis": "schematic",
+      "count": 90,
+      "axis": "x",
+      "group": "radiator",
+      "finish": "black_metal"
+    },
+    {
+      "id": "fan-frame-1",
+      "shape": "box",
+      "at": [
+        73.3,
+        60,
+        40
+      ],
+      "size": [
+        118.5,
+        118.5,
+        4
+      ],
+      "role": "body",
+      "basis": "schematic",
+      "group": "radiator",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "fan-1",
+      "shape": "rotor",
+      "at": [
+        73.3,
+        60,
+        52.5
+      ],
+      "radius": 55.3,
+      "height": 19,
+      "axis": "z",
+      "role": "fan",
+      "basis": "schematic",
+      "count": 9,
+      "group": "radiator",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "fan-frame-2",
+      "shape": "box",
+      "at": [
+        191.8,
+        60,
+        40
+      ],
+      "size": [
+        118.5,
+        118.5,
+        4
+      ],
+      "role": "body",
+      "basis": "schematic",
+      "group": "radiator",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "fan-2",
+      "shape": "rotor",
+      "at": [
+        191.8,
+        60,
+        52.5
+      ],
+      "radius": 55.3,
+      "height": 19,
+      "axis": "z",
+      "role": "fan",
+      "basis": "schematic",
+      "count": 9,
+      "group": "radiator",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "hose-fittings",
+      "shape": "box",
+      "at": [
+        271,
+        60,
+        13
+      ],
+      "size": [
+        12,
+        36,
+        14
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "group": "radiator",
+      "finish": "black_metal"
+    },
+    {
+      "id": "light-radiator-fans-1",
+      "shape": "cylinder",
+      "at": [
+        73.3,
+        60,
+        62
+      ],
+      "radius": 18,
+      "height": 2,
+      "axis": "z",
+      "role": "light",
+      "basis": "schematic",
+      "group": "radiator",
+      "finish": "white_plastic"
+    },
+    {
+      "id": "light-radiator-fans-2",
+      "shape": "cylinder",
+      "at": [
+        191.8,
+        60,
+        62
+      ],
+      "radius": 18,
+      "height": 2,
+      "axis": "z",
+      "role": "light",
+      "basis": "schematic",
+      "group": "radiator",
+      "finish": "white_plastic"
+    },
+    {
+      "id": "cold-plate",
+      "shape": "box",
+      "at": [
+        335,
+        2,
+        48
+      ],
+      "size": [
+        56,
+        4,
+        56
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "group": "block",
+      "finish": "copper"
+    },
+    {
+      "id": "mounting-ears",
+      "shape": "box",
+      "at": [
+        335,
+        5.5,
+        48
+      ],
+      "size": [
+        68,
+        3,
+        12
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "group": "block",
+      "finish": "black_metal"
+    },
+    {
+      "id": "pump-block",
+      "shape": "cylinder",
+      "at": [
+        335,
+        26,
+        48
+      ],
+      "radius": 32,
+      "height": 40,
+      "axis": "y",
+      "role": "body",
+      "basis": "schematic",
+      "group": "block",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "pump-cap",
+      "shape": "cylinder",
+      "at": [
+        335,
+        48,
+        48
+      ],
+      "radius": 28,
+      "height": 4,
+      "axis": "y",
+      "role": "plate",
+      "basis": "schematic",
+      "group": "block",
+      "finish": "black_metal"
+    },
+    {
+      "id": "hose-1",
+      "shape": "cylinder",
+      "at": [
+        292,
+        51,
+        13
+      ],
+      "radius": 6,
+      "height": 30,
+      "axis": "x",
+      "role": "tube",
+      "basis": "schematic",
+      "group": "block",
+      "finish": "rubber"
+    },
+    {
+      "id": "hose-2",
+      "shape": "cylinder",
+      "at": [
+        292,
+        69,
+        13
+      ],
+      "radius": 6,
+      "height": 30,
+      "axis": "x",
+      "role": "tube",
+      "basis": "schematic",
+      "group": "block",
+      "finish": "rubber"
+    }
+  ],
+  "attach": {
+    "block": {
+      "at": [
+        335,
+        0,
+        48
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "radiator": {
+      "at": [
+        138.5,
+        60,
+        63
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "mounts": {},
+  "ports": {},
+  "leads": {
+    "pump-fan": {
+      "at": [
+        335,
+        30,
+        80
+      ]
+    },
+    "argb": {
+      "at": [
+        341,
+        30,
+        80
+      ]
+    }
+  },
+  "zones": {
+    "cold-plate": {
+      "solids": [
+        "cold-plate"
+      ]
+    },
+    "radiator": {
+      "solids": [
+        "radiator-core",
+        "radiator-tank-1",
+        "radiator-tank-2",
+        "fan-1",
+        "fan-2"
+      ]
+    }
+  },
+  "lights": [
+    {
+      "zone": "radiator-fans",
+      "solids": [
+        "light-radiator-fans-1",
+        "light-radiator-fans-2"
+      ]
+    }
+  ],
+  "label": {
+    "en": "Educational model — not manufacturer-accurate",
+    "ar": "نموذج تعليمي، مو مطابق لشكل المنتج الحقيقي"
+  }
+}

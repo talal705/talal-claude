@@ -1,0 +1,562 @@
+{
+  "schema": 2,
+  "catalogId": "corsair-vengeance-rgb-ddr5-6000-32gb-kit",
+  "catalogVersion": "2026.10.31-1",
+  "units": "mm",
+  "bounds": {
+    "size": [
+      133.4,
+      44,
+      7
+    ],
+    "basis": {
+      "x": "schematic",
+      "y": "schematic",
+      "z": "schematic"
+    }
+  },
+  "solids": [
+    {
+      "id": "contacts-left",
+      "shape": "fins",
+      "at": [
+        34.5,
+        2,
+        3.5
+      ],
+      "size": [
+        63,
+        4,
+        1.6
+      ],
+      "role": "edge_connector",
+      "basis": "schematic",
+      "count": 40,
+      "axis": "x",
+      "finish": "gold"
+    },
+    {
+      "id": "contacts-right",
+      "shape": "fins",
+      "at": [
+        100.2,
+        2,
+        3.5
+      ],
+      "size": [
+        60.3,
+        4,
+        1.6
+      ],
+      "role": "edge_connector",
+      "basis": "schematic",
+      "count": 40,
+      "axis": "x",
+      "finish": "gold"
+    },
+    {
+      "id": "notch",
+      "shape": "box",
+      "at": [
+        68,
+        1.5,
+        3.5
+      ],
+      "size": [
+        2,
+        3,
+        2
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "label": "DDR5"
+    },
+    {
+      "id": "pcb",
+      "shape": "box",
+      "at": [
+        66.7,
+        20,
+        3.5
+      ],
+      "size": [
+        133.4,
+        32,
+        1.6
+      ],
+      "role": "pcb",
+      "basis": "standard",
+      "finish": "pcb_green"
+    },
+    {
+      "id": "chip-front-1",
+      "shape": "box",
+      "at": [
+        11.1,
+        11,
+        4.8
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-front-2",
+      "shape": "box",
+      "at": [
+        23.2,
+        11,
+        4.8
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-front-3",
+      "shape": "box",
+      "at": [
+        35.3,
+        11,
+        4.8
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-front-4",
+      "shape": "box",
+      "at": [
+        47.5,
+        11,
+        4.8
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-front-5",
+      "shape": "box",
+      "at": [
+        59.6,
+        11,
+        4.8
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-front-6",
+      "shape": "box",
+      "at": [
+        71.7,
+        11,
+        4.8
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-front-7",
+      "shape": "box",
+      "at": [
+        83.9,
+        11,
+        4.8
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-front-8",
+      "shape": "box",
+      "at": [
+        96,
+        11,
+        4.8
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-front-9",
+      "shape": "box",
+      "at": [
+        108.1,
+        11,
+        4.8
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-front-10",
+      "shape": "box",
+      "at": [
+        120.3,
+        11,
+        4.8
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-back-1",
+      "shape": "box",
+      "at": [
+        11.1,
+        11,
+        2.2
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-back-2",
+      "shape": "box",
+      "at": [
+        23.2,
+        11,
+        2.2
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-back-3",
+      "shape": "box",
+      "at": [
+        35.3,
+        11,
+        2.2
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-back-4",
+      "shape": "box",
+      "at": [
+        47.5,
+        11,
+        2.2
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-back-5",
+      "shape": "box",
+      "at": [
+        59.6,
+        11,
+        2.2
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-back-6",
+      "shape": "box",
+      "at": [
+        71.7,
+        11,
+        2.2
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-back-7",
+      "shape": "box",
+      "at": [
+        83.9,
+        11,
+        2.2
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-back-8",
+      "shape": "box",
+      "at": [
+        96,
+        11,
+        2.2
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-back-9",
+      "shape": "box",
+      "at": [
+        108.1,
+        11,
+        2.2
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "chip-back-10",
+      "shape": "box",
+      "at": [
+        120.3,
+        11,
+        2.2
+      ],
+      "size": [
+        10.1,
+        10,
+        1
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "silicon"
+    },
+    {
+      "id": "heat-spreader",
+      "shape": "box",
+      "at": [
+        66.7,
+        22,
+        3.5
+      ],
+      "size": [
+        129.4,
+        26,
+        7
+      ],
+      "role": "heatsink",
+      "basis": "schematic",
+      "finish": "black_metal"
+    },
+    {
+      "id": "spreader-ridges",
+      "shape": "fins",
+      "at": [
+        66.7,
+        31,
+        3.5
+      ],
+      "size": [
+        117.4,
+        4,
+        6.6
+      ],
+      "role": "heatsink",
+      "basis": "schematic",
+      "count": 12,
+      "axis": "x",
+      "finish": "aluminium"
+    },
+    {
+      "id": "latch-end-left",
+      "shape": "box",
+      "at": [
+        1.3,
+        9,
+        3.5
+      ],
+      "size": [
+        2.5,
+        10,
+        3
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "latch-end-right",
+      "shape": "box",
+      "at": [
+        132.1,
+        9,
+        3.5
+      ],
+      "size": [
+        2.5,
+        10,
+        3
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "light-light-bar",
+      "shape": "box",
+      "at": [
+        66.7,
+        40,
+        3.5
+      ],
+      "size": [
+        125.4,
+        8,
+        6
+      ],
+      "role": "light",
+      "basis": "schematic",
+      "finish": "white_plastic"
+    }
+  ],
+  "attach": {
+    "main": {
+      "at": [
+        -4.5,
+        0,
+        3.5
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "mounts": {},
+  "ports": {},
+  "leads": {},
+  "zones": {
+    "notch": {
+      "solids": [
+        "notch"
+      ]
+    },
+    "edge-ends": {
+      "solids": [
+        "latch-end-left",
+        "latch-end-right"
+      ]
+    }
+  },
+  "lights": [
+    {
+      "zone": "light-bar",
+      "solids": [
+        "light-light-bar"
+      ]
+    }
+  ],
+  "label": {
+    "en": "Educational model — not manufacturer-accurate",
+    "ar": "نموذج تعليمي، مو مطابق لشكل المنتج الحقيقي"
+  }
+}

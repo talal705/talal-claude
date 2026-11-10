@@ -1,0 +1,45 @@
+# Owner decisions
+
+Decisions the owner made in conversation after writing `docs/BRIEF.md`. Add new ones at the bottom with a date; do not rewrite old ones.
+
+## 2026-10-09 / 2026-10-10
+
+1. **Standalone project.** This project lives in `~/مشروع-موقع/تعليمي` and must stay completely separate from every earlier project on the machine. Nothing is merged, copied or read from them.
+2. **Delivery is incremental**, following the milestones in section 19 of the brief.
+3. **Database.** PostgreSQL is the platform database and IndexedDB holds guest drafts, as the brief says. Reuse a working PostgreSQL installation if one exists, otherwise install a local development one. Create a separate database for Your Tech Lab and leave every other database untouched. No paid or hosted database. Database integration is not complete until the connection and migrations have been verified. The owner will do any step that needs the administrator password. No other database engine is to be substituted.
+4. **AI tutor.** Start with the 2D robot and rule-based hints while preparing a configurable provider adapter. The finished product must still include a real AI tutor. The provider and API setup are chosen when that feature is ready to integrate, and must not delay the labs.
+5. **Team.** Four roles: one supervises the whole project, finds errors and gets them fixed; one programs the site; one works on how the site interacts with the learner; one works on the backend. The mapping to names and files is in `CLAUDE.md`.
+6. **Real Agent Teams from the terminal.** The owner chose to continue in the standalone Claude Code CLI with a native agent team, not with ordinary subagents in the desktop app. Agent teams were enabled in the owner's user settings at the owner's request (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`).
+7. **Language.** The owner is addressed in Arabic.
+
+## 2026-10-27 — Scope change approved by the owner
+
+These replace earlier, less specific requirements in `docs/BRIEF.md` where they conflict. The brief itself is unchanged.
+
+8. **Code Studio is removed from the active product.** No homepage card, navigation entry, routes, programming lessons, editor, or code-only execution infrastructure in the active product. PC assembly and virtual networking stay, each with Learn, Free Lab and Test Yourself. Shared dependencies are traced before anything is removed. Existing programming projects in learners' browsers are archived safely: storage is not wiped and legacy records must not appear corrupt. The full pre-change state is recoverable from the Git tag `checkpoint-before-scope-change-2026-10-27`.
+9. **Full PC assembly is the main experience.** The main entry starts from fully disassembled components laid out on a workbench. The learner installs the motherboard, CPU, RAM, GPU, storage, PSU, cooler, fans, fasteners and required cables. Every supported operation is available in the 3D scene; the list controls remain as the accessible alternative. An empty-workbench option stays. The two starter configurations are not assembled automatically.
+10. **Catalog: exactly two options per main component category**, replacing the twenty-per-category target. It includes an Intel Core i5 and an Intel Core i7 with their actual model specifications and appropriate motherboards, one DDR4 configuration and one DDR5 configuration. Compatibility follows real socket, firmware, memory, clearance, power, connector and cooling rules only. Colour, appearance, the i5/i7 name, or belonging to a different starter kit never creates an incompatibility; genuinely compatible mixes are allowed. Every necessary cable type and the correct cables for each PSU are kept.
+11. **No external monitor and no HDMI/DisplayPort assembly in the PC lab.** Startup evaluation, presets, lessons, messages and tests change together: a valid build succeeds without a monitor or display cable. Internal assembly and startup checks remain. A green check means the build passes those checks; a red X names a real fault and offers a progressive hint. Fans and optional RGB reflect the simulated state but never prove success by themselves. The RGB / no-RGB choice stays.
+12. **Detailed 3D models for the smaller catalog come first**: real geometry, materials, mounting details, sockets, connectors, cable ends, lighting and interaction, not recoloured boxes. Installable parts, including case fans, stay individually selectable. Both complete builds are validated interactively from their disassembled starting state. Any asset-quality limitation is stated, not hidden.
+13. **Team of exactly four agents**: the lead/manager (coordinates, assigns ownership, integrates, accepts verified results); a critical reviewer (reproduces defects, reports evidence); a preservation reviewer (verifies working behaviour, guards against regressions and unnecessary changes); an implementation/fix engineer (main implementation and repairs). Teammates may talk directly to each other and the lead. Reviewers are read-only; one active writer per file. Reports are short and evidence-based; no repetitive review loops.
+
+
+## 2026-11-06 — Stable camera and motherboard-first assembly
+
+14. **Keep the learner's camera still during assembly.** Choosing a part or cable, showing destinations, mounting, seating and fastening must not automatically turn or zoom the camera. Manual orbit, zoom, view buttons and an explicitly requested tutor reveal remain available. Fit the initial build once after its models load.
+15. **Prepare the motherboard outside the case first.** Fit the CPU, RAM, M.2 drive where present, and the CPU cooler/pump block on the bench; then move the board and its attached parts into the case together, before fitting the remaining case parts and cables. A SATA drive belongs in a case bay; an AIO radiator mounts to the case after the prepared board is installed. Free Lab still accepts other physically valid orders.
+
+16. **Keep manual orbit centred.** Rotation and zoom use a fixed workbench pivot; panning and zoom-to-cursor are disabled. View-angle buttons preserve that centre; an explicit Fit all recentres the current parts. A different project gets its own initial fit so it cannot inherit the previous project's viewpoint.
+
+
+## 2026-11-06 — Compact single-page PC experience
+
+17. **The active PC experience is one simple page and one fixed computer.** No catalog, multiple kits, entry wizard, lesson modes, technical specifications, cables or manual electricity settings in this flow. There is one case and seven learner-installable parts; selecting a part and pressing Fit installs it with seating and fasteners handled automatically. The learner prepares the motherboard first, then moves it into the case and fits the remaining parts. One Start PC button reports only working/not working with a short unfinished-parts cue. Necessary internal connections are handled automatically, while the actual PC engine still decides startup success. The compact page replaces the home/PC entries; old project data and detailed lab code are retained without being placed in the compact flow. English/Arabic and the fixed-centre camera remain.
+
+18. **Restore a compact learning home and programming, with PC assembly last.** Owner requested a named landing introduction, Help me start and Start on my own, the small assistant, and programming where errors can be explained and corrected. Keep all sections on one page. The simplified one-PC builder from decision 17 stays at the end; do not restore the large catalog or manual electricity details. Seven tracks (HTML/CSS, JavaScript, TypeScript, Python, C++, Java and C#) have examples, real isolated execution, separate local drafts and explicit apply/undo for suggested corrections. Actual AI review uses the configured server provider; built-in/compiler hints must be labeled honestly, and provider credentials are not currently configured. This supersedes decision 8 for the compact programming area and the PC-only homepage part of decision 17.
+
+19. **OpenAI is the selected real AI tutor provider.** Owner chose OpenAI in the provider clarification. Use the first-party OpenAI API on the server, with configurable model/key. The initial focused-tutor default is GPT-6 Luna with low reasoning and strict structured output. Provider selection alone is not activation: a valid project key and a successful live check are still required. Keep secret-looking learner values redacted before provider transmission; a redacted copy cannot be applied over the original file.
+
+## 2026-11-10 — Manual compact cables
+
+20. **Compact PC cabling and visual detail.** The owner requested visible, learner-connected GPU/motherboard/cooler and case leads, plus better-looking components and case. Keep the one-PC flow simple with Parts/Cables tabs. Five required startup connections use the existing engine; two case fan leads affect fan motion without inventing a boot failure. Preserve centred camera, motherboard-first assembly and old saves. Version-1 powered builds migrate with their former automatic connections. Refined original procedural geometry remains educational, not manufacturer-accurate.

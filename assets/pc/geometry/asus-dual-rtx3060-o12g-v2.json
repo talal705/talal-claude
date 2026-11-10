@@ -1,0 +1,459 @@
+{
+  "schema": 2,
+  "catalogId": "asus-dual-rtx3060-o12g-v2",
+  "catalogVersion": "2026.10.31-1",
+  "units": "mm",
+  "bounds": {
+    "size": [
+      200,
+      123,
+      38
+    ],
+    "basis": {
+      "x": "catalog",
+      "y": "catalog",
+      "z": "catalog"
+    }
+  },
+  "solids": [
+    {
+      "id": "backplate",
+      "shape": "box",
+      "at": [
+        100,
+        67.5,
+        1.5
+      ],
+      "size": [
+        200,
+        111,
+        3
+      ],
+      "role": "backplate",
+      "basis": "schematic",
+      "finish": "black_metal"
+    },
+    {
+      "id": "pcb",
+      "shape": "box",
+      "at": [
+        80,
+        60.5,
+        3.8
+      ],
+      "size": [
+        160,
+        97,
+        1.6
+      ],
+      "role": "pcb",
+      "basis": "schematic",
+      "finish": "pcb_black"
+    },
+    {
+      "id": "heatsink",
+      "shape": "fins",
+      "at": [
+        100,
+        67.5,
+        16.6
+      ],
+      "size": [
+        188,
+        103,
+        24
+      ],
+      "role": "heatsink",
+      "basis": "schematic",
+      "count": 85,
+      "axis": "x",
+      "finish": "aluminium"
+    },
+    {
+      "id": "heat-pipe-1",
+      "shape": "cylinder",
+      "at": [
+        100,
+        26,
+        7
+      ],
+      "radius": 3,
+      "height": 170,
+      "axis": "x",
+      "role": "tube",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "heat-pipe-2",
+      "shape": "cylinder",
+      "at": [
+        100,
+        53.7,
+        7
+      ],
+      "radius": 3,
+      "height": 170,
+      "axis": "x",
+      "role": "tube",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "heat-pipe-3",
+      "shape": "cylinder",
+      "at": [
+        100,
+        81.3,
+        7
+      ],
+      "radius": 3,
+      "height": 170,
+      "axis": "x",
+      "role": "tube",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "heat-pipe-4",
+      "shape": "cylinder",
+      "at": [
+        100,
+        109,
+        7
+      ],
+      "radius": 3,
+      "height": 170,
+      "axis": "x",
+      "role": "tube",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "shroud",
+      "shape": "box",
+      "at": [
+        101,
+        67.3,
+        32.8
+      ],
+      "size": [
+        198,
+        110.5,
+        9.5
+      ],
+      "role": "shroud",
+      "basis": "catalog",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "bracket",
+      "shape": "box",
+      "at": [
+        0.8,
+        61.5,
+        19
+      ],
+      "size": [
+        1.5,
+        123,
+        38
+      ],
+      "role": "bracket",
+      "basis": "catalog",
+      "finish": "nickel"
+    },
+    {
+      "id": "bracket-vent",
+      "shape": "fins",
+      "at": [
+        0.8,
+        56.5,
+        27.6
+      ],
+      "size": [
+        1.6,
+        81,
+        17.1
+      ],
+      "role": "grille",
+      "basis": "schematic",
+      "count": 6,
+      "axis": "y",
+      "finish": "black_metal"
+    },
+    {
+      "id": "edge-connector",
+      "shape": "fins",
+      "at": [
+        58.5,
+        6,
+        3.8
+      ],
+      "size": [
+        89,
+        12,
+        1.6
+      ],
+      "role": "edge_connector",
+      "basis": "standard",
+      "count": 60,
+      "axis": "x",
+      "finish": "gold"
+    },
+    {
+      "id": "fan-1",
+      "shape": "rotor",
+      "at": [
+        54,
+        67.5,
+        35
+      ],
+      "radius": 44,
+      "height": 6,
+      "axis": "z",
+      "role": "fan",
+      "basis": "schematic",
+      "count": 11,
+      "finish": "black_plastic"
+    },
+    {
+      "id": "fan-2",
+      "shape": "rotor",
+      "at": [
+        146,
+        67.5,
+        35
+      ],
+      "radius": 44,
+      "height": 6,
+      "axis": "z",
+      "role": "fan",
+      "basis": "schematic",
+      "count": 11,
+      "finish": "black_plastic"
+    },
+    {
+      "id": "power-8pin",
+      "shape": "box",
+      "at": [
+        133,
+        118.5,
+        19.7
+      ],
+      "size": [
+        18,
+        9,
+        9
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "POWER-8PIN",
+      "pins": 8,
+      "finish": "black_plastic"
+    },
+    {
+      "id": "hdmi-1",
+      "shape": "box",
+      "at": [
+        0.8,
+        25,
+        17
+      ],
+      "size": [
+        1.5,
+        6,
+        15
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "HDMI-1"
+    },
+    {
+      "id": "dp-1",
+      "shape": "box",
+      "at": [
+        0.8,
+        47.3,
+        17
+      ],
+      "size": [
+        1.5,
+        5,
+        15
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "DP-1"
+    },
+    {
+      "id": "dp-2",
+      "shape": "box",
+      "at": [
+        0.8,
+        70,
+        17
+      ],
+      "size": [
+        1.5,
+        5,
+        15
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "DP-2"
+    },
+    {
+      "id": "dp-3",
+      "shape": "box",
+      "at": [
+        0.8,
+        92.8,
+        17
+      ],
+      "size": [
+        1.5,
+        5,
+        15
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "DP-3"
+    }
+  ],
+  "attach": {
+    "main": {
+      "at": [
+        14,
+        0,
+        3.8
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "mounts": {},
+  "ports": {
+    "power-8pin": {
+      "at": [
+        133,
+        123,
+        19.7
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        18,
+        9,
+        9
+      ],
+      "solid": "power-8pin"
+    },
+    "hdmi-1": {
+      "at": [
+        0.1,
+        25,
+        17
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        6,
+        15
+      ],
+      "solid": "hdmi-1"
+    },
+    "dp-1": {
+      "at": [
+        0.1,
+        47.3,
+        17
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        5,
+        15
+      ],
+      "solid": "dp-1"
+    },
+    "dp-2": {
+      "at": [
+        0.1,
+        70,
+        17
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        5,
+        15
+      ],
+      "solid": "dp-2"
+    },
+    "dp-3": {
+      "at": [
+        0.1,
+        92.8,
+        17
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.5,
+        5,
+        15
+      ],
+      "solid": "dp-3"
+    }
+  },
+  "leads": {},
+  "zones": {
+    "power-socket": {
+      "solids": [
+        "power-8pin"
+      ]
+    },
+    "display-outputs": {
+      "solids": [
+        "hdmi-1",
+        "dp-1",
+        "dp-2",
+        "dp-3"
+      ]
+    },
+    "slot-edge": {
+      "solids": [
+        "edge-connector",
+        "bracket"
+      ]
+    }
+  },
+  "lights": [],
+  "label": {
+    "en": "Educational model — not manufacturer-accurate",
+    "ar": "نموذج تعليمي، مو مطابق لشكل المنتج الحقيقي"
+  }
+}

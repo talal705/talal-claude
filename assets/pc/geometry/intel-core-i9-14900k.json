@@ -1,0 +1,164 @@
+{
+  "schema": 2,
+  "catalogId": "intel-core-i9-14900k",
+  "catalogVersion": "2026.10.31-1",
+  "units": "mm",
+  "bounds": {
+    "size": [
+      45,
+      4.4,
+      37.5
+    ],
+    "basis": {
+      "x": "catalog",
+      "y": "schematic",
+      "z": "catalog"
+    }
+  },
+  "solids": [
+    {
+      "id": "contacts",
+      "shape": "fins",
+      "at": [
+        22.5,
+        0.3,
+        18.8
+      ],
+      "size": [
+        41,
+        0.5,
+        33.5
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "count": 24,
+      "axis": "x",
+      "finish": "gold"
+    },
+    {
+      "id": "substrate",
+      "shape": "box",
+      "at": [
+        22.5,
+        1.1,
+        18.8
+      ],
+      "size": [
+        45,
+        1.2,
+        37.5
+      ],
+      "role": "pcb",
+      "basis": "catalog",
+      "finish": "pcb_green"
+    },
+    {
+      "id": "capacitors",
+      "shape": "fins",
+      "at": [
+        22.5,
+        2,
+        2.3
+      ],
+      "size": [
+        37.8,
+        0.5,
+        2.5
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "count": 14,
+      "axis": "x",
+      "finish": "silicon"
+    },
+    {
+      "id": "lid-flange",
+      "shape": "box",
+      "at": [
+        22.5,
+        2.1,
+        18.8
+      ],
+      "size": [
+        39.6,
+        0.8,
+        28.5
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "heat-spreader",
+      "shape": "box",
+      "at": [
+        22.5,
+        3.5,
+        18.8
+      ],
+      "size": [
+        31.5,
+        1.9,
+        26.3
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "nickel",
+      "label": "I9-14900K"
+    },
+    {
+      "id": "corner-mark",
+      "shape": "box",
+      "at": [
+        2.5,
+        1.8,
+        35
+      ],
+      "size": [
+        3,
+        0.2,
+        3
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "gold"
+    }
+  ],
+  "attach": {
+    "main": {
+      "at": [
+        22.5,
+        0,
+        18.8
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "mounts": {},
+  "ports": {},
+  "leads": {},
+  "zones": {
+    "heat-spreader": {
+      "solids": [
+        "heat-spreader",
+        "lid-flange"
+      ]
+    },
+    "contacts": {
+      "solids": [
+        "contacts",
+        "corner-mark"
+      ]
+    }
+  },
+  "lights": [],
+  "label": {
+    "en": "Educational model — not manufacturer-accurate",
+    "ar": "نموذج تعليمي، مو مطابق لشكل المنتج الحقيقي"
+  }
+}

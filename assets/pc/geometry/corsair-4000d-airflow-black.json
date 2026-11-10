@@ -1,0 +1,1209 @@
+{
+  "schema": 2,
+  "catalogId": "corsair-4000d-airflow-black",
+  "catalogVersion": "2026.10.31-1",
+  "units": "mm",
+  "bounds": {
+    "size": [
+      453,
+      466,
+      230
+    ],
+    "basis": {
+      "x": "catalog",
+      "y": "catalog",
+      "z": "catalog"
+    }
+  },
+  "solids": [
+    {
+      "id": "foot-1",
+      "shape": "box",
+      "at": [
+        35,
+        6,
+        35
+      ],
+      "size": [
+        30,
+        12,
+        30
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "rubber"
+    },
+    {
+      "id": "foot-2",
+      "shape": "box",
+      "at": [
+        418,
+        6,
+        35
+      ],
+      "size": [
+        30,
+        12,
+        30
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "rubber"
+    },
+    {
+      "id": "foot-3",
+      "shape": "box",
+      "at": [
+        35,
+        6,
+        195
+      ],
+      "size": [
+        30,
+        12,
+        30
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "rubber"
+    },
+    {
+      "id": "foot-4",
+      "shape": "box",
+      "at": [
+        418,
+        6,
+        195
+      ],
+      "size": [
+        30,
+        12,
+        30
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "rubber"
+    },
+    {
+      "id": "floor",
+      "shape": "box",
+      "at": [
+        226.5,
+        13,
+        115
+      ],
+      "size": [
+        453,
+        2,
+        230
+      ],
+      "role": "panel",
+      "basis": "catalog",
+      "finish": "black_metal"
+    },
+    {
+      "id": "roof",
+      "shape": "box",
+      "at": [
+        226.5,
+        465,
+        115
+      ],
+      "size": [
+        453,
+        2,
+        230
+      ],
+      "role": "panel",
+      "basis": "catalog",
+      "finish": "black_metal"
+    },
+    {
+      "id": "rear-panel",
+      "shape": "box",
+      "at": [
+        1,
+        239,
+        115
+      ],
+      "size": [
+        2,
+        454,
+        230
+      ],
+      "role": "panel",
+      "basis": "catalog",
+      "finish": "black_metal"
+    },
+    {
+      "id": "tray-wall",
+      "shape": "box",
+      "at": [
+        221.5,
+        239,
+        31.2
+      ],
+      "size": [
+        443,
+        454,
+        2
+      ],
+      "role": "panel",
+      "basis": "schematic",
+      "finish": "black_metal"
+    },
+    {
+      "id": "back-side-panel",
+      "shape": "box",
+      "at": [
+        221.5,
+        239,
+        1
+      ],
+      "size": [
+        443,
+        454,
+        2
+      ],
+      "role": "panel",
+      "basis": "schematic",
+      "finish": "black_metal"
+    },
+    {
+      "id": "io-cutout",
+      "shape": "box",
+      "at": [
+        2.5,
+        290.2,
+        117.2
+      ],
+      "size": [
+        1,
+        45,
+        162
+      ],
+      "role": "plate",
+      "basis": "standard",
+      "finish": "black_plastic",
+      "label": "I/O"
+    },
+    {
+      "id": "slot-covers",
+      "shape": "fins",
+      "at": [
+        2.6,
+        207.7,
+        115.2
+      ],
+      "size": [
+        1.2,
+        140,
+        130
+      ],
+      "role": "grille",
+      "basis": "standard",
+      "count": 7,
+      "axis": "y",
+      "finish": "black_metal"
+    },
+    {
+      "id": "front-frame",
+      "shape": "box",
+      "at": [
+        449,
+        239,
+        115
+      ],
+      "size": [
+        8,
+        454,
+        230
+      ],
+      "role": "panel",
+      "basis": "catalog",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "front-panel",
+      "shape": "fins",
+      "at": [
+        444,
+        239,
+        115
+      ],
+      "size": [
+        2,
+        434,
+        210
+      ],
+      "role": "grille",
+      "basis": "schematic",
+      "count": 40,
+      "axis": "y",
+      "finish": "mesh"
+    },
+    {
+      "id": "front-io",
+      "shape": "box",
+      "at": [
+        411,
+        463.8,
+        115
+      ],
+      "size": [
+        56,
+        0.5,
+        92
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "black_plastic",
+      "label": "POWER"
+    },
+    {
+      "id": "top-filter",
+      "shape": "fins",
+      "at": [
+        215.2,
+        463.5,
+        131.1
+      ],
+      "size": [
+        249.2,
+        1,
+        177.8
+      ],
+      "role": "grille",
+      "basis": "schematic",
+      "count": 30,
+      "axis": "x",
+      "finish": "mesh"
+    },
+    {
+      "id": "psu-shroud",
+      "shape": "box",
+      "at": [
+        208.5,
+        117.5,
+        129.1
+      ],
+      "size": [
+        413,
+        2,
+        193.8
+      ],
+      "role": "panel",
+      "basis": "schematic",
+      "finish": "black_metal"
+    },
+    {
+      "id": "shroud-front",
+      "shape": "box",
+      "at": [
+        412,
+        65.3,
+        129.1
+      ],
+      "size": [
+        2,
+        102.5,
+        193.8
+      ],
+      "role": "panel",
+      "basis": "schematic",
+      "finish": "black_metal"
+    },
+    {
+      "id": "grommet-1",
+      "shape": "box",
+      "at": [
+        338.2,
+        204.5,
+        30.2
+      ],
+      "size": [
+        24,
+        60,
+        1
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "rubber"
+    },
+    {
+      "id": "grommet-2",
+      "shape": "box",
+      "at": [
+        338.2,
+        294.5,
+        30.2
+      ],
+      "size": [
+        24,
+        60,
+        1
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "rubber"
+    },
+    {
+      "id": "grommet-3",
+      "shape": "box",
+      "at": [
+        338.2,
+        384.5,
+        30.2
+      ],
+      "size": [
+        24,
+        60,
+        1
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "rubber"
+    },
+    {
+      "id": "motherboard-tray",
+      "shape": "box",
+      "at": [
+        140,
+        290.2,
+        32.7
+      ],
+      "size": [
+        244,
+        305,
+        1
+      ],
+      "role": "tray",
+      "basis": "schematic",
+      "label": "MOTHERBOARD"
+    },
+    {
+      "id": "standoff-1",
+      "shape": "cylinder",
+      "at": [
+        24,
+        432.7,
+        35.7
+      ],
+      "radius": 2.5,
+      "height": 6,
+      "axis": "z",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "standoff-2",
+      "shape": "cylinder",
+      "at": [
+        24,
+        282.7,
+        35.7
+      ],
+      "radius": 2.5,
+      "height": 6,
+      "axis": "z",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "standoff-3",
+      "shape": "cylinder",
+      "at": [
+        24,
+        152.7,
+        35.7
+      ],
+      "radius": 2.5,
+      "height": 6,
+      "axis": "z",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "standoff-4",
+      "shape": "cylinder",
+      "at": [
+        146,
+        432.7,
+        35.7
+      ],
+      "radius": 2.5,
+      "height": 6,
+      "axis": "z",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "standoff-5",
+      "shape": "cylinder",
+      "at": [
+        146,
+        282.7,
+        35.7
+      ],
+      "radius": 2.5,
+      "height": 6,
+      "axis": "z",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "standoff-6",
+      "shape": "cylinder",
+      "at": [
+        146,
+        152.7,
+        35.7
+      ],
+      "radius": 2.5,
+      "height": 6,
+      "axis": "z",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "standoff-7",
+      "shape": "cylinder",
+      "at": [
+        254,
+        432.7,
+        35.7
+      ],
+      "radius": 2.5,
+      "height": 6,
+      "axis": "z",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "standoff-8",
+      "shape": "cylinder",
+      "at": [
+        254,
+        282.7,
+        35.7
+      ],
+      "radius": 2.5,
+      "height": 6,
+      "axis": "z",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "standoff-9",
+      "shape": "cylinder",
+      "at": [
+        254,
+        152.7,
+        35.7
+      ],
+      "radius": 2.5,
+      "height": 6,
+      "axis": "z",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "psu-bay",
+      "shape": "box",
+      "at": [
+        96,
+        64.3,
+        111.2
+      ],
+      "size": [
+        180,
+        96.5,
+        150
+      ],
+      "role": "bay",
+      "basis": "schematic",
+      "label": "PSU"
+    },
+    {
+      "id": "fan-front-1",
+      "shape": "cylinder",
+      "at": [
+        431,
+        82,
+        131.1
+      ],
+      "radius": 60,
+      "height": 4,
+      "axis": "x",
+      "role": "fan_mount",
+      "basis": "schematic",
+      "label": "FAN"
+    },
+    {
+      "id": "fan-front-2",
+      "shape": "cylinder",
+      "at": [
+        431,
+        204,
+        131.1
+      ],
+      "radius": 60,
+      "height": 4,
+      "axis": "x",
+      "role": "fan_mount",
+      "basis": "schematic",
+      "label": "FAN"
+    },
+    {
+      "id": "fan-front-3",
+      "shape": "cylinder",
+      "at": [
+        431,
+        326,
+        131.1
+      ],
+      "radius": 60,
+      "height": 4,
+      "axis": "x",
+      "role": "fan_mount",
+      "basis": "schematic",
+      "label": "FAN"
+    },
+    {
+      "id": "rad-front",
+      "shape": "box",
+      "at": [
+        423,
+        204,
+        131.1
+      ],
+      "size": [
+        6,
+        333.5,
+        120
+      ],
+      "role": "radiator_mount",
+      "basis": "schematic",
+      "label": "RAD 360"
+    },
+    {
+      "id": "fan-top-1",
+      "shape": "cylinder",
+      "at": [
+        158.5,
+        450,
+        131.1
+      ],
+      "radius": 60,
+      "height": 4,
+      "axis": "y",
+      "role": "fan_mount",
+      "basis": "schematic",
+      "label": "FAN"
+    },
+    {
+      "id": "fan-top-2",
+      "shape": "cylinder",
+      "at": [
+        282.5,
+        450,
+        131.1
+      ],
+      "radius": 60,
+      "height": 4,
+      "axis": "y",
+      "role": "fan_mount",
+      "basis": "schematic",
+      "label": "FAN"
+    },
+    {
+      "id": "fan-rear-1",
+      "shape": "cylinder",
+      "at": [
+        14,
+        372.8,
+        131.1
+      ],
+      "radius": 60,
+      "height": 4,
+      "axis": "x",
+      "role": "fan_mount",
+      "basis": "schematic",
+      "label": "FAN"
+    },
+    {
+      "id": "rad-rear",
+      "shape": "box",
+      "at": [
+        22,
+        372.8,
+        131.1
+      ],
+      "size": [
+        6,
+        157,
+        120
+      ],
+      "role": "radiator_mount",
+      "basis": "schematic",
+      "label": "RAD 120"
+    },
+    {
+      "id": "drive-25-1",
+      "shape": "box",
+      "at": [
+        242.3,
+        157.5,
+        45.2
+      ],
+      "size": [
+        104,
+        74,
+        10
+      ],
+      "role": "bay",
+      "basis": "schematic",
+      "label": "2.5"
+    },
+    {
+      "id": "drive-25-2",
+      "shape": "box",
+      "at": [
+        354.3,
+        157.5,
+        45.2
+      ],
+      "size": [
+        104,
+        74,
+        10
+      ],
+      "role": "bay",
+      "basis": "schematic",
+      "label": "2.5"
+    },
+    {
+      "id": "drive-35-1",
+      "shape": "box",
+      "at": [
+        328,
+        33,
+        104.2
+      ],
+      "size": [
+        150,
+        30,
+        104
+      ],
+      "role": "bay",
+      "basis": "schematic",
+      "label": "3.5"
+    },
+    {
+      "id": "drive-35-2",
+      "shape": "box",
+      "at": [
+        328,
+        69,
+        104.2
+      ],
+      "size": [
+        150,
+        30,
+        104
+      ],
+      "role": "bay",
+      "basis": "schematic",
+      "label": "3.5"
+    }
+  ],
+  "attach": {},
+  "mounts": {
+    "motherboard-tray": {
+      "at": [
+        18,
+        442.7,
+        39.2
+      ],
+      "quat": [
+        0.7071067811865476,
+        0,
+        0,
+        0.7071067811865476
+      ],
+      "insert": [
+        0,
+        0,
+        -1
+      ],
+      "travelMm": 30,
+      "facing": [
+        0,
+        0,
+        1
+      ],
+      "size": [
+        244,
+        305,
+        1
+      ],
+      "solid": "motherboard-tray"
+    },
+    "psu-bay": {
+      "at": [
+        6,
+        16,
+        36.2
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "insert": [
+        -1,
+        0,
+        0
+      ],
+      "travelMm": 60,
+      "facing": [
+        0,
+        0,
+        1
+      ],
+      "size": [
+        180,
+        96.5,
+        150
+      ],
+      "solid": "psu-bay"
+    },
+    "fan-front-1": {
+      "at": [
+        431,
+        82,
+        131.1
+      ],
+      "quat": [
+        0,
+        0.7071067811865476,
+        0,
+        0.7071067811865476
+      ],
+      "insert": [
+        1,
+        0,
+        0
+      ],
+      "travelMm": 40,
+      "facing": [
+        0,
+        0,
+        1
+      ],
+      "size": [
+        4,
+        120,
+        120
+      ],
+      "solid": "fan-front-1"
+    },
+    "fan-front-2": {
+      "at": [
+        431,
+        204,
+        131.1
+      ],
+      "quat": [
+        0,
+        0.7071067811865476,
+        0,
+        0.7071067811865476
+      ],
+      "insert": [
+        1,
+        0,
+        0
+      ],
+      "travelMm": 40,
+      "facing": [
+        0,
+        0,
+        1
+      ],
+      "size": [
+        4,
+        120,
+        120
+      ],
+      "solid": "fan-front-2"
+    },
+    "fan-front-3": {
+      "at": [
+        431,
+        326,
+        131.1
+      ],
+      "quat": [
+        0,
+        0.7071067811865476,
+        0,
+        0.7071067811865476
+      ],
+      "insert": [
+        1,
+        0,
+        0
+      ],
+      "travelMm": 40,
+      "facing": [
+        0,
+        0,
+        1
+      ],
+      "size": [
+        4,
+        120,
+        120
+      ],
+      "solid": "fan-front-3"
+    },
+    "rad-front": {
+      "at": [
+        423,
+        204,
+        131.1
+      ],
+      "quat": [
+        0,
+        0.7071067811865476,
+        0,
+        0.7071067811865476
+      ],
+      "insert": [
+        1,
+        0,
+        0
+      ],
+      "travelMm": 40,
+      "facing": [
+        0,
+        0,
+        1
+      ],
+      "size": [
+        6,
+        333.5,
+        120
+      ],
+      "solid": "rad-front"
+    },
+    "fan-top-1": {
+      "at": [
+        158.5,
+        450,
+        131.1
+      ],
+      "quat": [
+        -0.7071067811865476,
+        0,
+        0,
+        0.7071067811865476
+      ],
+      "insert": [
+        0,
+        1,
+        0
+      ],
+      "travelMm": 40,
+      "facing": [
+        0,
+        0,
+        1
+      ],
+      "size": [
+        120,
+        4,
+        120
+      ],
+      "solid": "fan-top-1"
+    },
+    "fan-top-2": {
+      "at": [
+        282.5,
+        450,
+        131.1
+      ],
+      "quat": [
+        -0.7071067811865476,
+        0,
+        0,
+        0.7071067811865476
+      ],
+      "insert": [
+        0,
+        1,
+        0
+      ],
+      "travelMm": 40,
+      "facing": [
+        0,
+        0,
+        1
+      ],
+      "size": [
+        120,
+        4,
+        120
+      ],
+      "solid": "fan-top-2"
+    },
+    "fan-rear-1": {
+      "at": [
+        14,
+        372.8,
+        131.1
+      ],
+      "quat": [
+        0,
+        0.7071067811865476,
+        0,
+        0.7071067811865476
+      ],
+      "insert": [
+        -1,
+        0,
+        0
+      ],
+      "travelMm": 40,
+      "facing": [
+        0,
+        0,
+        1
+      ],
+      "size": [
+        4,
+        120,
+        120
+      ],
+      "solid": "fan-rear-1"
+    },
+    "rad-rear": {
+      "at": [
+        22,
+        372.8,
+        131.1
+      ],
+      "quat": [
+        0,
+        0.7071067811865476,
+        0,
+        0.7071067811865476
+      ],
+      "insert": [
+        -1,
+        0,
+        0
+      ],
+      "travelMm": 40,
+      "facing": [
+        0,
+        0,
+        1
+      ],
+      "size": [
+        6,
+        157,
+        120
+      ],
+      "solid": "rad-rear"
+    },
+    "drive-25-1": {
+      "at": [
+        190.3,
+        120.5,
+        40.2
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "insert": [
+        0,
+        -1,
+        0
+      ],
+      "travelMm": 40,
+      "facing": [
+        0,
+        0,
+        1
+      ],
+      "size": [
+        104,
+        74,
+        10
+      ],
+      "solid": "drive-25-1"
+    },
+    "drive-25-2": {
+      "at": [
+        302.3,
+        120.5,
+        40.2
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "insert": [
+        0,
+        -1,
+        0
+      ],
+      "travelMm": 40,
+      "facing": [
+        0,
+        0,
+        1
+      ],
+      "size": [
+        104,
+        74,
+        10
+      ],
+      "solid": "drive-25-2"
+    },
+    "drive-35-1": {
+      "at": [
+        253,
+        18,
+        52.2
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "insert": [
+        1,
+        0,
+        0
+      ],
+      "travelMm": 40,
+      "facing": [
+        0,
+        0,
+        1
+      ],
+      "size": [
+        150,
+        30,
+        104
+      ],
+      "solid": "drive-35-1"
+    },
+    "drive-35-2": {
+      "at": [
+        253,
+        54,
+        52.2
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "insert": [
+        1,
+        0,
+        0
+      ],
+      "travelMm": 40,
+      "facing": [
+        0,
+        0,
+        1
+      ],
+      "size": [
+        150,
+        30,
+        104
+      ],
+      "solid": "drive-35-2"
+    }
+  },
+  "ports": {},
+  "leads": {
+    "power-switch": {
+      "at": [
+        383,
+        426,
+        36.2
+      ]
+    },
+    "front-audio": {
+      "at": [
+        383,
+        412,
+        36.2
+      ]
+    },
+    "front-usb3": {
+      "at": [
+        383,
+        398,
+        36.2
+      ]
+    },
+    "front-usb-c": {
+      "at": [
+        383,
+        384,
+        36.2
+      ]
+    }
+  },
+  "zones": {
+    "front-panel": {
+      "solids": [
+        "front-frame",
+        "front-panel",
+        "front-io"
+      ]
+    },
+    "main-chamber": {
+      "solids": [
+        "tray-wall",
+        "motherboard-tray"
+      ]
+    },
+    "psu-shroud": {
+      "solids": [
+        "psu-shroud",
+        "shroud-front"
+      ]
+    }
+  },
+  "lights": [],
+  "label": {
+    "en": "Educational model — not manufacturer-accurate",
+    "ar": "نموذج تعليمي، مو مطابق لشكل المنتج الحقيقي"
+  }
+}

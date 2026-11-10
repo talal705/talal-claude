@@ -1,0 +1,198 @@
+{
+  "tutor": {
+    "greeting": "Need help? I can guide you.",
+    "thinkAbout": "Think about this…",
+    "tryAgain": "Give it another try.",
+    "wellDone": "Well done!",
+    "aiUnavailable": "AI assistant is not configured. Using built-in hints.",
+    "launcher": {
+      "open": "Help",
+      "close": "Close help"
+    },
+    "panel": {
+      "title": "Tutor",
+      "close": "Close",
+      "noTopic": "There are no hints for this page yet.",
+      "intro": "Ask for a hint when you want one. You get one step at a time.",
+      "problem": "Problem {current} of {total}",
+      "previous": "Previous problem",
+      "next": "Next problem"
+    },
+    "ladder": {
+      "label1": "Hint 1 · Something to think about",
+      "label2": "Hint 2 · Where to look",
+      "label3": "Hint 3 · The explanation",
+      "ask1": "Give me a hint",
+      "ask2": "Tell me where to look",
+      "ask3": "Explain it to me",
+      "reset": "Start over",
+      "locked": "The full explanation opens after you submit an attempt."
+    },
+    "point": {
+      "show": "Show me where",
+      "stop": "Stop pointing",
+      "pointing": "I marked it on the page.",
+      "offscreen": "It moved off the screen. Scroll back to it, or press “Show me where” again.",
+      "unavailable": "I can’t point at that right now. It is not on this page.",
+      "stale": "The project changed, so that hint no longer fits. Ask again for a fresh one."
+    },
+    "robot": {
+      "hide": "Hide the robot",
+      "show": "Show the robot",
+      "hiddenNote": "The robot is hidden. All help stays here as text.",
+      "notSaved": "This choice could not be saved on this device. It applies until you leave the page."
+    },
+    "hints": {
+      "home": {
+        "title": "Not sure where to start?",
+        "level1": "Choose Help me start for a clear first step, or Start on my own to explore freely.",
+        "level2": "Programming is in the middle of the page. PC assembly is at the end.",
+        "level3": "Choose PC assembly to jump to the builder, or Programming to run your first example."
+      },
+      "generic": {
+        "symptom": "Something is not right yet. What did you expect to happen, and what happened instead?"
+      },
+      "pc": {
+        "class": {
+          "impossible_fit": "This does not fit there",
+          "assembly": "Something in the build needs attention",
+          "startup_fault": "The computer does not start properly",
+          "operating_load_fault": "A problem shows up under load",
+          "optional_improvement": "Something you could improve"
+        }
+      },
+      "network": {
+        "title": {
+          "blocking": "Something stops the network",
+          "warning": "Something to check in the network",
+          "info": "A note about the network"
+        },
+        "journey": {
+          "symptom": "The packet did not arrive. Play its journey step by step: at which device does it stop?"
+        }
+      }
+    },
+    "aiError": "The AI assistant cannot be reached right now. Using built-in hints.",
+    "assembly": {
+      "announce": {
+        "selected": "{subject} picked up. {available} of {total} places are available. Use the up and down arrows to go through them, Enter to place, Escape to cancel.",
+        "selectedNone": "{subject} picked up. None of the {total} places can take it right now. Go through the list to hear why.",
+        "selectedNowhere": "There is nowhere to put {subject} yet.",
+        "notAvailable": "{subject} cannot go in {destination}.",
+        "confirm": "Put {subject} in {destination}? Press Enter to confirm, or Escape to go back.",
+        "placing": "Putting {subject} in {destination}…",
+        "placed": "{subject} is now in {destination}.",
+        "refused": "{subject} did not go in {destination}.",
+        "cancelled": "Cancelled. {subject} was not moved.",
+        "backToList": "Back to the list of places for {subject}.",
+        "undone": "Last step undone.",
+        "redone": "Step done again.",
+        "nothingToUndo": "There is nothing to undo.",
+        "nothingToRedo": "There is nothing to redo."
+      },
+      "list": {
+        "destinations": "Places for {subject}",
+        "available": "Available",
+        "unavailable": "Not available",
+        "keys": "Up and down arrows: move. Enter: place. Escape: cancel. Ctrl+Z: undo."
+      }
+    },
+    "playback": {
+      "controls": {
+        "play": "Play",
+        "pause": "Pause",
+        "stepForward": "Next step",
+        "stepBack": "Previous step",
+        "restart": "Start over",
+        "speed": "Speed",
+        "speedValue": "{speed}×",
+        "position": "Step {current} of {total}",
+        "ready": "Ready. Press Play, or go step by step."
+      },
+      "outcome": {
+        "delivered": "Delivered",
+        "failed": "Not delivered",
+        "incomplete": "Stopped before an outcome"
+      },
+      "announce": {
+        "event": "Step {current} of {total}.",
+        "finished": "End of the journey.",
+        "empty": "Nothing to play.",
+        "paused": "Paused at step {current} of {total}.",
+        "restarted": "Back to the start.",
+        "speed": "Speed {speed}×."
+      }
+    },
+    "cabling": {
+      "announce": {
+        "selected": "{subject} picked up. {available} of {total} ports can take it. Use the up and down arrows to go through them, Enter to plug in, Escape to cancel.",
+        "selectedNone": "{subject} picked up. None of the {total} ports can take it right now. Go through the list to hear why.",
+        "selectedNowhere": "There is no port for {subject} yet.",
+        "notAvailable": "{subject} cannot be plugged into {destination}.",
+        "confirm": "Plug {subject} into {destination}? Press Enter to confirm, or Escape to go back.",
+        "placing": "Plugging {subject} into {destination}…",
+        "placed": "{subject} is now plugged into {destination}.",
+        "refused": "{subject} was not plugged into {destination}.",
+        "cancelled": "Cancelled. {subject} was not plugged in.",
+        "backToList": "Back to the list of ports for {subject}.",
+        "undone": "Last step undone.",
+        "redone": "Step done again.",
+        "nothingToUndo": "There is nothing to undo.",
+        "nothingToRedo": "There is nothing to redo."
+      },
+      "plug": {
+        "wire": {
+          "white-orange": "white-orange wire",
+          "orange": "orange wire",
+          "white-green": "white-green wire",
+          "blue": "blue wire",
+          "white-blue": "white-blue wire",
+          "green": "green wire",
+          "white-brown": "white-brown wire",
+          "brown": "brown wire"
+        },
+        "controls": {
+          "row": "Wires in the plug, pin 1 to pin 8",
+          "position": "Pin {position}",
+          "moveLeft": "Move toward pin 1",
+          "moveRight": "Move toward pin 8",
+          "standard": "Wiring standard",
+          "crimp": "Crimp the plug",
+          "reset": "Cut the plug off and start again",
+          "keys": "Left and right arrows: move between wires. Space: pick a wire up or put it down. While holding a wire, the arrows move it. Escape: put it back.",
+          "pinOk": "Pin {position}: correct",
+          "pinWrong": "Pin {position}: not correct"
+        },
+        "announce": {
+          "grabbed": "Picked up the {wire} at pin {position}. Left and right arrows move it. Space puts it down. Escape puts it back.",
+          "moved": "The {wire} is now at pin {position}.",
+          "dropped": "Put the {wire} down at pin {position}.",
+          "grabCancelled": "The {wire} is back at pin {position}.",
+          "atEdge": "The {wire} is already at pin {position}. It cannot go further.",
+          "standardChosen": "You chose {standard}.",
+          "needStandard": "Choose T568A or T568B before you crimp.",
+          "crimping": "Crimping the plug…",
+          "passed": "Wiremap test passed.",
+          "failed": "Wiremap test failed.",
+          "locked": "The plug is crimped, so the wires cannot move. Cut it off to try again.",
+          "reset": "Plug cut off. The wires are loose again."
+        }
+      }
+    },
+    "ask": {
+      "label": "Ask the tutor a question",
+      "placeholder": "For example: why doesn't my computer start?",
+      "send": "Ask",
+      "thinking": "Thinking…",
+      "answerLabel": "Answer from the AI assistant",
+      "caution": "The AI assistant can be wrong. Check its answer against the hints above.",
+      "possible": "This is a possibility, not a certainty.",
+      "error": "The AI assistant could not answer. The built-in hints above still work.",
+      "discarded": "Your project changed while the assistant was thinking, so its answer was dropped. Ask again if you still need it.",
+      "showTarget": "Show me what it means",
+      "clear": "Clear the answer",
+      "youAsked": "You asked:",
+      "busy": "The AI assistant has had many questions in a short time. Wait a moment, then ask again. The built-in hints above still work."
+    }
+  }
+}

@@ -1,0 +1,17 @@
+node_modules/
+.next/
+dist/
+out/
+build/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+coverage/
+.turbo/
+apps/web/public/assets/pc/
+
+# Generated, locally served language runtimes
+apps/web/public/runtime/

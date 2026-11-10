@@ -1,0 +1,66 @@
+.lab { max-width: 1480px; margin-inline: auto; padding: clamp(16px,3vw,40px); }
+.heading { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-block-end:24px; }
+.heading h1, .heading h2 { font-size:clamp(24px,3vw,38px); font-weight:650; letter-spacing:-.03em; line-height:1.35; }
+.heading p { color:var(--text-soft); margin-block-start:6px; font-size:14px; }
+.progress { flex-shrink:0; color:var(--accent-strong); font-size:25px; font-weight:600; direction:ltr; }
+.progress span { color:var(--text-muted); font-size:16px; font-weight:400; }
+.workspace { display:grid; grid-template-columns:minmax(0,1fr) 310px; gap:20px; align-items:start; }
+.viewer { position:relative; overflow:hidden; border:1px solid #272c35; border-radius:20px; background:radial-gradient(ellipse at 50% 30%,#171d28,#090b10 75%); box-shadow:inset 0 1px 0 #ffffff0c; }
+.canvas { height:clamp(400px,64svh,740px); width:100%; touch-action:none; }
+.canvas canvas { display:block; }
+.viewControls { position:absolute; top:14px; inset-inline-end:14px; display:flex; align-items:center; gap:6px; z-index:2; }
+.viewControls button { min-width:38px; min-height:38px; padding:6px 12px; border:1px solid #ffffff20; border-radius:10px; background:#10141de6; color:#e8edf5; cursor:pointer; font-size:14px; }
+.viewControls button:hover { border-color:var(--accent); }
+.cameraHint { text-align:center; color:var(--text-muted); font-size:12px; padding:10px 12px 12px; }
+.controls { display:grid; gap:14px; }
+.parts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.part { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; padding:10px 8px; min-height:88px; cursor:pointer; border:1px solid var(--border); border-radius:12px; background:linear-gradient(160deg,#17191f,#0e0f13); color:var(--text-soft); font-size:13px; transition:border-color .15s,background .15s; }
+.part img { object-fit:contain; max-height:44px; width:58px; }
+.part[data-selected="true"] { border-color:var(--accent); background:linear-gradient(160deg,#14333d,#10191e); color:white; }
+.part[data-installed="true"] { border-color:#2c5e46; }
+.part[data-selected="true"][data-installed="true"] { border-color:var(--accent); }
+.part svg { position:absolute; top:8px; inset-inline-end:8px; width:15px; height:15px; color:var(--success); }
+.install { border:1px solid var(--border); border-radius:14px; padding:14px; background:var(--gloss),#0d0f14; }
+.selection { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-block-end:10px; font-size:14px; }
+.selection span { font-size:12px; color:var(--text-muted); }
+.installButton { width:100%; min-height:44px; background:var(--accent); border-radius:9px; color:#03242b; font-weight:650; cursor:pointer; }
+.installButton:disabled { background:#20252b; color:#87909a; cursor:default; }
+.hint { font-size:12px; color:var(--text-soft); margin-block-start:8px; }
+.power { padding:14px; border:1px solid var(--border); border-radius:14px; background:#0c0e12; }
+.result { display:flex; gap:10px; align-items:center; justify-content:center; min-height:54px; margin-block-end:10px; color:var(--text-muted); font-size:13px; }
+.result strong { font-size:20px; }
+.result svg { width:24px; height:24px; flex-shrink:0; }
+.result[data-result="success"] { color:var(--success); }
+.result[data-result="failure"] { color:var(--danger); }
+.result p { font-size:12px; color:var(--text-soft); margin-block-start:2px; }
+.powerButton { width:100%; min-height:48px; display:flex; align-items:center; justify-content:center; gap:9px; background:linear-gradient(130deg,#286fe4,#0a4eaa); color:#fff; font-size:15px; font-weight:600; border:1px solid #4587e5; border-radius:10px; cursor:pointer; }
+.powerButton span { font-size:24px; line-height:1; }
+.powerButton:disabled { opacity:.55; cursor:default; }
+.reset { display:block; padding:8px 14px 0; margin-inline:auto; color:var(--text-muted); font-size:12px; cursor:pointer; }
+.reset:hover { color:white; }
+.fallback { display:grid; place-items:center; height:100%; padding:24px; color:var(--text-muted); text-align:center; }
+@media(max-width:800px) { .workspace { grid-template-columns:minmax(0,1fr); gap:14px; } .canvas { height:clamp(300px,48svh,500px); } .parts { grid-template-columns:repeat(4,minmax(0,1fr)); } .part { min-height:80px; font-size:12px; padding:8px 5px; } .controls { gap:12px; } .heading { margin-block-end:16px; } .heading p { max-width:28ch; font-size:13px; } }
+@media(prefers-reduced-motion:reduce) { .part { transition:none; } }
+
+.tabs { display:flex; gap:4px; padding:4px; border:1px solid var(--border); border-radius:12px; background:#0c1016; }
+.tabs button { display:flex; align-items:center; justify-content:center; gap:10px; flex:1; min-height:42px; border-radius:8px; font-size:14px; color:var(--text-muted); cursor:pointer; }
+.tabs button[aria-pressed="true"] { background:#20323e; color:#f4fbff; box-shadow:inset 0 1px 0 #ffffff10; }
+.tabs button span { font-size:12px; color:var(--accent-strong); }
+.controls [hidden] { display:none; }
+.controls > div > .install { margin-block-start:12px; }
+.cablesIntro { margin-block-end:10px; font-size:12px; color:var(--text-soft); line-height:1.65; }
+.cables { display:grid; gap:6px; }
+.cable { display:flex; align-items:center; gap:10px; width:100%; min-height:46px; padding:10px; text-align:start; border:1px solid var(--border); border-radius:10px; background:linear-gradient(120deg,#171c25,#0e121a); color:var(--text-soft); cursor:pointer; font-size:13px; }
+.cable[data-selected="true"] { border-color:var(--accent); background:linear-gradient(130deg,#173642,#101d26); color:#fff; }
+.cable[data-connected="true"] .wireIcon { color:var(--success); }
+.cable > span:nth-child(2) { flex:1; }
+.cable small { display:block; color:var(--text-muted); font-size:10px; margin-block-start:2px; }
+.wireIcon { font-size:22px; line-height:1; color:#99b6c7; }
+.cable svg { width:16px; height:16px; color:var(--success); flex-shrink:0; }
+.unplugged { font-size:10px; color:var(--text-muted); }
+.cableDetail { padding:14px; margin-block-start:12px; background:var(--gloss),#10151d; border:1px solid #2d3946; border-radius:12px; }
+.cableDetail strong { font-size:14px; }
+.cableDetail > p { font-size:12px; color:var(--text-soft); margin-block:7px; line-height:1.65; }
+.cableDetail code { display:block; width:fit-content; margin-block:8px 12px; padding:5px 7px; border:1px solid #405464; border-radius:5px; color:#a8d9ec; background:#0a1018; font-size:11px; }
+.cablesNote { font-size:11px; color:var(--text-muted); margin-block-start:9px; line-height:1.6; }
+.tabs button:focus-visible, .part:focus-visible, .cable:focus-visible, .installButton:focus-visible, .powerButton:focus-visible { outline:2px solid var(--accent-strong); outline-offset:3px; }

@@ -1,0 +1,949 @@
+{
+  "modes": {
+    "learn": "Learn",
+    "freeLab": "Free Lab",
+    "testYourself": "Test Yourself"
+  },
+  "entry": {
+    "iKnow": "I know what I want to do",
+    "helpMe": "Help me start",
+    "iKnowDescription": "Skip the plan and pick a mode yourself.",
+    "helpMeDescription": "Get a short plan: your goal, where you start, and the next step."
+  },
+  "modeDescriptions": {
+    "learn": "Short explanations and a guided practical path.",
+    "free": "Choose your own goal and build it your way.",
+    "test": "A challenge that is checked for you, with an explanation after your attempt."
+  },
+  "labPage": {
+    "entryHeading": "How do you want to start?",
+    "modeHeading": "Choose a mode",
+    "selected": "Selected",
+    "clear": "Clear my choices",
+    "projectsLink": "Saved projects for this lab",
+    "guided": {
+      "heading": "Your starting plan",
+      "goal": "Goal",
+      "startingPoint": "Starting point",
+      "nextAction": "Next step",
+      "goals": {
+        "pc": "Assemble a complete PC that passes its startup check.",
+        "network": "Connect two devices and get a packet from one to the other."
+      },
+      "starts": {
+        "pc": "No experience needed. You begin by getting to know the main parts.",
+        "network": "No experience needed. You begin with what a cable, a switch and a router do."
+      },
+      "next": {
+        "none": "Start in Learn mode. It goes step by step.",
+        "learn": "Learn is selected. Guided lessons are not built yet, so for now it opens the workspace without steps.",
+        "free": "Free Lab is selected. It has no fixed steps.",
+        "test": "Test Yourself is selected. Checked challenges are not built yet, so for now it opens the workspace without checks."
+      }
+    },
+    "steps": {
+      "entry": "Step 1",
+      "plan": "Step 2 of 3",
+      "create2": "Step 2 of 2",
+      "create3": "Step 3 of 3",
+      "next": "Next step",
+      "action": {
+        "pc": "Name your build and press “Create build”. That opens the workspace.",
+        "network": "Name your network and press “Create network”. That opens the workspace."
+      },
+      "actionLesson": "Choose a lesson and press “Start”. It opens in the lab, ready to work in."
+    },
+    "entryCue": "Choose one. It takes you to the next step.",
+    "modeAuto": "Free Lab is selected for you. You can change it here at any time.",
+    "modeCue": "Choosing a mode takes you to the next step.",
+    "continue": {
+      "heading": "Continue where you stopped",
+      "item": "Continue: <title></title>",
+      "untitled": "Untitled project",
+      "all": "All {count} saved projects",
+      "orNew": "Or start a new one below."
+    },
+    "guidedGo": {
+      "learn": "Start in Learn mode",
+      "next": "Go to the next step"
+    }
+  },
+  "project": {
+    "load": {
+      "loading": "Opening your project…",
+      "missing": {
+        "heading": "This project isn't on this device",
+        "body": "It may have been deleted, or the link came from another browser. Guest projects stay in the browser that made them."
+      },
+      "corrupt": {
+        "heading": "This project can't be opened",
+        "body": "Its saved data isn't a readable project for this lab. It was left as it is, not deleted."
+      },
+      "archived": {
+        "heading": "This is an archived programming project",
+        "body": "Code Studio is no longer part of Your Tech Lab, so this project can't be opened here. It is kept on this device as you saved it. In My Projects you can download it as a JSON file or delete it."
+      },
+      "unavailable": {
+        "heading": "This browser won't open local storage",
+        "body": "Storage may be blocked or full. Private windows often block it. Nothing was deleted."
+      },
+      "error": {
+        "heading": "Couldn't open the project",
+        "body": "Something failed while reading it. Nothing was deleted."
+      },
+      "startNew": "Start a new project",
+      "allProjects": "My Projects"
+    },
+    "save": {
+      "saved": "Saved on this device",
+      "saving": "Saving…",
+      "failed": "Not saved",
+      "conflict": "Not saved: changed elsewhere",
+      "failedBody": "Your latest changes are not saved yet. They are still here on this page. Try again.",
+      "retry": "Save again",
+      "recovered": "We brought back edits that were not saved when this page closed last time.",
+      "dismiss": "OK"
+    },
+    "conflict": {
+      "heading": "This project was changed somewhere else",
+      "body": "Another tab or window saved a newer version. Your changes here are not saved until you choose.",
+      "keepMine": "Keep my version",
+      "loadTheirs": "Load the other version"
+    },
+    "snapshots": {
+      "heading": "Snapshots",
+      "note": "A snapshot is a named copy of the whole project, kept on this device. You can go back to it later.",
+      "nameLabel": "Snapshot name",
+      "take": "Save snapshot",
+      "taking": "Saving…",
+      "taken": "Snapshot saved.",
+      "takeFailed": "Couldn't save the snapshot. The project must save first.",
+      "nameTooLong": "The name is too long. Keep it under 200 characters.",
+      "loading": "Loading snapshots…",
+      "loadFailed": "Couldn't read the snapshots.",
+      "empty": "No snapshots yet.",
+      "listLabel": "Saved snapshots",
+      "unnamed": "Unnamed snapshot",
+      "meta": "Revision {revision}",
+      "restore": "Restore",
+      "restoreNamed": "Restore snapshot: {name}",
+      "confirmHeading": "Go back to this snapshot?",
+      "confirmBody": "What is on screen is replaced by the snapshot. The snapshot itself is kept.",
+      "confirm": "Restore snapshot",
+      "restoring": "Restoring…",
+      "restored": "Project restored from the snapshot.",
+      "restoreFailed": "Couldn't restore the snapshot."
+    },
+    "bar": {
+      "titleLabel": "Project name",
+      "titleInvalid": "A name can't be empty or longer than 200 characters.",
+      "snapshots": "Snapshots",
+      "close": "Close project",
+      "heading": "Workspace"
+    },
+    "export": "Export"
+  },
+  "pcLab": {
+    "starter": {
+      "heading": "Start a build",
+      "titleLabel": "Build name",
+      "titleHint": "Optional. You can change it later.",
+      "defaultTitle": "My PC build",
+      "lightingLegend": "Lighting in this build",
+      "withRgb": "With RGB lighting",
+      "withRgbHint": "Parts that have lights can light up once they are connected correctly.",
+      "withoutRgb": "Without RGB lighting",
+      "withoutRgbHint": "Nothing lights up, even on parts that have lights. The build works the same.",
+      "create": "Create build",
+      "creating": "Creating…",
+      "createFailed": "Couldn't create the build. Try again.",
+      "unavailable": "This browser won't open local storage, so the build can't be saved. Private windows often block it.",
+      "titleTooLong": "The name is too long. Keep it under 200 characters.",
+      "viewNote": "The build is shown two ways that stay in step: a 3D view, and a list of every part, position, port and cable as text and buttons.",
+      "startLegend": "Start with",
+      "startEmpty": "An empty workbench",
+      "startEmptyHint": "Choose every part yourself from the catalog.",
+      "importHeading": "Import a build",
+      "importLabel": "Choose an exported build file (.json)",
+      "importHint": "Use a file made with Export in this lab. Its steps are replayed under the current rules and it becomes a new build.",
+      "importing": "Importing…",
+      "importProblems": {
+        "file_too_large": "This file is too large to be a build export.",
+        "not_json": "This file is not valid JSON.",
+        "wrong_format": "This file is not a build exported from Your Tech Lab.",
+        "unsupported_version": "This export was made by a newer version and can't be read here.",
+        "invalid_title": "The build name in this file is missing or too long.",
+        "invalid_log": "The steps in this file are missing or damaged.",
+        "step_refused": "One step of this build is not accepted under the current rules:",
+        "read_failed": "Couldn't read the file."
+      },
+      "kitHint": "The parts arrive disassembled on the workbench. Nothing is installed or connected for you.",
+      "kitFailed": "This starter set no longer fits the current parts list, so it was not created."
+    },
+    "bar": {
+      "undo": "Undo",
+      "redo": "Redo",
+      "export": "Export",
+      "exported": "Build exported as {name}."
+    },
+    "categories": {
+      "case": "Case",
+      "motherboard": "Motherboard",
+      "cpu": "Processor (CPU)",
+      "ram": "Memory (RAM)",
+      "gpu": "Graphics card",
+      "psu": "Power supply",
+      "storage": "Storage drive",
+      "fan": "Fan",
+      "cooling": "CPU cooler",
+      "cable": "Cable",
+      "monitor": "Monitor"
+    },
+    "picker": {
+      "heading": "Parts",
+      "categoryLabel": "Kind of part",
+      "lightingLabel": "Show",
+      "lightingAll": "All parts",
+      "lightingWith": "With lighting",
+      "lightingWithout": "Without lighting",
+      "empty": "No parts of this kind match the filter.",
+      "add": "Add to bench",
+      "addNamed": "Add {name} to the bench",
+      "added": "{name} is on the bench.",
+      "generic": "Generic teaching part, not a commercial product",
+      "formFactor": "Form factor",
+      "hasLighting": "Has lighting",
+      "noLighting": "No lighting",
+      "noPicture": "No picture yet",
+      "details": "Sources and checks",
+      "verification": {
+        "verified": "Specifications checked against the maker's pages",
+        "partially_verified": "Partly checked: some values are not from a source",
+        "generic": "Generic part: values chosen for teaching"
+      },
+      "unverified": "Values not read from a source",
+      "sources": "Sources",
+      "retrieved": "read on {date}",
+      "noSources": "No source: this is a generic teaching part.",
+      "count": "{count, plural, one {# part} other {# parts}}"
+    },
+    "build": {
+      "heading": "Your build",
+      "empty": "The bench is empty. Add a case from the parts list to start.",
+      "standalone": "Case and outside parts",
+      "bench": "On the bench",
+      "installed": "Installed",
+      "cables": "Cables",
+      "noCables": "No cables yet. Cables arrive with the parts they belong to.",
+      "onBench": "On the bench, not installed.",
+      "isCase": "Other parts go into this one.",
+      "location": "{role}: in {mount} on {host}",
+      "seatingLabel": "Seating",
+      "seating": {
+        "placed": "Placed, not pushed in",
+        "partial": "Partly in",
+        "seated": "Fully seated"
+      },
+      "fasteners": "Fasteners secured: {secured} of {total}",
+      "noFasteners": "Nothing to secure here",
+      "place": "Place…",
+      "seat": "Push in fully",
+      "unseat": "Pull back out",
+      "secure": "Secure",
+      "loosen": "Loosen",
+      "unmount": "Take out",
+      "remove": "Remove from build",
+      "lightingOn": "Lighting on",
+      "positions": "Positions on this part ({count})",
+      "ports": "Ports ({count})",
+      "positionEmpty": "Empty",
+      "positionHolds": "Holds {name}",
+      "portEmpty": "Empty",
+      "portPlugged": "Plugged in: {cable}, {end}",
+      "requirement": {
+        "required": "Required",
+        "recommended": "Recommended",
+        "optional": "Optional"
+      },
+      "disconnect": "Unplug",
+      "disconnectNamed": "Unplug {end} of {cable}",
+      "cableOwner": "Comes with {name}",
+      "cableLoose": "Separate cable",
+      "endLoose": "Loose",
+      "endPlugged": "Plugged into {owner}: {label}",
+      "connect": "Connect…",
+      "connectNamed": "Choose where to plug {end} of {cable}",
+      "removeCable": "Put cable away",
+      "tidy": "Routed tidily",
+      "done": {
+        "seat": "{name} is fully seated.",
+        "unseat": "{name} is pulled back out.",
+        "secure": "{name} is secured.",
+        "loosen": "{name} is loosened.",
+        "unmount": "{name} is back on the bench.",
+        "remove": "{name} was removed.",
+        "disconnect": "Unplugged.",
+        "removeCable": "Cable put away.",
+        "panel": "Side panel changed.",
+        "lighting": "Lighting changed.",
+        "partial": "{name} is partly in.",
+        "bios": "Firmware version changed.",
+        "bootable": "Drive setting changed.",
+        "tidy": "Cable routing changed."
+      },
+      "seatPartly": "Push in partly",
+      "secureOne": "Secure one",
+      "secureAll": "Secure all",
+      "loosenOne": "Loosen one",
+      "loosenAll": "Loosen all",
+      "bios": "Firmware (BIOS) version",
+      "bootable": "Has an operating system installed",
+      "lightingColor": "Light colour",
+      "lightingEffect": "Light effect",
+      "effects": {
+        "static": "Steady",
+        "breathing": "Breathing",
+        "rainbow": "Rainbow"
+      },
+      "colors": {
+        "#00e5ff": "Cyan",
+        "#ffffff": "White",
+        "#ff0033": "Red",
+        "#00ff66": "Green",
+        "#0066ff": "Blue",
+        "#a855f7": "Purple"
+      },
+      "lightingBlocked": "Colour and effect can be set once the lighting is connected."
+    },
+    "refusal": {
+      "heading": "That did not work",
+      "why": "Why",
+      "evidence": "What the lab checked",
+      "observed": "found",
+      "expected": "needed"
+    },
+    "power": {
+      "heading": "Power and startup",
+      "sidePanel": "Side panel open",
+      "wall": "Wall power cable connected",
+      "psuSwitch": "Power supply switch on",
+      "press": "Press the power button",
+      "off": "Switch off",
+      "pressed": "The power button has been pressed.",
+      "notPressed": "The power button has not been pressed.",
+      "outcomeLabel": "Result",
+      "outcome": {
+        "idle": "Not started",
+        "no_power": "No power",
+        "no_post": "Power, but no startup check (POST)",
+        "no_display": "Stops at the graphics check",
+        "no_boot_device": "Self-test passes: no drive to start from",
+        "load_fault": "Starts, then fails under load",
+        "operational": "Working"
+      },
+      "stagesLabel": "Startup stages",
+      "stage": {
+        "power": "Power",
+        "post": "Startup check (POST)",
+        "firmware_display": "Firmware and graphics",
+        "boot_device": "Boot drive",
+        "operating_load": "Running under load"
+      },
+      "status": {
+        "passed": "Passed",
+        "failed": "Failed",
+        "not_reached": "Not reached"
+      },
+      "spinning": "Fans and pumps turning: {count}",
+      "lit": "Parts lit: {lit} of {total}",
+      "advisories": "Notes that do not stop startup",
+      "loadModel": "Estimated draw {draw} W; power supply rated {rated} W"
+    },
+    "diagnostics": {
+      "heading": "What still needs attention",
+      "none": "The lab finds nothing wrong with the build as it is.",
+      "severity": {
+        "blocking": "Stops startup",
+        "warning": "Warning",
+        "info": "Note"
+      },
+      "explain": "Why it matters"
+    },
+    "destination": {
+      "cancel": "Cancel",
+      "placing": "Placing…",
+      "why": "Why not"
+    },
+    "drift": {
+      "heading": "The parts catalog changed since this build was saved",
+      "body": "The build opens as it was saved. Under the current rules, one of its steps is no longer accepted:"
+    },
+    "scene": {
+      "heading": "3D view",
+      "show": "Show the 3D view",
+      "intro": "Click a part to pick it up, then click a highlighted place. Cyan places can take it; amber ones cannot, and clicking one tells you why. Everything here can also be done in the list below. The camera stays where you leave it while you select and install parts. Move it yourself with the view controls, drag, or zoom.",
+      "educational": "Educational models, not manufacturer-accurate. A part with no model yet is drawn as an outline box of its size.",
+      "noModel": "No model yet",
+      "loading": "Loading the 3D view…",
+      "unavailable": "The 3D view can't start in this browser (no WebGL). The list below does everything the 3D view does.",
+      "lost": "The 3D view stopped (the graphics context was lost). The list below still works.",
+      "failed": "The 3D view ran into a problem and was closed. The list below still works.",
+      "retry": "Try the 3D view again",
+      "quality": "Picture quality",
+      "qualities": {
+        "low": "Low (fastest)",
+        "medium": "Medium",
+        "high": "High (sharpest)"
+      },
+      "viewsLabel": "Camera views",
+      "views": {
+        "front": "Front",
+        "top": "Top",
+        "side": "Side",
+        "angle": "Angle",
+        "fit": "Fit all"
+      },
+      "moveLabel": "Move the camera",
+      "moves": {
+        "left": "Turn left",
+        "right": "Turn right",
+        "up": "Tilt up",
+        "down": "Tilt down",
+        "in": "Zoom in",
+        "out": "Zoom out"
+      },
+      "canvasLabel": "3D view of your build. Arrow keys turn the camera, plus and minus zoom.",
+      "keys": "With the picture focused: arrow keys turn the camera, + and − zoom. Drag with a mouse or finger to turn, scroll or pinch to zoom. Orbit stays centred on the workbench; dragging rotates the view without panning it away. Use Fit all to centre the current parts again.",
+      "selected": "Marked in both views: {name}",
+      "benchAssembly": "Prepare the motherboard on the workbench first: CPU, RAM, M.2 drive and CPU cooler/block. Then select the motherboard and place it in the case; its attached parts move with it. Finish with the graphics card, power supply, case fans, radiator and cables. A SATA drive mounts in the case."
+    },
+    "archived": {
+      "heading": "{count, plural, one {This build uses # part that is no longer offered} other {This build uses # parts that are no longer offered}}",
+      "body": "The lab now offers two options for each kind of part and no monitor. Your build keeps these parts exactly as saved and is checked by the same rules; you just cannot add them again."
+    },
+    "faultHint": {
+      "prompt": "This check failed. Ask for hints one at a time to work out why.",
+      "first": "Show a hint",
+      "next": "Next hint",
+      "level": "Hint {level} of {total}:",
+      "showWhere": "Show me where"
+    },
+    "sceneActions": {
+      "heading": "Work on the selection",
+      "none": "Click a part or a cable end in the picture to see everything you can do with it here. The switches below are always available.",
+      "cables": "Cables of this selection",
+      "switches": "Switches outside the build",
+      "done": "Done: {text}",
+      "refused": "Not done:",
+      "why": "Why?",
+      "doneWall": "Mains cable changed.",
+      "donePsu": "Power supply switch changed.",
+      "doneOff": "Computer switched off.",
+      "inScene": " (3D view)"
+    }
+  },
+  "netLab": {
+    "starter": {
+      "heading": "Start a network",
+      "titleLabel": "Network name",
+      "titleHint": "Optional. You can change it later.",
+      "defaultTitle": "My home network",
+      "titleTooLong": "The name is too long. Keep it under 200 characters.",
+      "startLegend": "Start with",
+      "startEmpty": "An empty table",
+      "startEmptyHint": "Add every device and cable yourself.",
+      "create": "Create network",
+      "creating": "Creating…",
+      "createFailed": "Couldn't create the network. Try again.",
+      "presetFailed": "This ready network is not accepted by the current rules, so it was not created.",
+      "unavailable": "This browser won't open local storage, so the network can't be saved. Private windows often block it.",
+      "viewNote": "This is the list view of the network: every device, port, cable and setting as text and buttons. The drawn map is not built yet.",
+      "simNote": "Everything here is a simulation. No real device, address or website is contacted."
+    },
+    "bar": {
+      "undo": "Undo",
+      "redo": "Redo"
+    },
+    "kinds": {
+      "isp": "Internet provider",
+      "ont": "Fibre box (ONT)",
+      "router": "Router",
+      "switch": "Switch",
+      "access_point": "Wi-Fi access point",
+      "fiber_gateway": "Fibre gateway",
+      "wired_client": "Computer (cable)",
+      "wifi_client": "Phone (Wi-Fi)"
+    },
+    "roles": {
+      "internet_service": "internet service",
+      "optical_termination": "fibre to Ethernet",
+      "routing": "routing",
+      "nat": "NAT",
+      "dhcp_server": "DHCP server",
+      "switching": "switching",
+      "wifi_access": "Wi-Fi",
+      "client": "client"
+    },
+    "medium": {
+      "fiber": "Fibre",
+      "rj45": "Ethernet (RJ45)"
+    },
+    "devices": {
+      "heading": "Devices",
+      "addLabel": "Add a device",
+      "add": "Add device",
+      "noAutoMdix": "Ports without Auto-MDIX (for the crossover lesson)",
+      "added": "{name} added.",
+      "empty": "No devices yet. Add one, or start again with a ready home network.",
+      "rolesLabel": "Does",
+      "power": "Powered on",
+      "remove": "Remove",
+      "removeNamed": "Remove {name}",
+      "removed": "{name} removed.",
+      "ports": "Ports ({count})",
+      "noPorts": "No cable ports: this device joins by Wi-Fi.",
+      "portEmpty": "Empty",
+      "portPlugged": "Cable {number}, end {end}",
+      "unplug": "Unplug",
+      "unplugNamed": "Unplug cable {number} from {port}",
+      "unplugged": "Unplugged.",
+      "settings": "Settings",
+      "wifiLink": "Wi-Fi connection"
+    },
+    "settings": {
+      "apply": "Apply",
+      "applied": "Settings applied.",
+      "interface": {
+        "nic": "Network settings",
+        "wan": "Internet side (WAN)",
+        "lan": "Home side (LAN)"
+      },
+      "mode": "How it gets its address",
+      "modes": {
+        "static": "Typed by hand",
+        "dhcp": "Automatic (DHCP)",
+        "none": "No address"
+      },
+      "address": "IP address",
+      "mask": "Subnet mask",
+      "gateway": "Default gateway",
+      "dns": "DNS servers",
+      "dnsHint": "Separate several with commas.",
+      "dhcp": "DHCP server",
+      "dhcpEnabled": "Hand out addresses",
+      "poolStart": "First address",
+      "poolEnd": "Last address",
+      "dhcpDnsHint": "Leave empty to hand out the DNS server learned from the provider.",
+      "nat": "NAT (share one outside address)",
+      "wifi": "Wi-Fi network",
+      "wifiEnabled": "Wi-Fi on",
+      "ssid": "Network name (SSID)",
+      "passphrase": "Passphrase",
+      "wifiClient": "Wi-Fi to join",
+      "passphraseNote": "Shown as plain text: this is a practice network, not a real one."
+    },
+    "cables": {
+      "heading": "Cables",
+      "addFiber": "Add fibre cable",
+      "addPatch": "Add ready-made Ethernet cable",
+      "addTerminated": "Add Ethernet cable to terminate",
+      "category": "Category for the cable you terminate",
+      "categoryNote": "The category is recorded but does not change whether a link works in this lab.",
+      "added": "Cable {number} added.",
+      "empty": "No cables yet.",
+      "name": "Cable {number}",
+      "readyMade": "ready-made",
+      "toTerminate": "you make the plugs",
+      "end": "End {end}",
+      "loose": "Loose",
+      "pluggedInto": "Plugged into {device}, port {port}",
+      "connect": "Connect…",
+      "connectNamed": "Choose a port for end {end} of cable {number}",
+      "subject": "Cable {number}, end {end}",
+      "unplug": "Unplug",
+      "remove": "Remove cable",
+      "removed": "Cable {number} removed.",
+      "plugNone": "No plug yet",
+      "plugMade": "Plug made: {standard}",
+      "plugOther": "Plug made: matches neither standard",
+      "makePlug": "Make this plug",
+      "remakePlug": "Remake this plug",
+      "wiremap": "Cable test",
+      "wiring": {
+        "straight_through": "Straight-through",
+        "crossover": "Crossover"
+      },
+      "pinsLabel": "Each pin, end A to end B",
+      "pinTo": "Pin {pin} to pin {far}",
+      "pinNowhere": "Pin {pin} reaches nothing",
+      "pinStatus": {
+        "ok": "correct",
+        "open": "open",
+        "short": "shorted",
+        "swapped": "swapped",
+        "split_pair": "split pair"
+      }
+    },
+    "ports": {
+      "heading": "Ports for {subject}",
+      "cancel": "Cancel",
+      "placing": "Plugging in…"
+    },
+    "plug": {
+      "heading": "Ethernet plug exercise",
+      "intro": "Arrange the eight wires, choose the standard you are wiring to, then crimp. The lab tests the plug and shows each pin.",
+      "forCable": "For cable {number}, end {end}",
+      "practice": "Practice plug (not part of a cable)",
+      "open": "Practise making a plug",
+      "close": "Close the exercise",
+      "standardShown": "Standard order, pin 1 first",
+      "saved": "The plug is now on the cable.",
+      "notSaved": "The plug was not put on the cable.",
+      "result": "Wiremap result",
+      "layoutNote": "Pin 1 is on the left with the clip facing away. The order is the same in Arabic and English.",
+      "standardsNote": "T568A and T568B are both correct; pick either and use it on the plug you are making. Fibre is not terminated this way: a fibre cable here is ready-made."
+    },
+    "refusal": {
+      "heading": "That did not work",
+      "why": "Why",
+      "evidence": "What the lab checked",
+      "observed": "found",
+      "expected": "needed"
+    },
+    "test": {
+      "heading": "Test the network",
+      "from": "From",
+      "kind": "Test",
+      "ping": "Ping",
+      "lookup": "Name lookup",
+      "to": "To (address or name)",
+      "name": "Name",
+      "suggestions": "Names and addresses in this simulation",
+      "run": "Send",
+      "noClients": "Add a computer or a phone to send a test from.",
+      "result": "Result",
+      "succeeded": "It worked.",
+      "failed": "It did not work.",
+      "resolved": "The name is {address}.",
+      "journey": "The journey, step by step",
+      "noEvents": "Nothing was sent.",
+      "why": "Why",
+      "reasons": "Why it failed",
+      "stale": "The network changed after this test. Send it again for a current result."
+    },
+    "diagnostics": {
+      "heading": "What the lab finds in this network",
+      "none": "The lab finds nothing wrong with the network as it is.",
+      "severity": {
+        "blocking": "Stops traffic",
+        "warning": "Warning",
+        "info": "Note"
+      },
+      "explain": "Why it matters"
+    },
+    "addresses": {
+      "heading": "Addresses in use",
+      "caption": "The address every interface has right now, typed by hand or handed out by DHCP.",
+      "device": "Device",
+      "interface": "Interface",
+      "source": "From",
+      "address": "Address",
+      "mask": "Mask",
+      "gateway": "Gateway",
+      "dns": "DNS",
+      "interfaces": {
+        "nic": "Network",
+        "wan": "WAN",
+        "lan": "LAN",
+        "isp": "Provider"
+      },
+      "sources": {
+        "static": "By hand",
+        "dhcp": "DHCP",
+        "none": "None"
+      },
+      "leasedBy": "from {name}",
+      "none": "No devices with addresses yet."
+    }
+  },
+  "lessons": {
+    "listHeading": {
+      "learn": "Choose a lesson",
+      "test": "Choose a challenge"
+    },
+    "listIntro": {
+      "learn": "Each lesson gives you a goal, lets you try it in the real lab, checks what you did, and explains why.",
+      "test": "Test Yourself: the same checks, with fewer hints. The full explanation opens after you submit an attempt."
+    },
+    "none": "There are no lessons for this lab yet.",
+    "freeInstead": "Open Free Lab instead",
+    "levels": {
+      "beginner": "Beginner",
+      "intermediate": "Intermediate",
+      "advanced": "Advanced",
+      "expert": "Expert"
+    },
+    "kinds": {
+      "lesson": "Lesson",
+      "challenge": "Challenge",
+      "fault": "Find and fix"
+    },
+    "status": {
+      "new": "Not started",
+      "in_progress": "In progress",
+      "completed": "Completed"
+    },
+    "outcome": "You will be able to",
+    "needsFirst": "Best after: {titles}",
+    "start": "Start",
+    "continue": "Continue",
+    "again": "Do it again",
+    "starting": "Opening…",
+    "startFailed": "Couldn't open the lesson. Try again.",
+    "progressUnavailable": "Your lesson progress can't be read in this browser, so it will not be kept.",
+    "panel": {
+      "heading": "Lesson",
+      "step": "Step {current} of {total}",
+      "goal": "Goal",
+      "followUpTitle": "One more, to check you've got it",
+      "predictTitle": "Before you start: what do you think?",
+      "predictSkip": "Skip the question",
+      "predictAnswer": "Answer",
+      "yourPrediction": "Your prediction: {answer}",
+      "options": "Your answer",
+      "check": "Check my work",
+      "checking": "Running the checks…",
+      "rubric": "What the lab checked",
+      "passed": "Done",
+      "notPassed": "Not yet",
+      "observed": "found: {value}",
+      "showExample": "Show me an example",
+      "example": "Example",
+      "explanation": "Why",
+      "continue": "Continue",
+      "skipFollowUp": "Skip this one",
+      "workHere": "Work in the lab below, then press “Check my work”.",
+      "toFree": "Continue in Free Lab",
+      "toFreeNote": "Your build stays as it is. You can come back to this lesson at any time.",
+      "backToLesson": "Back to the lesson",
+      "freeBanner": "This project belongs to the lesson “{title}”.",
+      "leave": "Lessons list",
+      "saveFailed": "Progress could not be saved in this browser.",
+      "rubricSummary": "{passed} of {total} done.",
+      "hints": "Hints",
+      "hintsOpened": "{count, plural, one {# hint opened} other {# hints opened}}"
+    },
+    "notice": {
+      "check_passed": "That's right.",
+      "check_failed": "Not yet. The list shows what is still missing.",
+      "hint_locked_until_attempt": "In Test Yourself the last hint opens after you submit an attempt.",
+      "no_more_hints": "That was the last hint.",
+      "example_not_in_test": "There are no examples in Test Yourself.",
+      "prediction_right": "That's right, and your prediction matched what happened.",
+      "prediction_wrong": "That's right. What happened was different from your prediction; the explanation says why.",
+      "follow_up_offered": "You corrected a mistake. One related question checks that it is clear.",
+      "follow_up_passed": "Right.",
+      "follow_up_failed": "Not yet. Have another look.",
+      "lesson_completed": "Lesson complete."
+    },
+    "summary": {
+      "heading": "Summary",
+      "practised": "You practised",
+      "needsWork": "Worth another go",
+      "independent": "{count} of {total} steps on your own",
+      "predictions": "Predictions: {correct} of {answered} matched",
+      "none": "Nothing yet.",
+      "next": "Your next step",
+      "nextLesson": "Next lesson: {title}",
+      "repeat": "Do this step again",
+      "free": "Practise freely in Free Lab",
+      "list": "Back to the lessons"
+    },
+    "baseline": {
+      "toggle": "Not sure where to start?",
+      "choose": "Which one?",
+      "dontKnow": "I don't know",
+      "submit": "Suggest where to start",
+      "result": "A suggestion",
+      "start_here": "Start with: {title}",
+      "skip_ahead": "You seem to know these already. Try the challenge: {title}",
+      "no_answers": "Start at the beginning: {title}",
+      "known": "You seem to know",
+      "toLearn": "This will help with",
+      "open": "Open it",
+      "again": "Answer again",
+      "noBaseline": "There is no starting check for this lab yet."
+    }
+  },
+  "simplePc": {
+    "title": "Build your PC.",
+    "intro": "Fit the parts. Connect the cables. Try starting it.",
+    "progress": "{count} of {total} parts installed",
+    "partsLabel": "Your parts",
+    "parts": {
+      "cpu": "CPU",
+      "ram": "RAM",
+      "storage": "Storage",
+      "cooler": "Cooler",
+      "motherboard": "Motherboard",
+      "gpu": "Graphics card",
+      "psu": "Power supply"
+    },
+    "inCase": "Into the case",
+    "onBoard": "On the motherboard",
+    "installed": "Installed",
+    "install": "Fit this part",
+    "cpuFirst": "Fit the CPU first.",
+    "boardFirst": "Fit the motherboard in the case first.",
+    "prepareBoard": "Fit the CPU, RAM, storage and cooler first.",
+    "cannotFit": "Fit the earlier parts first.",
+    "readyToTry": "Fit the parts and connect their cables, then try starting it.",
+    "power": "Start the PC",
+    "success": "It works!",
+    "failure": "Not working yet",
+    "missing": "Fit the remaining parts, then connect their cables.",
+    "reset": "Start over",
+    "camera": "Camera controls",
+    "center": "Centre",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "scene": "PC assembly view. Arrow keys rotate; plus and minus zoom.",
+    "cameraHint": "Drag to rotate · Scroll to zoom",
+    "loading": "Loading your PC…",
+    "no3d": "The 3D view is unavailable. You can still build using the part buttons.",
+    "part": "Part",
+    "assemblySteps": "Assembly steps",
+    "partsTab": "Parts",
+    "cablesTab": "Cables",
+    "cablesLabel": "Your cables",
+    "cablesIntro": "Five connections for startup, plus two case fan leads.",
+    "connect": "Connect cable",
+    "disconnect": "Unplug cable",
+    "loose": "Loose",
+    "fanOptional": "Case fan · optional for startup",
+    "powerOff": "Turn off the PC",
+    "turnOffFirst": "Turn the PC off before changing a cable.",
+    "fitCableParts": "Fit these parts first: {parts}.",
+    "cannotConnect": "This cable could not be connected. Check the parts and try again.",
+    "missingCable": "Connect the {cable} and try again.",
+    "checkCables": "Check the remaining cable connections and try again.",
+    "noStorageCable": "The RAM and M.2 SSD do not need separate cables.",
+    "cables": {
+      "atx": {
+        "name": "Motherboard power",
+        "route": "Power supply → motherboard main power socket",
+        "connector": "ATX · 24-pin"
+      },
+      "cpuPower": {
+        "name": "CPU power",
+        "route": "Power supply → CPU power socket on the motherboard",
+        "connector": "EPS / CPU · 4+4-pin"
+      },
+      "gpuPower": {
+        "name": "Graphics card power",
+        "route": "Power supply → power socket on the graphics card",
+        "connector": "PCIe / GPU · 6+2-pin"
+      },
+      "cpuFan": {
+        "name": "CPU cooler fan",
+        "route": "Air cooler → CPU_FAN on the motherboard",
+        "connector": "CPU_FAN · 4-pin PWM"
+      },
+      "powerSwitch": {
+        "name": "Case power button",
+        "route": "Case power button → front-panel power switch pins",
+        "connector": "F_PANEL · PWR_SW"
+      },
+      "caseFan1": {
+        "name": "Case fan 1",
+        "route": "First case fan → CHA_FAN1 on the motherboard",
+        "connector": "CHA_FAN1"
+      },
+      "caseFan2": {
+        "name": "Case fan 2",
+        "route": "Second case fan → CHA_FAN2 on the motherboard",
+        "connector": "CHA_FAN2"
+      }
+    }
+  },
+  "learning": {
+    "name": "Your Tech Lab",
+    "eyebrow": "Learn by doing",
+    "tagline": "Build your PC. Write your code. Find your way.",
+    "intro": "A place to try, learn, and make things work—with a little helper when you need one.",
+    "helpStart": "Help me start",
+    "helpStartDetail": "A clear first step, a small example, then your turn.",
+    "selfStart": "Start on my own",
+    "selfStartDetail": "Choose a lab and try your ideas at your own pace.",
+    "startTitle": "Start small. See what happens.",
+    "chooseTitle": "What would you like to try?",
+    "startSteps": "1. Choose code or PC assembly. 2. Try a small step. 3. Run it, then ask the helper if you get stuck.",
+    "startCoding": "Start coding",
+    "startPc": "Build my PC",
+    "codeNav": "Programming",
+    "pcNav": "PC assembly",
+    "helperNote": "The little robot in the corner is here whenever you need help.",
+    "codeSection": "Write & explore",
+    "pcSection": "Build & try",
+    "codeTitle": "A little code. A real result.",
+    "codeIntro": "Pick a language, write something, and run it. Learn with examples or build your own idea.",
+    "autoSave": "Draft saved on this device",
+    "language": "Language",
+    "learningMode": "Learning mode",
+    "learn": "Guide me",
+    "free": "On my own",
+    "level": "Example level",
+    "levels": {
+      "0": "Beginner",
+      "1": "Intermediate",
+      "2": "Advanced",
+      "3": "Expert"
+    },
+    "tasks": {
+      "0": "Run a greeting, then change the message to your own name.",
+      "1": "Use a function to calculate a result. Change the numbers and predict the answer.",
+      "2": "Work with a list. Add a value and decide which results should appear.",
+      "3": "Model a real task with structured code. Add one behavior and explain how it works."
+    },
+    "webTasks": {
+      "0": "Make a heading and a paragraph. Change the words and the heading color.",
+      "1": "Create a card with HTML and CSS. Add another detail and adjust the spacing.",
+      "2": "Make a responsive grid. Add a card and compare different widths.",
+      "3": "Build a form with clear labels and keyboard focus. Try submitting it with an empty field."
+    },
+    "showExample": "Load an example",
+    "freeNote": "This space is yours. Try a calculator, a small page, or any idea you like. Language changes keep a separate draft.",
+    "editable": "Editable file",
+    "editor": "Code editor",
+    "run": "Run code",
+    "stop": "Stop",
+    "askRobot": "Ask the helper",
+    "reviewing": "Reviewing…",
+    "output": "Output",
+    "preview": "Live preview",
+    "runReady": "Ready when you are.",
+    "running": "Running your code…",
+    "runtimeLoading": "Preparing the language for the first run…",
+    "runSuccess": "Your code ran successfully.",
+    "runError": "The program stopped. Read the error or ask the helper.",
+    "runnerUnavailable": "This language’s runner is unavailable. Your code has been kept.",
+    "stopped": "Stopped. You can edit and run again.",
+    "outputEmpty": "Your program’s output will appear here.",
+    "explainError": "Help me understand this error",
+    "reviewTitle": "Your little helper",
+    "aiReview": "AI code review",
+    "builtInReview": "Built-in guidance",
+    "aiNotConfigured": "Real AI review needs a provider connection. Built-in error guidance is available now.",
+    "aiUnavailable": "AI review is unavailable right now. Here is the built-in guidance.",
+    "typoHelp": "There may be a small spelling mistake in a command. Check {token}. You can review the suggested change and apply it, then run again.",
+    "errorHelp": "The checker reported an issue near line {line}: {message}. Check that line and the one before it, then run again.",
+    "generalHelp": "Try running the code first. Read the first error, check names and punctuation, and change one thing at a time. If it runs, change a value and predict the new result.",
+    "showWhere": "Show line {line}",
+    "applyFix": "Apply suggestion",
+    "seeFix": "See the suggested code",
+    "undo": "Undo the last replacement",
+    "privacy": "Code runs in an isolated learning environment. Only asking the helper sends the current file and error to a configured AI provider. AI suggestions are untested until you run them.",
+    "footer": "Try it. Understand it. Make it work.",
+    "previewReady": "Your page is live. Edit the code and run again to refresh it."
+  }
+}

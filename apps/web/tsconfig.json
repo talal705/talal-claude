@@ -1,0 +1,59 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ES2022"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./*"
+      ],
+      "@ytl/contracts": [
+        "../../packages/contracts/src"
+      ],
+      "@ytl/simulation": [
+        "../../packages/simulation/src"
+      ],
+      "@ytl/curriculum": [
+        "../../packages/curriculum/src"
+      ],
+      "@ytl/ui": [
+        "../../packages/ui/src"
+      ],
+      "@ytl/catalog": [
+        "../../content/catalog"
+      ],
+      "@ytl/lessons": [
+        "../../content/lessons"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

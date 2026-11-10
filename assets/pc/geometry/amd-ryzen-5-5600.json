@@ -1,0 +1,164 @@
+{
+  "schema": 2,
+  "catalogId": "amd-ryzen-5-5600",
+  "catalogVersion": "2026.10.31-1",
+  "units": "mm",
+  "bounds": {
+    "size": [
+      40,
+      4.4,
+      40
+    ],
+    "basis": {
+      "x": "schematic",
+      "y": "schematic",
+      "z": "schematic"
+    }
+  },
+  "solids": [
+    {
+      "id": "contacts",
+      "shape": "fins",
+      "at": [
+        20,
+        0.3,
+        20
+      ],
+      "size": [
+        36,
+        0.5,
+        36
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "count": 24,
+      "axis": "x",
+      "finish": "gold"
+    },
+    {
+      "id": "substrate",
+      "shape": "box",
+      "at": [
+        20,
+        1.1,
+        20
+      ],
+      "size": [
+        40,
+        1.2,
+        40
+      ],
+      "role": "pcb",
+      "basis": "schematic",
+      "finish": "pcb_green"
+    },
+    {
+      "id": "capacitors",
+      "shape": "fins",
+      "at": [
+        20,
+        2,
+        2.3
+      ],
+      "size": [
+        33.6,
+        0.5,
+        2.5
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "count": 14,
+      "axis": "x",
+      "finish": "silicon"
+    },
+    {
+      "id": "lid-flange",
+      "shape": "box",
+      "at": [
+        20,
+        2.1,
+        20
+      ],
+      "size": [
+        35.2,
+        0.8,
+        30.4
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "heat-spreader",
+      "shape": "box",
+      "at": [
+        20,
+        3.5,
+        20
+      ],
+      "size": [
+        28,
+        1.9,
+        28
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "nickel",
+      "label": "5600"
+    },
+    {
+      "id": "corner-mark",
+      "shape": "box",
+      "at": [
+        2.5,
+        1.8,
+        37.5
+      ],
+      "size": [
+        3,
+        0.2,
+        3
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "gold"
+    }
+  ],
+  "attach": {
+    "main": {
+      "at": [
+        20,
+        0,
+        20
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "mounts": {},
+  "ports": {},
+  "leads": {},
+  "zones": {
+    "heat-spreader": {
+      "solids": [
+        "heat-spreader",
+        "lid-flange"
+      ]
+    },
+    "contacts": {
+      "solids": [
+        "contacts",
+        "corner-mark"
+      ]
+    }
+  },
+  "lights": [],
+  "label": {
+    "en": "Educational model — not manufacturer-accurate",
+    "ar": "نموذج تعليمي، مو مطابق لشكل المنتج الحقيقي"
+  }
+}

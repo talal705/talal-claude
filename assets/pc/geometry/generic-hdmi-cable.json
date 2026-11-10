@@ -1,0 +1,78 @@
+{
+  "schema": 2,
+  "catalogId": "generic-hdmi-cable",
+  "catalogVersion": "2026.10.31-1",
+  "units": "mm",
+  "bounds": {
+    "size": [
+      160,
+      10,
+      18
+    ],
+    "basis": {
+      "x": "schematic",
+      "y": "schematic",
+      "z": "schematic"
+    }
+  },
+  "solids": [
+    {
+      "id": "cord",
+      "shape": "cylinder",
+      "at": [
+        80,
+        5,
+        9
+      ],
+      "radius": 2.5,
+      "height": 130,
+      "axis": "x",
+      "role": "tube",
+      "basis": "schematic"
+    },
+    {
+      "id": "end-a",
+      "shape": "box",
+      "at": [
+        9,
+        5,
+        9
+      ],
+      "size": [
+        18,
+        8,
+        14
+      ],
+      "role": "plug",
+      "basis": "schematic",
+      "label": "HDMI"
+    },
+    {
+      "id": "end-b",
+      "shape": "box",
+      "at": [
+        151,
+        5,
+        9
+      ],
+      "size": [
+        18,
+        8,
+        14
+      ],
+      "role": "plug",
+      "basis": "schematic",
+      "label": "HDMI"
+    }
+  ],
+  "attach": {},
+  "mounts": {},
+  "ports": {},
+  "leads": {},
+  "zones": {},
+  "lights": [],
+  "label": {
+    "en": "Educational model — not manufacturer-accurate",
+    "ar": "نموذج تعليمي، مو مطابق لشكل المنتج الحقيقي"
+  }
+}
