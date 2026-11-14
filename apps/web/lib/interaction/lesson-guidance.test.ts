@@ -6,6 +6,8 @@ import { activeTopic, createHintLadderStore } from "./hint-ladder";
 import { lessonTopic, releaseLessonFromTutor, syncLessonToTutor } from "./lesson-guidance";
 
 const lesson = lessonById("pc.beginner.first-build")!;
+// The lesson's own first step, not a fixed name: version 2 starts with the processor, not the board.
+const firstTopicId = `lesson:${lesson.id}:${lesson.steps[0].id}`;
 
 /** A page in miniature: the runner state, and the ladder kept in step after every event. */
 function page(mode: "learn" | "test" = "learn") {
@@ -22,7 +24,7 @@ function page(mode: "learn" | "test" = "learn") {
 describe("a lesson as the tutor's hint source", () => {
   it("the step's hints become the ladder's topic, with nothing opened yet", () => {
     const { ladder } = page();
-    expect(activeTopic(ladder.getState())?.id).toBe("lesson:pc.beginner.first-build:board");
+    expect(activeTopic(ladder.getState())?.id).toBe(firstTopicId);
     expect(activeTopic(ladder.getState())?.levels[1].target).toEqual(lesson.steps[0].hints[1].target);
     expect(ladder.getState().level).toBe(0);
   });
@@ -52,7 +54,7 @@ describe("a lesson as the tutor's hint source", () => {
     ladder.getState().requestNextLevel();
     send({ type: "skip_prediction" });
     send({ type: "submit", evidence: { lab: "choice", optionId: "x" } });
-    expect(activeTopic(ladder.getState())?.id).toContain(":board");
+    expect(activeTopic(ladder.getState())?.id).toBe(firstTopicId);
     expect(ladder.getState().level).toBe(1);
   });
 
