@@ -1,0 +1,10 @@
+# Netlify serves files from apps/web/public straight from its CDN, so the headers() rules in
+# apps/web/next.config.ts never reach them. The Python sandbox runs in an opaque-origin frame
+# (Origin: null) and fetches Pyodide's files from /runtime/pyodide/ with CORS; without these headers
+# the browser blocks them and Python reports "runner unavailable". Keep in sync with next.config.ts.
+[[headers]]
+  for = "/runtime/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Cross-Origin-Resource-Policy = "cross-origin"
+    Cache-Control = "public, max-age=86400"
