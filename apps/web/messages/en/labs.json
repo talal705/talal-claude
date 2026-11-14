@@ -927,6 +927,8 @@
     "runSuccess": "Your code ran successfully.",
     "runError": "The program stopped. Read the error or ask the helper.",
     "runnerUnavailable": "This language’s runner is unavailable. Your code has been kept.",
+    "notOnThisSite": "not available on this site",
+    "serverTrackUnavailable": "Running {language} needs a code runner that this site doesn’t have. You can still read and edit the code here. To run code, choose JavaScript, TypeScript or Python.",
     "stopped": "Stopped. You can edit and run again.",
     "outputEmpty": "Your program’s output will appear here.",
     "explainError": "Help me understand this error",
