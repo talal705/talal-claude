@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { CodeTrack, ExecutionResult, ExecutionStatus } from "@ytl/contracts";
 import { createRunAdapters, type RunHandle } from "@/lib/runtime";
+import { fetchServerAvailability, isServerTrack, type ServerAvailability } from "@/lib/runtime/availability";
 import { useTutorTarget } from "@/lib/targets";
 import { tutor } from "@/lib/interaction/advisor";
 import { hintLadder } from "@/lib/interaction/hint-ladder";
@@ -29,6 +30,8 @@ export function ProgrammingLab({ guided, onGuidedChange }: { guided: boolean; on
   const [reviewing, setReviewing] = useState(false);
   const [reviewNotice, setReviewNotice] = useState("");
   const [previousCode, setPreviousCode] = useState<string | null>(null);
+  // Unknown (null) until the site answers; C++/Java/C# stay usable until it says they cannot run here.
+  const [serverAvailability, setServerAvailability] = useState<ServerAvailability | null>(null);
   const editor = useRef<HTMLTextAreaElement>(null);
   const editorTarget = useTutorTarget<HTMLTextAreaElement>("code:ui:editor", "ui");
   const setEditor = useCallback((node: HTMLTextAreaElement | null) => {
@@ -44,6 +47,8 @@ export function ProgrammingLab({ guided, onGuidedChange }: { guided: boolean; on
   const meta = TRACKS.find((item) => item.id === track)!;
   const code = drafts[track] ?? meta.samples[0];
   const busy = status !== "idle" && ACTIVE.has(status);
+  const cannotRunHere = (item: CodeTrack) => isServerTrack(item) && serverAvailability?.[item] === false;
+  const trackUnavailable = cannotRunHere(track);
 
   useEffect(() => {
     projectId.current = crypto.randomUUID();
@@ -58,6 +63,12 @@ export function ProgrammingLab({ guided, onGuidedChange }: { guided: boolean; on
     } catch { /* Optional local drafts. */ }
     setReady(true);
     return () => { version.current++; running.current?.stop(); abortReview.current?.abort(); tutor.clearGuidance(); };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchServerAvailability(fetch, controller.signal).then((value) => { if (value && !controller.signal.aborted) setServerAvailability(value); });
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
@@ -87,6 +98,7 @@ export function ProgrammingLab({ guided, onGuidedChange }: { guided: boolean; on
   function changeTrack(value: CodeTrack) { invalidate(); setTrack(value); setLevel(0); setPreviousCode(null); }
 
   async function run() {
+    if (trackUnavailable) return;
     invalidate();
     const revision = version.current;
     adapters.current ??= createRunAdapters();
@@ -155,7 +167,7 @@ export function ProgrammingLab({ guided, onGuidedChange }: { guided: boolean; on
     <div className={styles.sectionLabel}><span>01 /</span> {t("codeSection")}</div>
     <div className={styles.sectionHeading}><div><h2 id="programming-title">{t("codeTitle")}</h2><p>{t("codeIntro")}</p></div><span className={styles.saved}>{t("autoSave")}</span></div>
     <div className={styles.toolbar}>
-      <label>{t("language")}<select value={track} onChange={(event) => changeTrack(event.target.value as CodeTrack)}>{TRACKS.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
+      <label>{t("language")}<select value={track} onChange={(event) => changeTrack(event.target.value as CodeTrack)}>{TRACKS.map((item) => <option value={item.id} key={item.id}>{cannotRunHere(item.id) ? `${item.name} — ${t("notOnThisSite")}` : item.name}</option>)}</select></label>
       <div className={styles.segmented} role="group" aria-label={t("learningMode")}><button type="button" aria-pressed={guided} onClick={() => onGuidedChange(true)}>{t("learn")}</button><button type="button" aria-pressed={!guided} onClick={() => onGuidedChange(false)}>{t("free")}</button></div>
     </div>
     {guided ? <div className={styles.lesson}>
@@ -168,9 +180,9 @@ export function ProgrammingLab({ guided, onGuidedChange }: { guided: boolean; on
         <textarea ref={setEditor} value={code} onChange={(event) => changeCode(event.target.value)} maxLength={MAX_CODE_LENGTH} dir="ltr" aria-label={t("editor")} spellCheck={false} autoCapitalize="off" autoCorrect="off" onKeyDown={(event) => {
           if ((event.metaKey || event.ctrlKey) && event.key === "Enter") { event.preventDefault(); void run(); }
         }} />
-        <div className={styles.runBar}><button type="button" className={styles.primary} disabled={!ready || !code.trim()} onClick={() => void run()}>{t("run")} <span aria-hidden="true">▶</span></button>{busy && <button type="button" className={styles.secondary} onClick={() => running.current?.stop()}>{t("stop")}</button>}<button type="button" className={styles.helpButton} disabled={reviewing || !ready || !code.trim()} onClick={() => void help()}>{t(reviewing ? "reviewing" : "askRobot")}</button></div>
+        <div className={styles.runBar}><button type="button" className={styles.primary} disabled={!ready || !code.trim() || trackUnavailable} onClick={() => void run()}>{t("run")} <span aria-hidden="true">▶</span></button>{busy && <button type="button" className={styles.secondary} onClick={() => running.current?.stop()}>{t("stop")}</button>}<button type="button" className={styles.helpButton} disabled={reviewing || !ready || !code.trim()} onClick={() => void help()}>{t(reviewing ? "reviewing" : "askRobot")}</button></div>
       </div>
-      <div className={styles.outputPane}><h3>{t(track === "html_css" ? "preview" : "output")}</h3><p role="status" data-status={status} className={styles.runStatus}>{t(statusKey)}</p>
+      <div className={styles.outputPane}><h3>{t(track === "html_css" ? "preview" : "output")}</h3><p role="status" data-status={trackUnavailable ? "runner_unavailable" : status} className={styles.runStatus}>{trackUnavailable ? t("serverTrackUnavailable", { language: meta.name }) : t(statusKey)}</p>
         <div ref={preview} className={styles.preview} hidden={track !== "html_css"} />
         {output ? <pre dir="ltr" className={styles.output}>{output}</pre> : track !== "html_css" && <p className={styles.emptyOutput}>{t("outputEmpty")}</p>}
         {result && result.status !== "success" && result.status !== "cancelled" && <button type="button" className={styles.secondary} disabled={reviewing} onClick={() => void help()}>{t("explainError")}</button>}
