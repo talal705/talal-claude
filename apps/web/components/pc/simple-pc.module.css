@@ -64,3 +64,20 @@
 .cableDetail code { display:block; width:fit-content; margin-block:8px 12px; padding:5px 7px; border:1px solid #405464; border-radius:5px; color:#a8d9ec; background:#0a1018; font-size:11px; }
 .cablesNote { font-size:11px; color:var(--text-muted); margin-block-start:9px; line-height:1.6; }
 .tabs button:focus-visible, .part:focus-visible, .cable:focus-visible, .installButton:focus-visible, .powerButton:focus-visible { outline:2px solid var(--accent-strong); outline-offset:3px; }
+
+/* Guided build: the companion sits above the controls, beside the 3D view (below it on phones). */
+.workspace { grid-template-columns:minmax(0,1fr) 340px; }
+.side { display:grid; gap:14px; align-content:start; }
+.companionSlot { position:relative; }
+.cancel { display:block; width:100%; min-height:36px; margin-block-start:8px; border:1px solid var(--border); border-radius:9px; color:var(--text-soft); font-size:13px; cursor:pointer; }
+.cancel:hover { color:#fff; border-color:var(--accent); }
+.steps { display:flex; gap:8px; margin-block-start:10px; }
+.steps button { flex:1; min-height:38px; border:1px solid var(--border); border-radius:9px; color:var(--text-soft); font-size:12px; cursor:pointer; }
+.steps button:hover:not(:disabled) { color:#fff; border-color:var(--accent); }
+.steps button:disabled { opacity:.45; cursor:default; }
+.confirm { margin-block-start:10px; padding:10px; border:1px solid #6b4e1f; border-radius:10px; background:#1d160b; font-size:12px; color:#f5e6c8; }
+.confirm div { display:flex; gap:8px; margin-block-start:8px; }
+.confirm button { flex:1; min-height:36px; border-radius:8px; border:1px solid #6b4e1f; color:#fff; cursor:pointer; font-size:12px; }
+.confirm button:first-child { background:#7c2d12; }
+.cancel:focus-visible, .steps button:focus-visible, .confirm button:focus-visible { outline:2px solid var(--accent-strong); outline-offset:2px; }
+@media(max-width:800px) { .workspace { grid-template-columns:minmax(0,1fr); } }
