@@ -14,8 +14,8 @@ import type { Obstacle } from "./cable-visuals";
 import { add, compose, rotate, scale, type PlacedPart } from "./placement";
 
 const noRaycast = () => null;
-/** Drawn 1.5× its model size (about 165 mm tall): readable from the default view, still smaller than the board. */
-const SIZE = 1.5;
+/** Compact guide: about 110 mm tall, leaving the component and its mounting point visible. */
+const SIZE = 1;
 const BASE_RADIUS = 46 * SIZE;
 /**
  * Seen from close up (a phone's view glides in to a small place), the robot shrinks and comes closer, so
@@ -201,9 +201,9 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
     // Fade in and out by scale. Appearing, it starts where it is needed (it does not fly in from afar).
     const want = shown && !hop.current ? 1 : 0;
     const wasHidden = !node.visible;
-    visible.current = animate ? THREE.MathUtils.damp(visible.current, want, 7, dt) : want;
+    visible.current = animate ? THREE.MathUtils.damp(visible.current, want, 10, dt) : want;
     node.visible = visible.current > 0.02;
-    shownScale.current = animate ? THREE.MathUtils.damp(shownScale.current, near.current, 4, dt) : near.current;
+    shownScale.current = animate ? THREE.MathUtils.damp(shownScale.current, near.current, 6, dt) : near.current;
     node.scale.setScalar(Math.max(0.001, visible.current) * SIZE * shownScale.current);
     if (hop.current && visible.current < 0.06) {
       if (goal.current) node.position.copy(goal.current);
@@ -221,20 +221,21 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
     if (g) {
       // It appears where it is needed, then flies from one target to the next.
       // Still growing in: stay put at the goal (a frame can come before the goal is first set).
-      if (animate && visible.current > 0.5) node.position.lerp(g, 1 - Math.exp(-dt * 3.2));
+      if (animate && visible.current > 0.5) node.position.lerp(g, 1 - Math.exp(-dt * 5));
       else node.position.copy(g);
     }
     const target = points[0] ? new THREE.Vector3(...points[0]) : null;
     const celebrate = focus?.reason === "celebrate";
-    // Face the viewer, turned a third of the way toward the target, so its face stays readable while it points.
+    // Face the viewer, turned slightly toward the target, so its face stays readable while it points.
     const toCamera = Math.atan2(camera.position.x - node.position.x, camera.position.z - node.position.z);
     const toTarget = target ? Math.atan2(target.x - node.position.x, target.z - node.position.z) : toCamera;
-    const yaw = celebrate ? toCamera : toCamera + Math.atan2(Math.sin(toTarget - toCamera), Math.cos(toTarget - toCamera)) * 0.35;
-    node.rotation.y = animate ? dampAngle(node.rotation.y, yaw + (celebrate ? Math.sin(time * 2.4) * 0.5 : 0), 6, dt) : yaw;
-    if (body.current) body.current.position.y = animate ? Math.sin(time * 2.2) * 4 + (celebrate ? Math.abs(Math.sin(time * 5)) * 10 : 0) : 0;
+    const yaw = celebrate ? toCamera : toCamera + Math.atan2(Math.sin(toTarget - toCamera), Math.cos(toTarget - toCamera)) * 0.2;
+    node.rotation.y = animate ? dampAngle(node.rotation.y, yaw + (celebrate ? Math.sin(time * 2.4) * 0.25 : 0), 6, dt) : yaw;
+    if (body.current) body.current.position.y = animate ? Math.sin(time * 1.8) * 1.8 + (celebrate ? Math.abs(Math.sin(time * 4)) * 6 : 0) : 0;
     if (head.current && target) {
       const local = node.worldToLocal(target.clone());
-      head.current.rotation.x = THREE.MathUtils.clamp(-Math.atan2(local.y - 40, Math.hypot(local.x, local.z)) * 0.6, -0.5, 0.5);
+      const tilt = THREE.MathUtils.clamp(-Math.atan2(local.y - 40, Math.hypot(local.x, local.z)) * 0.6, -0.5, 0.5);
+      head.current.rotation.x = animate ? THREE.MathUtils.damp(head.current.rotation.x, tilt, 8, dt) : tilt;
     }
     // The arm on the target's side points (so it never reaches across the body); the other rests, or both cheer.
     if (pointer.current && other.current && target) {
@@ -246,7 +247,9 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
       if (celebrate) pointer.current.rotation.set(0, 0, -Math.sign(pointer.current.position.x || -1) * (Math.PI * 0.85 + (animate ? Math.sin(time * 8) * 0.25 : 0)));
       else if (target) {
         const local = node.worldToLocal(target.clone()).sub(pointer.current.position).normalize();
-        pointer.current.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), local);
+        const pointing = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), local);
+        if (animate) pointer.current.quaternion.slerp(pointing, 1 - Math.exp(-10 * dt));
+        else pointer.current.quaternion.copy(pointing);
       }
     }
     if (other.current) {
@@ -254,7 +257,7 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
       other.current.rotation.set(0, 0, celebrate ? out * (Math.PI * 0.85 + (animate ? Math.sin(time * 8) * 0.25 : 0)) : out * 0.18);
     }
     if (eyes.current) eyes.current.scale.y = animate && time % 4.2 > 4.05 ? 0.15 : 1;
-    if (flame.current) flame.current.scale.set(7, 11 + (animate ? Math.sin(time * 30) * 1.5 : 0), 7);
+    if (flame.current) flame.current.scale.set(7, 11 + (animate ? Math.sin(time * 10) * 0.7 : 0), 7);
     // The dotted line from the fingertip to the target, when the target is not already glowing.
     if (line.current && pointer.current && target) {
       const tip = pointer.current.localToWorld(new THREE.Vector3(0, -36, 0));
