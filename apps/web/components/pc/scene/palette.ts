@@ -26,9 +26,9 @@ export const FINISHES: Record<string, { color: string; metalness: number; roughn
   brushed_mark: { color: "#495364", metalness: 0.25, roughness: 0.35 },
 };
 
-/** The wooden bench top and the anti-static mat on it. The mat is mid-grey so dark parts stand out on it. */
-export const BENCH_TOP_COLOR = "#6b5541";
-export const BENCH_MAT_COLOR = "#86909f";
+/** One dark walnut colour across the bench and its inset surface. Part finishes stay independent. */
+export const BENCH_TOP_COLOR = "#2e1b10";
+export const BENCH_MAT_COLOR = "#2e1b10";
 
 /** WCAG relative luminance of a `#rrggbb` colour. */
 export function luminance(hex: string): number {
