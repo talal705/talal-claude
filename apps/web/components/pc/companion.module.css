@@ -37,12 +37,16 @@
 
 /* ---------- The robot's moods. Arms turn at the shoulders, the head at the neck (drawing units). ---------- */
 .bot svg { overflow:visible; }
-.body, .head, .armLeft, .armRight, .eyes, .confetti, .shadow { transform-box:view-box; }
+.body, .head, .armLeft, .armRight, .eyes, .confetti, .shadow, .antenna, .antennaLight { transform-box:view-box; }
 .armLeft { transform-origin:31px 82px; transition:transform .45s cubic-bezier(.3,1.3,.5,1); }
 .armRight { transform-origin:89px 82px; transition:transform .45s cubic-bezier(.3,1.3,.5,1); }
 .head { transform-origin:60px 64px; transition:transform .4s ease; }
-.body { transform-origin:60px 150px; animation:bob 3.2s ease-in-out infinite; }
-.eyes { transform-origin:60px 40px; animation:blink 4.6s infinite; }
+.body { transform-origin:60px 150px; animation:float 3.4s ease-in-out infinite; }
+.shadow { transform-origin:60px 158px; animation:glow 3.4s ease-in-out infinite; }
+.eyes { transform-origin:60px 40px; animation:blink 4.6s infinite, look 9s ease-in-out infinite; transition:translate .35s ease; }
+.antenna { transform-origin:60px 12px; transition:transform .4s ease; }
+.antennaLight { transform-origin:60px 3px; animation:beacon 2.4s ease-in-out infinite; }
+.core { transform-origin:60px 104px; animation:beacon 3.4s ease-in-out infinite; }
 .smile { opacity:0; transition:opacity .3s; }
 .confetti { opacity:0; }
 
@@ -52,6 +56,12 @@
 .bot[data-mood="happy"] .armRight { transform:rotate(-40deg); }
 .bot[data-mood="happy"] .smile, .bot[data-mood="celebrate"] .smile, .bot[data-mood="wave"] .smile { opacity:1; }
 .bot[data-mood="concerned"] .head { transform:rotate(-9deg); }
+.bot[data-mood="concerned"] .antennaLight { fill:#fbbf24; }
+.bot[data-mood="thinking"] .antenna { transform:rotate(-12deg); }
+.bot[data-mood="point"] .eyes { animation:blink 4.6s infinite; translate:0 1px; }
+.bot[data-mood="point"][data-point="scene"] .eyes { translate:-2.5px 0; }
+:global([dir="rtl"]) .bot[data-mood="point"][data-point="scene"] .eyes { translate:2.5px 0; }
+.bot[data-mood="celebrate"] .antennaLight { fill:#4ade80; }
 .bot[data-mood="concerned"] .body { animation:shake .5s ease-in-out 1; }
 .bot[data-mood="thinking"] .head { transform:rotate(7deg); }
 .bot[data-mood="thinking"] .armRight { transform:rotate(-150deg); }
@@ -82,6 +92,10 @@
 
 @keyframes pop { from { transform:translateY(6px) scale(.97); opacity:0; } to { transform:none; opacity:1; } }
 @keyframes bob { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-2.5px); } }
+@keyframes float { 0%,100% { transform:translateY(0) rotate(0deg); } 30% { transform:translateY(-3px) rotate(-1.2deg); } 70% { transform:translateY(-1.5px) rotate(1deg); } }
+@keyframes glow { 0%,100% { transform:scaleX(1); opacity:.9; } 50% { transform:scaleX(.82); opacity:.6; } }
+@keyframes beacon { 0%,100% { opacity:1; } 50% { opacity:.45; } }
+@keyframes look { 0%,40%,100% { translate:0 0; } 48%,56% { translate:-2px 0; } 64%,72% { translate:2px 0; } }
 @keyframes blink { 0%,94%,100% { transform:scaleY(1); } 96% { transform:scaleY(.1); } }
 @keyframes wave { 0%,100% { transform:rotate(-120deg); } 50% { transform:rotate(-160deg); } }
 @keyframes hop { 0%,100% { transform:translateY(0); } 40% { transform:translateY(-9px); } }

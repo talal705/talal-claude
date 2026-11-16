@@ -20,6 +20,7 @@ import {
   type SimpleCableKey, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
 } from "./simple-model";
 import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-scene";
+import { guideFocus } from "./guide";
 import styles from "./simple-pc.module.css";
 import arLabs from "../../messages/ar/labs.json";
 
@@ -31,6 +32,19 @@ const partSpec = (key: SimplePartKey) => ALL_SIMPLE_PARTS.find((p) => p.key === 
 const cableSpec = (key: SimpleCableKey) => ALL_SIMPLE_CABLES.find((c) => c.key === key)!;
 // Computed once: where every part lies on the bench at the start, and the second stick beside the first.
 const BENCH = simpleBenchLayout(createSimpleBuild());
+
+/**
+ * How the learner likes the 3D view, kept apart from the build's own saved progress: the guide robot
+ * in the scene, whether it flies and bobs, and the optional RGB lighting (off unless turned on).
+ */
+export const SIMPLE_VIEW_KEY = "ytl_simple_pc_view_v1";
+export type SimpleView = { guide: boolean; guideMotion: boolean; rgb: boolean };
+const DEFAULT_VIEW: SimpleView = { guide: true, guideMotion: true, rgb: false };
+export function parseSimpleView(value: unknown): SimpleView {
+  const data = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const flag = (key: keyof SimpleView) => (typeof data[key] === "boolean" ? (data[key] as boolean) : DEFAULT_VIEW[key]);
+  return { guide: flag("guide"), guideMotion: flag("guideMotion"), rgb: flag("rgb") };
+}
 
 const PcScene = dynamic(() => import("./scene/PcScene"), { ssr: false });
 
@@ -55,7 +69,7 @@ function supportsWebgl(): boolean {
 declare global {
   interface Window {
     /** Read-only view of the guided build for browser automation: what is fitted, selected and said. */
-    __ytlSimplePc?: () => { placed: string[]; connected: string[]; history: string[]; powered: boolean; selection: Selection; complete: boolean; mood: string; lines: string[] };
+    __ytlSimplePc?: () => { placed: string[]; connected: string[]; history: string[]; powered: boolean; selection: Selection; complete: boolean; mood: string; lines: string[]; guide: ReturnType<typeof guideFocus>; view: SimpleView };
   }
 }
 
@@ -76,6 +90,9 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [message, setMessage] = useState<CompanionMessage>({ id: 0, say: { lines: [{ key: "hello" }], mood: "wave" } });
   const [ai, setAi] = useState<AiStatus>("unknown");
+  const [view, setView] = useState<SimpleView>(DEFAULT_VIEW);
+  /** The learner has started being guided (picked something up or asked): the robot then follows every step. */
+  const [guided, setGuided] = useState(false);
   const [thinking, setThinking] = useState(false);
   const cablesTarget = useTutorTarget<HTMLDivElement>("pc:ui:simple-cables", "ui");
   const partsTarget = useTutorTarget<HTMLDivElement>("pc:ui:simple-parts", "ui");
@@ -84,6 +101,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
   const state = useMemo(() => simpleBuildFromSnapshot(saved), [saved]);
   const startup = useMemo(() => pc.evaluateStartup(state, pcCatalog), [state]);
   const targets = useMemo(() => simpleSceneTargets(state, selection), [state, selection]);
+  const guide = useMemo(() => (view.guide ? guideFocus(state, selection, saved.powered, guided) : null), [view.guide, state, selection, saved.powered, guided]);
   const progress = simplePartsProgress(state);
   /** The leads of this build: the liquid cooler's two replace the air cooler's one when it is fitted. */
   const leads = useMemo(() => simpleCablesFor(state), [state]);
@@ -111,6 +129,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
       if (simpleAllPartsIn(simpleBuildFromSnapshot(restored))) setTab("cables");
     }
     speak(companionSay(snapshot.history.length > 0 ? { type: "resume" } : { type: "start" }, simpleBuildFromSnapshot(snapshot), snapshot.powered, null));
+    try { setView(parseSimpleView(JSON.parse(localStorage.getItem(SIMPLE_VIEW_KEY) ?? "null"))); } catch { /* Defaults. */ }
     setWebgl(supportsWebgl());
     setReady(true);
     const controller = new AbortController();
@@ -124,6 +143,14 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
     try { localStorage.setItem(SIMPLE_SAVE_KEY, JSON.stringify(saved)); } catch { /* Keep working. */ }
   }, [ready, saved]);
 
+  function changeView(patch: Partial<SimpleView>) {
+    setView((previous) => {
+      const next = { ...previous, ...patch };
+      try { localStorage.setItem(SIMPLE_VIEW_KEY, JSON.stringify(next)); } catch { /* Applies on this page only. */ }
+      return next;
+    });
+  }
+
   // The 3D view marks the part in hand (and nothing while a lead or nothing is in hand).
   useEffect(() => {
     selectPart(selection?.kind === "part" ? partSpec(selection.key).id : null);
@@ -132,10 +159,10 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
   useEffect(() => {
     window.__ytlSimplePc = () => ({
       placed: [...saved.placed], connected: [...saved.connected], history: [...saved.history], powered: saved.powered, selection, complete,
-      mood: message.say.mood, lines: message.say.lines.map((line) => line.key),
+      mood: message.say.mood, lines: message.say.lines.map((line) => line.key), guide, view,
     });
     return () => { delete window.__ytlSimplePc; };
-  }, [saved, selection, complete, message]);
+  }, [saved, selection, complete, message, guide, view]);
 
   // ---------- Learner actions ----------
 
@@ -144,6 +171,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
     if (selection?.kind === "part" && selection.key === key) { cancel(); return; }
     const next: Selection = { kind: "part", key };
     setSelection(next);
+    setGuided(true);
     setTab("parts");
     if (saved.powered) { speak({ lines: [{ key: "blocked.turnOff" }], mood: "concerned", point: "power" }); return; }
     react({ type: "select", selection: next }, state, saved.powered, next);
@@ -154,6 +182,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
     if (selection?.kind === "cable" && selection.key === key) { cancel(); return; }
     const next: Selection = { kind: "cable", key };
     setSelection(next);
+    setGuided(true);
     setTab("cables");
     react({ type: "select", selection: next }, state, saved.powered, next);
   }
@@ -270,6 +299,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
     setSelection(null);
     setTab("parts");
     setConfirmRestart(false);
+    setGuided(false);
     setSceneVersion((n) => n + 1);
     if (webgl === false) setWebgl(supportsWebgl());
     react({ type: "restart" }, createSimpleBuild(), false, null);
@@ -300,10 +330,12 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
   }
 
   function quick(intent: "next" | "help" | "explain") {
+    setGuided(true);
     react({ type: "ask", intent });
   }
 
   async function ask(text: string) {
+    setGuided(true);
     const intent = intentOf(text);
     if (intent === "undo") { undo(); return; }
     // A question that names a part or lead ("why does RAM go in A2?") is answered about that part.
@@ -390,6 +422,9 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
                   simpleTargets={targets}
                   onSimpleTarget={onTarget}
                   onSimpleMiss={() => { if (selection) react({ type: "missedTarget" }); }}
+                  guide={guide}
+                  guideAnimate={view.guideMotion}
+                  rgb={view.rgb}
                   benchOrder={BENCH.benchOrder}
                   beside={BENCH.beside}
                   onContextLost={() => setWebgl(false)}
@@ -397,7 +432,14 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
               </SceneBoundary>
             )}
           </div>
-          <p className={styles.cameraHint}>{t("cameraHint")}</p>
+          <div className={styles.viewBar}>
+            <div className={styles.toggles} role="group" aria-label={t("view.label")}>
+              <button type="button" aria-pressed={view.guide} onClick={() => changeView({ guide: !view.guide })}>{t("view.guide")}</button>
+              <button type="button" aria-pressed={view.guideMotion && !reducedMotion} disabled={!view.guide || reducedMotion} onClick={() => changeView({ guideMotion: !view.guideMotion })} title={reducedMotion ? t("view.reduced") : undefined}>{t("view.motion")}</button>
+              <button type="button" aria-pressed={view.rgb} onClick={() => changeView({ rgb: !view.rgb })}>{t("view.rgb")}</button>
+            </div>
+            <p className={styles.cameraHint}>{t("cameraHint")}</p>
+          </div>
         </div>
 
         <div className={styles.side}>

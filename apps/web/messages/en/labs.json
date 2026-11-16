@@ -1058,7 +1058,14 @@
     "cablesIntroLiquid": "Six connections for startup (the liquid cooler has a pump lead and a fan lead), plus two case fan leads. Select a lead, then tap its glowing port.",
     "swap": "Swap it in for the {other}",
     "swapHint": "The {other} is fitted now. Swapping takes it out and puts this one in its place.",
-    "swapCpuHint": "To change the CPU, select the other CPU and press Swap."
+    "swapCpuHint": "To change the CPU, select the other CPU and press Swap.",
+    "view": {
+      "label": "View options",
+      "guide": "Robot guide",
+      "motion": "Guide motion",
+      "rgb": "RGB lighting",
+      "reduced": "Reduced motion is on: the guide appears without moving."
+    }
   },
   "learning": {
     "name": "Your Tech Lab",

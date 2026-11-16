@@ -25,6 +25,8 @@ import { clickBox, fastenerMarkers, settingHotspots, type FastenerMarker, type H
 import { BENCH_MAT_COLOR, BENCH_TOP_COLOR, FINISHES } from "./palette";
 import { useGeometry } from "./use-geometry";
 import { HOSE_ROUTES } from "./visual-details";
+import { GuideRobot } from "./GuideRobot";
+import type { GuideFocus } from "../guide";
 import { avoidObstacles, cableStrands, connectorSize, smoothCableRoute, type Obstacle } from "./cable-visuals";
 import { applyDetail, boxRaycast, cylinderRaycast, detailedBox, detailedCylinder, stretchTubeUv, surfaceSet } from "./surface-details";
 
@@ -1636,7 +1638,7 @@ function SceneEnvironment({ enabled }: { enabled: boolean }) {
   return null;
 }
 
-function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false, viewId, onSelectPart, simpleCableIds, selectedSimpleCableId, onSelectSimpleCable, simpleTargets, onSimpleTarget, benchOrder, beside, quality }: PcSceneProps & { quality: SceneQuality }) {
+function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false, viewId, onSelectPart, simpleCableIds, selectedSimpleCableId, onSelectSimpleCable, simpleTargets, onSimpleTarget, benchOrder, beside, quality, guide, guideAnimate = true }: PcSceneProps & { quality: SceneQuality }) {
   const projectId = usePC((store) => store.projectId);
   const { geometry, ready } = useGeometry(useMemo(() => state.parts.map((part) => part.catalogId), [state.parts]));
   const benchSlots = useMemo(() => new Map<string, { at: Vec3; size: Vec3 }>(), [state, geometry, benchOrder, beside]);
@@ -1796,6 +1798,9 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
       {simple && simpleTargets && (
         <SimpleTargets targets={simpleTargets} placed={placed} geometry={geometry} state={state} reducedMotion={reducedMotion} onTarget={onSimpleTarget} />
       )}
+      {simple && guide !== undefined && (
+        <GuideRobot focus={guide} placed={placed} geometry={geometry} state={state} obstacles={cableObstacles} caseId={state.parts.find(standsFirst)?.instanceId ?? null} animate={guideAnimate && !reducedMotion} />
+      )}
       <Candidates markers={markers} />
       {!simple && selectedPart && <Fasteners part={selectedPart} markers={fasteners} />}
       {!simple && <Hotspots spots={spots} state={state} />}
@@ -1825,6 +1830,12 @@ export interface PcSceneProps {
   onSimpleTarget?: (id: string) => void;
   /** A click on the canvas that hit nothing (no part, place or lead). */
   onSimpleMiss?: () => void;
+  /** The guide robot's focus on the guided page (see `guide.ts`); null parks it, undefined leaves it out. */
+  guide?: GuideFocus | null;
+  /** False: the robot appears without flying or bobbing (animated guidance turned off). */
+  guideAnimate?: boolean;
+  /** Optional decorative RGB lighting (case fans, RAM, liquid cooler). Lit only while the build runs. */
+  rgb?: boolean;
   /** A fixed workbench (see `placeParts`). */
   benchOrder?: readonly string[];
   beside?: Readonly<Record<string, string>>;

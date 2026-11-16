@@ -93,47 +93,72 @@ export function BuildCompanion({ message, ai, thinking, reducedMotion, onQuick, 
   );
 }
 
-/** The site's robot (same drawing as the page tutor), posed by CSS for each mood. Decorative. */
+/**
+ * The site's robot, drawn as a small hovering helper: a white shell, a dark visor with two eyes, an
+ * antenna light, a glowing core and a hover glow under it. CSS poses it for each mood (idle float,
+ * wave, point, think, worry, cheer). Decorative: the bubble carries every word.
+ */
 function Bot({ mood, point, reducedMotion }: { mood: string; point?: string; reducedMotion: boolean }) {
   return (
     <div className={styles.bot} data-mood={mood} data-point={point ?? "none"} data-reduced={reducedMotion} aria-hidden="true" data-testid="companion-robot">
       <svg viewBox="0 0 120 164" width="100%" height="100%" focusable="false">
         <defs>
-          <linearGradient id="ytl-companion-shell" x1="0.2" y1="0" x2="0.8" y2="1">
+          <linearGradient id="ytl-companion-shell" x1="0.15" y1="0" x2="0.85" y2="1">
             <stop offset="0" stopColor="#ffffff" />
-            <stop offset="0.6" stopColor="#eef1f6" />
-            <stop offset="1" stopColor="#c3cad6" />
+            <stop offset="0.55" stopColor="#eef2f7" />
+            <stop offset="1" stopColor="#b9c2d0" />
+          </linearGradient>
+          <linearGradient id="ytl-companion-trim" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#d5dbe5" />
+            <stop offset="1" stopColor="#a3adbd" />
           </linearGradient>
           <linearGradient id="ytl-companion-face" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#15171c" />
-            <stop offset="1" stopColor="#030304" />
+            <stop offset="0" stopColor="#1a1d24" />
+            <stop offset="1" stopColor="#030406" />
           </linearGradient>
-          <radialGradient id="ytl-companion-eye" cx="0.5" cy="0.4" r="0.7">
-            <stop offset="0" stopColor="#b9f3ff" />
-            <stop offset="0.55" stopColor="#38bdf8" />
+          <radialGradient id="ytl-companion-eye" cx="0.45" cy="0.38" r="0.75">
+            <stop offset="0" stopColor="#e0fbff" />
+            <stop offset="0.45" stopColor="#5fd4fb" />
             <stop offset="1" stopColor="#1d6fe0" />
           </radialGradient>
+          <radialGradient id="ytl-companion-glow" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stopColor="#22d3ee" stopOpacity="0.55" />
+            <stop offset="1" stopColor="#22d3ee" stopOpacity="0" />
+          </radialGradient>
         </defs>
-        <ellipse className={styles.shadow} cx="60" cy="158" rx="22" ry="4" fill="#000000" opacity="0.35" />
+        <ellipse className={styles.shadow} cx="60" cy="158" rx="24" ry="4.5" fill="url(#ytl-companion-glow)" />
         <g className={styles.body}>
           <g className={styles.armLeft}>
-            <path d="M31 76c5 0 8 4 7.4 10l-3 30c-.5 5-3 8-6.4 8s-5.6-3-5.4-8l1.4-30c.3-6 2.2-10 6-10z" fill="url(#ytl-companion-shell)" stroke="#aab2c0" strokeWidth="0.8" />
+            <path d="M31 76c5 0 8 4 7.4 10l-3 28c-.5 5-3 8-6.4 8s-5.6-3-5.4-8l1.4-28c.3-6 2.2-10 6-10z" fill="url(#ytl-companion-shell)" stroke="#a9b2c1" strokeWidth="0.8" />
+            <circle cx="29" cy="121" r="5.2" fill="url(#ytl-companion-trim)" />
           </g>
           <g className={styles.armRight}>
-            <path d="M89 76c-5 0-8 4-7.4 10l3 30c.5 5 3 8 6.4 8s5.6-3 5.4-8l-1.4-30c-.3-6-2.2-10-6-10z" fill="url(#ytl-companion-shell)" stroke="#aab2c0" strokeWidth="0.8" />
+            <path d="M89 76c-5 0-8 4-7.4 10l3 28c.5 5 3 8 6.4 8s5.6-3 5.4-8l-1.4-28c-.3-6-2.2-10-6-10z" fill="url(#ytl-companion-shell)" stroke="#a9b2c1" strokeWidth="0.8" />
+            <circle cx="91" cy="121" r="5.2" fill="url(#ytl-companion-trim)" />
           </g>
-          <path d="M60 68c21 0 31 13 29 34-2.2 25-15 48-29 48s-26.8-23-29-48c-2-21 8-34 29-34z" fill="url(#ytl-companion-shell)" stroke="#aab2c0" strokeWidth="0.8" />
-          <path d="M44 78c-6 6-8 16-6 28" fill="none" stroke="#ffffff" strokeWidth="5" strokeLinecap="round" opacity="0.85" />
-          <circle className={styles.core} cx="60" cy="92" r="3.2" fill="#22d3ee" opacity="0.9" />
+          <path d="M60 66c22 0 32 13 30 35-2.2 25-15.5 47-30 47s-27.8-22-30-47c-2-22 8-35 30-35z" fill="url(#ytl-companion-shell)" stroke="#a9b2c1" strokeWidth="0.8" />
+          <path d="M33 86c8 4 18 6 27 6s19-2 27-6" fill="none" stroke="#c7cfdb" strokeWidth="1.4" strokeLinecap="round" />
+          <path d="M43 77c-6 6-8 16-6 28" fill="none" stroke="#ffffff" strokeWidth="5" strokeLinecap="round" opacity="0.85" />
+          <circle cx="60" cy="104" r="8" fill="#0d1218" stroke="#c7cfdb" strokeWidth="1.2" />
+          <circle className={styles.core} cx="60" cy="104" r="4" fill="#22d3ee" />
           <g className={styles.head}>
-            <ellipse cx="60" cy="36" rx="35" ry="27" fill="url(#ytl-companion-shell)" stroke="#aab2c0" strokeWidth="0.8" />
-            <path d="M34 24c5-8 14-12 24-12.5" fill="none" stroke="#ffffff" strokeWidth="4" strokeLinecap="round" opacity="0.9" />
-            <rect x="35" y="25" width="50" height="30" rx="15" fill="url(#ytl-companion-face)" />
-            <g className={styles.eyes}>
-              <ellipse cx="49" cy="40" rx="5.5" ry="6.5" fill="url(#ytl-companion-eye)" transform="rotate(-8 49 40)" />
-              <ellipse cx="71" cy="40" rx="5.5" ry="6.5" fill="url(#ytl-companion-eye)" transform="rotate(8 71 40)" />
+            <g className={styles.antenna}>
+              <path d="M60 12V3" stroke="#a9b2c1" strokeWidth="2.4" strokeLinecap="round" />
+              <circle className={styles.antennaLight} cx="60" cy="3" r="3.4" fill="#22d3ee" />
             </g>
-            <path className={styles.smile} d="M53 48c4 3 10 3 14 0" fill="none" stroke="#38bdf8" strokeWidth="1.8" strokeLinecap="round" />
+            <ellipse cx="24.5" cy="37" rx="4.5" ry="8" fill="url(#ytl-companion-trim)" />
+            <ellipse cx="95.5" cy="37" rx="4.5" ry="8" fill="url(#ytl-companion-trim)" />
+            <ellipse cx="60" cy="36" rx="35" ry="27" fill="url(#ytl-companion-shell)" stroke="#a9b2c1" strokeWidth="0.8" />
+            <path d="M33 23c5-8 15-12.5 25-13" fill="none" stroke="#ffffff" strokeWidth="4" strokeLinecap="round" opacity="0.9" />
+            <rect x="34" y="24" width="52" height="31" rx="15.5" fill="url(#ytl-companion-face)" />
+            <path d="M40 28c4-2 10-2.6 16-2.4" fill="none" stroke="#ffffff" strokeWidth="1.6" strokeLinecap="round" opacity="0.16" />
+            <g className={styles.eyes}>
+              <ellipse cx="49" cy="40" rx="5.6" ry="6.8" fill="url(#ytl-companion-eye)" transform="rotate(-8 49 40)" />
+              <ellipse cx="71" cy="40" rx="5.6" ry="6.8" fill="url(#ytl-companion-eye)" transform="rotate(8 71 40)" />
+              <circle cx="47" cy="37.5" r="1.6" fill="#ffffff" opacity="0.9" />
+              <circle cx="69" cy="37.5" r="1.6" fill="#ffffff" opacity="0.9" />
+            </g>
+            <path className={styles.smile} d="M53 48.5c4 3 10 3 14 0" fill="none" stroke="#38bdf8" strokeWidth="1.8" strokeLinecap="round" />
           </g>
         </g>
         <g className={styles.confetti}>
