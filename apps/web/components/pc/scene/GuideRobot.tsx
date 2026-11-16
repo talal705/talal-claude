@@ -16,7 +16,12 @@ import { add, compose, rotate, scale, type PlacedPart } from "./placement";
 const noRaycast = () => null;
 /** Drawn 1.5× its model size (about 165 mm tall): readable from the default view, still smaller than the board. */
 const SIZE = 1.5;
-const RADIUS = 46 * SIZE;
+const BASE_RADIUS = 46 * SIZE;
+/**
+ * Seen from close up (a phone's view glides in to a small place), the robot shrinks and comes closer, so
+ * it stays about the same size on screen and never fills the view: 1 from the default distance, down to 0.4.
+ */
+export const nearScale = (cameraToTarget: number) => THREE.MathUtils.clamp(cameraToTarget / 1300, 0.4, 1);
 const TABLE_CLEAR = 60;
 
 // ---------- Where things are ----------
@@ -64,9 +69,10 @@ function segmentDistance(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): 
  * part (and outside the case unless the target is the case's own button), above the table, and off
  * the line from the eye to the target so it never covers what it points at.
  */
-export function hoverPoint(target: Vec3, eye: Vec3, obstacles: readonly Obstacle[], caseBox: Obstacle | null): Vec3 {
+export function hoverPoint(target: Vec3, eye: Vec3, obstacles: readonly Obstacle[], caseBox: Obstacle | null, k = 1): Vec3 {
   const t = new THREE.Vector3(...target);
   const camera = new THREE.Vector3(...eye);
+  const RADIUS = BASE_RADIUS * k;
   const inCase = caseBox !== null && inside(t, caseBox, 0);
   const toEye = camera.clone().sub(t).setY(0).normalize();
   const side = new THREE.Vector3(-toEye.z, 0, toEye.x);
@@ -74,11 +80,11 @@ export function hoverPoint(target: Vec3, eye: Vec3, obstacles: readonly Obstacle
   if (inCase && caseBox) {
     // Inside the case: outside its open (glass) side, level with the target, a little to one side.
     for (const dy of [80, 20, 150]) for (const dx of [190, -190, 130, -130, 260, -260]) {
-      candidates.push(new THREE.Vector3(t.x + dx, t.y + dy, caseBox.max[2] + RADIUS + 50));
+      candidates.push(new THREE.Vector3(t.x + dx * k, t.y + dy * k, caseBox.max[2] + RADIUS + 50 * k));
     }
   } else {
     for (const up of [150, 200, 120, 260, 40, -40]) for (const across of [160, -160, 100, -100, 230, -230]) for (const toward of [80, 0, 160, 240]) {
-      candidates.push(t.clone().add(side.clone().multiplyScalar(across)).add(toEye.clone().multiplyScalar(toward)).setY(t.y + up));
+      candidates.push(t.clone().add(side.clone().multiplyScalar(across * k)).add(toEye.clone().multiplyScalar(toward * k)).setY(t.y + up * k));
     }
   }
   let best: THREE.Vector3 | null = null;
@@ -92,10 +98,10 @@ export function hoverPoint(target: Vec3, eye: Vec3, obstacles: readonly Obstacle
     const sight = segmentDistance(c, camera, t);
     if (sight.t < 0.98 && sight.distance < RADIUS * 1.5) continue;
     // Close to the target, toward the viewer, and not far off the screen's line to it.
-    const score = c.distanceTo(t) - 0.35 * c.clone().sub(t).dot(camera.clone().sub(t).normalize()) + 0.2 * Math.abs(c.y - t.y - 140);
+    const score = c.distanceTo(t) - 0.35 * c.clone().sub(t).dot(camera.clone().sub(t).normalize()) + 0.2 * Math.abs(c.y - t.y - 140 * k);
     if (score < bestScore) { bestScore = score; best = c; }
   }
-  const chosen = best ?? t.clone().add(toEye.multiplyScalar(220)).setY(Math.max(t.y + 160, RADIUS + TABLE_CLEAR));
+  const chosen = best ?? t.clone().add(toEye.multiplyScalar(220 * k)).setY(Math.max(t.y + 160 * k, RADIUS + TABLE_CLEAR));
   return [chosen.x, chosen.y, chosen.z];
 }
 
@@ -159,12 +165,15 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
 
   // Where it hovers: chosen when the target changes, and again once the learner stops turning the view.
   const goal = useRef<THREE.Vector3 | null>(null);
+  const near = useRef(1);
+  const shownScale = useRef(1);
   const placedFrom = useRef(new THREE.Vector3());
   const still = useRef(0);
   const choose = () => {
     const target = points[0];
     if (!target) { goal.current = null; return; }
-    let at: Vec3 = hoverPoint(target, camera.position.toArray() as unknown as Vec3, obstacles, caseBox);
+    near.current = nearScale(camera.position.distanceTo(new THREE.Vector3(...target)));
+    let at: Vec3 = hoverPoint(target, camera.position.toArray() as unknown as Vec3, obstacles, caseBox, near.current);
     // Celebrating: beside the case, up high, where the whole build stays in view.
     if (focus?.reason === "celebrate" && caseBox) at = [caseBox.max[0] + 120, caseBox.max[1] - 40, (caseBox.min[2] + caseBox.max[2]) / 2 + 140];
     goal.current = new THREE.Vector3(...at);
@@ -194,7 +203,8 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
     const wasHidden = !node.visible;
     visible.current = animate ? THREE.MathUtils.damp(visible.current, want, 7, dt) : want;
     node.visible = visible.current > 0.02;
-    node.scale.setScalar(Math.max(0.001, visible.current) * SIZE);
+    shownScale.current = animate ? THREE.MathUtils.damp(shownScale.current, near.current, 4, dt) : near.current;
+    node.scale.setScalar(Math.max(0.001, visible.current) * SIZE * shownScale.current);
     if (hop.current && visible.current < 0.06) {
       if (goal.current) node.position.copy(goal.current);
       hop.current = false;
@@ -321,7 +331,7 @@ function TargetRing({ at, color, animate }: { at: Vec3; color: string; animate: 
 
 /** True when the straight way from a to b passes through the box (sampled; the box is large). */
 function segmentCrosses(a: THREE.Vector3, b: THREE.Vector3, box: Obstacle): boolean {
-  for (let i = 1; i < 24; i++) if (inside(a.clone().lerp(b, i / 24), box, RADIUS * 0.4)) return true;
+  for (let i = 1; i < 24; i++) if (inside(a.clone().lerp(b, i / 24), box, BASE_RADIUS * 0.4)) return true;
   return false;
 }
 
