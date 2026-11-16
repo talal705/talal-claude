@@ -17,14 +17,15 @@ import { pc } from "@ytl/simulation";
 import { catalogIndex } from "../catalog";
 import { pcStore, usePC } from "../pc-client";
 import type { AssemblyCandidate } from "@/lib/interaction/assembly";
-import type { Frame, PartGeometry, Solid, Vec3 } from "./geometry";
-import { add, boxCorners, compose, placeCableEnds, placeParts, rotate, scale, workbenchArea, type PlacedCableEnd, type PlacedPart } from "./placement";
+import type { Frame, PartGeometry, Quat, Solid, Vec3 } from "./geometry";
+import { add, boxCorners, compose, inverse, placeCableEnds, placeParts, rotate, scale, workbenchArea, type PlacedCableEnd, type PlacedPart } from "./placement";
 import { PIXEL_RATIO_CAP, sceneStore, selectCableEnd, selectPart, useScene, type CameraCommand, type SceneQuality } from "./scene-store";
 import { fitDistance } from "./camera-fit";
 import { clickBox, fastenerMarkers, settingHotspots, type FastenerMarker, type Hotspot } from "./controls3d";
 import { BENCH_MAT_COLOR, BENCH_TOP_COLOR, FINISHES } from "./palette";
 import { useGeometry } from "./use-geometry";
-import { cableStrands, connectorSize, smoothCableRoute } from "./cable-visuals";
+import { avoidObstacles, cableStrands, connectorSize, smoothCableRoute, type Obstacle } from "./cable-visuals";
+import { applyDetail, boxRaycast, cylinderRaycast, detailedBox, detailedCylinder, stretchTubeUv, surfaceSet } from "./surface-details";
 
 // ---------- Shared resources: one geometry per shape, one material per look ----------
 
@@ -94,7 +95,7 @@ function materialFor(role: string, category = ""): THREE.MeshStandardMaterial {
     if (hue) color.lerp(new THREE.Color(hue), role === "port" || role === "edge_connector" ? 0.25 : 0.7);
     // The scene has a soft studio environment (SceneEnvironment), so surfaces may reflect a little.
     const look = ROLE_SURFACE[role] ?? { roughness: 0.62, metalness: 0.05 };
-    material = new THREE.MeshStandardMaterial({ color, ...look });
+    material = applyDetail(new THREE.MeshStandardMaterial({ color, ...look }), undefined, role);
     materials.set(key, material);
   }
   return material;
@@ -138,6 +139,7 @@ function finishMaterial(finish: string): THREE.MeshStandardMaterial | null {
       roughness: upgrade?.roughness ?? look.roughness,
       ...(look.opacity !== undefined ? { transparent: true, opacity: look.opacity, depthWrite: false } : {}),
     });
+    applyDetail(material, finish, "");
     finishMaterials.set(finish, material);
   }
   return material;
@@ -298,7 +300,16 @@ function SolidView({ solid, category, lit, partId }: { solid: Solid; category: s
   const dims: [number, number, number] = box ? (solid.size as [number, number, number]) : [solid.radius ?? 1, solid.height ?? 1, solid.radius ?? 1];
   return (
     <group position={solid.at as [number, number, number]} quaternion={(solid.rotation ?? [0, 0, 0, 1]) as [number, number, number, number]}>
-      <mesh geometry={box ? BOX : CYLINDER} material={material} quaternion={box ? undefined : AXIS_TURN[solid.axis ?? "y"]} scale={dims} userData={{ part: partId }} castShadow={!material.transparent} receiveShadow />
+      {/* Real-size geometry (softened edges, texture at true scale); the pointer still hits the plain shape. */}
+      <mesh
+        geometry={box ? detailedBox(dims[0], dims[1], dims[2]) : detailedCylinder(dims[0], dims[1])}
+        material={material}
+        quaternion={box ? undefined : AXIS_TURN[solid.axis ?? "y"]}
+        raycast={box ? boxRaycast(dims) : cylinderRaycast(dims[0], dims[1])}
+        userData={{ part: partId }}
+        castShadow={!material.transparent}
+        receiveShadow
+      />
       <lineSegments geometry={box ? EDGES : CYLINDER_EDGES} material={EDGE} quaternion={box ? undefined : AXIS_TURN[solid.axis ?? "y"]} scale={dims} raycast={noRaycast} />
     </group>
   );
@@ -310,6 +321,8 @@ const MOVE_LIFT_MM = 90;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 /** Parts in motion, by key: the probe reports when every move has finished. */
 const moving = new Set<string>();
+/** The drawn group of every part (by instance ID, or `id#group`), so leads can follow a part while it moves. */
+const liveGroups = new Map<string, THREE.Group>();
 
 /**
  * A frame that glides to where the build puts it: when `frame` changes, the group travels from where
@@ -344,6 +357,12 @@ function FrameGroup({ frame, animate, reducedMotion, moveKey, onClick, children 
     invalidate();
   }, [x, y, z, qx, qy, qz, qw, animate, reducedMotion, moveKey, invalidate]);
   useEffect(() => () => { moving.delete(moveKey); }, [moveKey]);
+  useLayoutEffect(() => {
+    const node = group.current;
+    if (!node) return;
+    liveGroups.set(moveKey, node);
+    return () => { if (liveGroups.get(moveKey) === node) liveGroups.delete(moveKey); };
+  }, [moveKey]);
   useFrame(() => {
     const node = group.current;
     const current = move.current;
@@ -563,7 +582,9 @@ function cableMaterial(kind: string): THREE.MeshStandardMaterial {
   let material = cableMaterials.get(kind);
   if (!material) {
     // Braided sleeving: a soft sheen, not a plastic shine.
-    material = new THREE.MeshStandardMaterial({ color: CABLE_COLORS[kind] ?? "#4a515e", roughness: 0.46, metalness: 0.12 });
+    material = new THREE.MeshStandardMaterial({ color: CABLE_COLORS[kind] ?? "#4a515e", roughness: 0.5, metalness: 0.1 });
+    const braid = surfaceSet()?.braidNormal;
+    if (braid) { material.normalMap = braid; material.normalScale.set(0.7, 0.7); }
     cableMaterials.set(kind, material);
   }
   return material;
@@ -574,13 +595,20 @@ const CONNECTOR = new THREE.MeshStandardMaterial({ color: "#1c2027", roughness: 
 const CONTACT = new THREE.MeshStandardMaterial({ color: "#d1b46d", roughness: 0.25, metalness: 0.9 });
 const BOOT = new THREE.MeshStandardMaterial({ color: "#2a2f37", roughness: 0.7, metalness: 0 });
 
-/** One bundle along a route: `count` round conductors side by side, merged into one mesh. */
-function bundleGeometry(route: Vec3[], kind: string): THREE.BufferGeometry | null {
+/** One bundle along a route: `count` round conductors side by side, merged into one mesh, sleeving at real scale. */
+/** The last centre line drawn for each cable and the parts it had to avoid, for the probe's clipping check. */
+const drawnRoutes = new Map<string, { line: Vec3[]; obstacles: readonly Obstacle[] }[]>();
+
+function bundleGeometry(route: Vec3[], kind: string, obstacles: readonly Obstacle[], record?: { line: Vec3[]; obstacles: readonly Obstacle[] }[]): THREE.BufferGeometry | null {
   const { count, radius, pitch } = cableStrands(kind);
   const start = new THREE.Vector3(...route[0]);
   const end = new THREE.Vector3(...route[route.length - 1]);
   const along = end.clone().sub(start);
   if (along.length() < 2) return null;
+  // The centre line, sampled and bent out of the parts it would pass through; the plug ends stay put.
+  const centre = new THREE.CatmullRomCurve3(route.map((at) => new THREE.Vector3(...at)), false, "centripetal").getPoints(40).map((p) => p.toArray() as Vec3);
+  const clear = avoidObstacles(centre, obstacles, (count * pitch) / 2 + radius + 2, 3);
+  record?.push({ line: clear, obstacles });
   // The strands lie side by side across the run, flat against the board like a real ribbon.
   let across = along.clone().cross(new THREE.Vector3(0, 0, 1));
   if (across.lengthSq() < 1e-6) across = new THREE.Vector3(1, 0, 0);
@@ -589,66 +617,208 @@ function bundleGeometry(route: Vec3[], kind: string): THREE.BufferGeometry | nul
   for (let strand = 0; strand < count; strand++) {
     const offset = (strand - (count - 1) / 2) * pitch;
     // Strands converge into the plug at both ends and spread to their ribbon width between.
-    const path = route.map((at, i, all) => {
-      const share = i === 0 || i === all.length - 1 ? 0.35 : 1;
+    const path = clear.map((at, i, all) => {
+      const fromEnd = Math.min(i, all.length - 1 - i);
+      const share = 0.35 + 0.65 * Math.min(1, fromEnd / 4);
       return new THREE.Vector3(...at).addScaledVector(across, offset * share);
     });
-    tubes.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(path, false, "centripetal"), 56, radius, 8, false));
+    const curve = new THREE.CatmullRomCurve3(path, false, "centripetal");
+    tubes.push(stretchTubeUv(new THREE.TubeGeometry(curve, 64, radius, 10, false), curve.getLength(), radius));
   }
   const merged = mergeGeometries(tubes);
   tubes.forEach((tube) => tube.dispose());
   return merged;
 }
 
-/** Sleeved wires and keyed connector housings. A captive lead includes its fixed source. */
-function Cable({ cableId, kind, ends, fixedSource, orientations, simple = false, selected = false, onSelectSimpleCable }: {
+/** Where a cable point is held: a spot in the frame of a part, so it moves exactly with that part. */
+export interface CableAnchor { hostId: string; local: Vec3; turn?: Quat }
+
+/** How long a plug takes to go into (or come out of) its port, and how far it arcs on the way. */
+const PLUG_MS = 420;
+const PLUG_ARC_MM = 18;
+/** A loose end follows its part with this lag (seconds): the lead trails a little, then settles. */
+const TRAIL_S = 0.09;
+const SETTLED_MM = 0.05;
+
+/**
+ * Sleeved wires and keyed connector housings. A captive lead includes its fixed source.
+ *
+ * The geometry follows what is drawn, not only the build state: a point held by a part (a plugged
+ * end, the lead's source, a loose end hanging from its part) is read from that part's live
+ * transform every frame, so while a part glides into place its leads stay attached. A plug that is
+ * connected or unplugged travels to its new place on a short arc; a loose end trails its part
+ * slightly and settles. None of this changes what the build says is connected.
+ */
+function Cable({ cableId, kind, ends, fixedSource, orientations, anchors, obstacles, simple = false, selected = false, reducedMotion = false, onSelectSimpleCable }: {
   cableId: string; kind: string; ends: [string, PlacedCableEnd][]; fixedSource?: Vec3; orientations?: ReadonlyMap<string, THREE.Quaternion>;
-  simple?: boolean; selected?: boolean; onSelectSimpleCable?: (cableId: string) => void;
+  /** Point ID ("source", or an end ID) to the part frame that holds it. */
+  anchors?: ReadonlyMap<string, CableAnchor>;
+  obstacles?: readonly Obstacle[];
+  simple?: boolean; selected?: boolean; reducedMotion?: boolean; onSelectSimpleCable?: (cableId: string) => void;
 }) {
   const assembly = usePC((store) => store.assembly);
-  const geometry = useMemo(() => {
-    const points = fixedSource ? [fixedSource, ...ends.map(([, end]) => end.at)] : ends.map(([, end]) => end.at);
-    const parts: THREE.BufferGeometry[] = [];
-    for (let pair = 1; pair < points.length; pair++) {
-      const a = points[pair - 1], b = points[pair];
-      if (Math.hypot(...a.map((v, i) => b[i] - v)) < 2) continue;
-      const [, end] = ends[fixedSource ? pair - 1 : pair] ?? [];
-      // A plugged end arrives straight out of its port; a loose one simply lies where it fell.
-      const turn = end?.plugged ? orientations?.get(ends[fixedSource ? pair - 1 : pair][0]) : undefined;
-      const facing = turn ? (new THREE.Vector3(0, 1, 0).applyQuaternion(turn).toArray() as Vec3) : undefined;
-      const bundle = bundleGeometry(smoothCableRoute(a, b, facing), kind);
-      if (bundle) parts.push(bundle);
+  const invalidate = useThree((three) => three.invalidate);
+  const tube = useRef<THREE.Mesh>(null);
+  const plugs = useRef(new Map<string, THREE.Group>());
+  const ids = useMemo(() => [...(fixedSource ? ["source"] : []), ...ends.map(([endId]) => endId)], [fixedSource, ends]);
+  /** What is drawn now, per point; and a plug's move in progress. */
+  const shown = useRef(new Map<string, THREE.Vector3>());
+  const turns = useRef(new Map<string, THREE.Quaternion>());
+  const plugged = useRef(new Map<string, boolean>());
+  const moves = useRef(new Map<string, { from: THREE.Vector3; start: number }>());
+  const built = useRef<{ key: string; geometry: THREE.BufferGeometry | null }>({ key: "", geometry: null });
+  const last = useRef(performance.now());
+
+  /** Where each point should be now: its anchor's live transform, or the build's place for it. */
+  const targetOf = (id: string, out: THREE.Vector3): THREE.Vector3 => {
+    const anchor = anchors?.get(id);
+    const group = anchor && liveGroups.get(anchor.hostId);
+    if (anchor && group) {
+      group.updateWorldMatrix(true, false);
+      return group.localToWorld(out.set(...anchor.local));
     }
-    return parts;
-  }, [ends, fixedSource, kind, orientations]);
-  useEffect(() => () => geometry.forEach((tube) => tube.dispose()), [geometry]);
+    const at = id === "source" ? fixedSource! : ends.find(([endId]) => endId === id)![1].at;
+    return out.set(...at);
+  };
+  const turnOf = (id: string, out: THREE.Quaternion): THREE.Quaternion | null => {
+    const anchor = anchors?.get(id);
+    const group = anchor?.turn && liveGroups.get(anchor.hostId);
+    if (anchor?.turn && group) return group.getWorldQuaternion(out).multiply(scratchQuat.set(...anchor.turn));
+    const fixed = orientations?.get(id);
+    return fixed ? out.copy(fixed) : null;
+  };
+
+  /** Moves the drawn points one step; true while anything is still moving. */
+  const step = (now: number, dt: number): boolean => {
+    let busy = false;
+    for (const id of ids) {
+      const target = targetOf(id, scratchVec.clone());
+      const isPlugged = id !== "source" && Boolean(ends.find(([endId]) => endId === id)?.[1].plugged);
+      let point = shown.current.get(id);
+      if (!point) { shown.current.set(id, target.clone()); plugged.current.set(id, isPlugged); continue; }
+      const wasPlugged = plugged.current.get(id);
+      if (wasPlugged !== undefined && wasPlugged !== isPlugged && !reducedMotion) moves.current.set(id, { from: point.clone(), start: now });
+      plugged.current.set(id, isPlugged);
+      const move = moves.current.get(id);
+      if (move) {
+        const t = Math.min(1, (now - move.start) / PLUG_MS);
+        // Ease out with a whisper of overshoot, so the plug seats and stops.
+        const k = 1 - (1 - t) ** 3 + Math.sin(Math.PI * t) * 0.04 * (1 - t);
+        point.lerpVectors(move.from, target, k);
+        point.y += Math.sin(Math.PI * t) * PLUG_ARC_MM;
+        if (t >= 1) { moves.current.delete(id); point.copy(target); } else busy = true;
+      } else if (id === "source" || isPlugged || reducedMotion) {
+        // Held by a part: exactly where the part is, every frame.
+        point.copy(target);
+      } else {
+        // Loose: trail the part a little, then settle.
+        const share = 1 - Math.exp(-dt / TRAIL_S);
+        point.lerp(target, share);
+        if (point.distanceTo(target) < SETTLED_MM) point.copy(target); else busy = true;
+      }
+      const turn = turnOf(id, turns.current.get(id) ?? new THREE.Quaternion());
+      if (turn) turns.current.set(id, turn);
+    }
+    return busy;
+  };
+
+  /** Rebuilds the sleeving when the drawn points moved, and places the plugs. */
+  const draw = () => {
+    const points = ids.map((id) => shown.current.get(id)!.toArray() as Vec3);
+    const key = `${points.map((p) => p.map((v) => v.toFixed(2)).join(",")).join("|")}#${obstacles?.length ?? 0}`;
+    if (key !== built.current.key) {
+      const segments: THREE.BufferGeometry[] = [];
+      const record: { line: Vec3[]; obstacles: readonly Obstacle[] }[] = [];
+      for (let pair = 1; pair < points.length; pair++) {
+        const a = points[pair - 1], b = points[pair];
+        if (Math.hypot(...a.map((v, i) => b[i] - v)) < 2) continue;
+        const id = ids[pair];
+        // A plugged end arrives straight out of its port; a loose one simply lies where it fell.
+        const turn = plugged.current.get(id) ? turns.current.get(id) : undefined;
+        const facing = turn ? (new THREE.Vector3(0, 1, 0).applyQuaternion(turn).toArray() as Vec3) : undefined;
+        const bundle = bundleGeometry(smoothCableRoute(a, b, facing), kind, obstacles ?? [], record);
+        if (bundle) segments.push(bundle);
+      }
+      const geometry = segments.length > 1 ? mergeGeometries(segments) : (segments[0] ?? null);
+      if (segments.length > 1) segments.forEach((segment) => segment.dispose());
+      built.current.geometry?.dispose();
+      built.current = { key, geometry };
+      drawnRoutes.set(cableId, record);
+      if (tube.current) {
+        tube.current.geometry = geometry ?? EMPTY_GEOMETRY;
+        tube.current.visible = geometry !== null;
+      }
+    }
+    for (const [id, group] of plugs.current) {
+      const at = shown.current.get(id);
+      if (at) group.position.copy(at);
+      const turn = turns.current.get(id);
+      if (turn) group.quaternion.copy(turn);
+    }
+  };
+
+  // A new build state: take a step at once (so a still scene is right on its first frame), then animate.
+  useLayoutEffect(() => {
+    const now = performance.now();
+    const busy = step(now, 0);
+    draw();
+    last.current = now;
+    if (busy) invalidate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ends, fixedSource, anchors, obstacles, orientations]);
+
+  useFrame(() => {
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - last.current) / 1000);
+    last.current = now;
+    // Anchored points follow their part even while nothing in this cable changed (the part is gliding).
+    const anchoredMoving = ids.some((id) => { const hostId = anchors?.get(id)?.hostId; return hostId !== undefined && moving.has(hostId); });
+    if (!anchoredMoving && moves.current.size === 0 && ids.every((id) => { const p = shown.current.get(id); return p && p.distanceTo(targetOf(id, scratchVec)) < SETTLED_MM; })) return;
+    const busy = step(now, dt);
+    draw();
+    if (busy || anchoredMoving) invalidate();
+  });
+
+  useEffect(() => () => { built.current.geometry?.dispose(); drawnRoutes.delete(cableId); }, [cableId]);
+
   const size = connectorSize(kind);
   const strands = cableStrands(kind);
   const bootRadius = Math.max(1.6, (strands.count * strands.pitch) / 2 * 0.7 + strands.radius);
+  const housing = detailedBox(size[0], size[1], size[2]);
   return (
     <group>
-      {geometry.map((tube, index) => <mesh key={index} geometry={tube} material={selected ? SELECTED_END : cableMaterial(kind)} raycast={noRaycast} castShadow receiveShadow />)}
-      {fixedSource && <mesh geometry={BOX} material={CONNECTOR} position={fixedSource as [number, number, number]} scale={[9, 8, 9]} raycast={noRaycast} />}
+      <mesh ref={tube} geometry={EMPTY_GEOMETRY} material={selected ? SELECTED_END : cableMaterial(kind)} raycast={noRaycast} castShadow receiveShadow />
+      {fixedSource && <mesh geometry={detailedBox(9, 8, 9)} material={CONNECTOR} position={fixedSource as [number, number, number]} raycast={noRaycast} castShadow />}
       {ends.map(([endId, end]) => (
-        <group key={endId} position={end.at as [number, number, number]} quaternion={orientations?.get(endId)} onClick={(event) => {
+        <group key={endId} ref={(node) => { if (node) plugs.current.set(endId, node); else plugs.current.delete(endId); }} onClick={(event) => {
           if (simple) { event.stopPropagation(); onSelectSimpleCable?.(cableId); return; }
           if (assembly.phase !== "idle") return;
           event.stopPropagation(); selectCableEnd(`${cableId}/${endId}`);
           if (end.plugged) return;
           sceneStore.setState({ pickInScene: true }); pcStore.getState().selectCableEnd(cableId, endId);
         }}>
-          {/* Housing, contacts under it, the retention latch on its side and the boot where the wires enter. */}
-          <mesh geometry={BOX} material={selected ? SELECTED_END : end.plugged ? CONNECTOR : LOOSE_END} scale={size} userData={{ cableEnd: `${cableId}/${endId}`, looseEnd: !end.plugged }} castShadow />
+          {/* Housing (softened edges, same hit box), contacts under it, the retention latch with its
+              hook on one side, a darker pin face, and the moulded boot where the wires enter. */}
+          <mesh geometry={housing} material={selected ? SELECTED_END : end.plugged ? CONNECTOR : LOOSE_END} raycast={boxRaycast(size)} userData={{ cableEnd: `${cableId}/${endId}`, looseEnd: !end.plugged }} castShadow />
+          <mesh geometry={BOX} material={PIN_FACE} position={[0, -size[1] / 2 + 0.2, 0]} scale={[size[0] * 0.86, 0.5, size[2] * 0.86]} raycast={noRaycast} />
           <mesh geometry={BOX} material={CONTACT} position={[0, -size[1] / 2 - 0.3, 0]} scale={[size[0] * 0.76, 0.8, size[2] * 0.76]} userData={{ looseEnd: !end.plugged }} />
           <mesh geometry={BOX} material={CONNECTOR} position={[size[0] / 2 + 0.7, 0, 0]} scale={[1.4, size[1] * 0.5, size[2] * 0.4]} userData={{ looseEnd: !end.plugged }} />
           <mesh geometry={BOX} material={CONNECTOR} position={[size[0] / 2 + 1.2, size[1] * 0.2, 0]} scale={[1, size[1] * 0.35, Math.min(6, size[2] * 0.5)]} raycast={noRaycast} />
-          <mesh geometry={CYLINDER} material={BOOT} position={[0, size[1] / 2 + 2.2, 0]} scale={[Math.min(bootRadius, size[0] / 2), 4.4, Math.min(bootRadius * 0.6 + 1, size[2] / 2)]} raycast={noRaycast} />
+          <mesh geometry={BOOT_GEOMETRY} material={BOOT} position={[0, size[1] / 2 + 2.6, 0]} scale={[Math.min(bootRadius, size[0] / 2), 5.2, Math.min(bootRadius * 0.6 + 1, size[2] / 2)]} raycast={noRaycast} castShadow />
           {!end.plugged && <mesh geometry={BOX} material={PICK} scale={size.map((s) => Math.max(22, s + 8)) as [number, number, number]} userData={{ cableEnd: `${cableId}/${endId}`, looseEnd: true }} />}
         </group>
       ))}
     </group>
   );
 }
+
+const scratchVec = new THREE.Vector3();
+const scratchQuat = new THREE.Quaternion();
+const EMPTY_GEOMETRY = new THREE.BufferGeometry();
+/** A strain-relief boot: wider where it meets the housing, tapering toward the wires. */
+const BOOT_GEOMETRY = new THREE.CylinderGeometry(0.78, 1, 1, 24);
+const PIN_FACE = new THREE.MeshStandardMaterial({ color: "#0d0f13", roughness: 0.8, metalness: 0 });
+
 
 // ---------- Destinations of the picked-up part or cable end ----------
 
@@ -1122,6 +1292,12 @@ interface SceneProbe {
   simpleTargets(): string[];
   /** True while any part is still travelling to its new place. */
   moving(): boolean;
+  /** Per cable: how many points of its centre line (plug ends aside) lie inside a solid part. */
+  cableClipping(): Record<string, number>;
+  /** The last drawn point of a cable (its plug end), scene millimetres. */
+  cableEnd(cableId: string): number[] | null;
+  /** Where a part is drawn this frame (it may be mid-move): position and rotation. */
+  liveFrame(instanceId: string): { at: number[]; quat: number[] } | null;
   /** Where a part is drawn now (scene millimetres), for checking that installed parts reach their place. */
   partFrame(instanceId: string): { at: number[]; quat: number[]; onBench: boolean } | null;
 }
@@ -1137,6 +1313,14 @@ const probe: SceneProbe = {
   simpleTargetRect: (id) => simpleTargetRects.get(id)?.() ?? null,
   simpleTargets: () => [...simpleTargetRects.keys()],
   moving: () => moving.size > 0,
+  cableEnd: (cableId) => { const runs = drawnRoutes.get(cableId); const line = runs?.at(-1)?.line; return line ? [...line[line.length - 1]] : null; },
+  liveFrame: (instanceId) => {
+    const group = liveGroups.get(instanceId);
+    if (!group) return null;
+    group.updateWorldMatrix(true, false);
+    return { at: group.getWorldPosition(new THREE.Vector3()).toArray(), quat: group.getWorldQuaternion(new THREE.Quaternion()).toArray() };
+  },
+  cableClipping: () => Object.fromEntries([...drawnRoutes].map(([id, runs]) => [id, runs.reduce((sum, run) => sum + run.line.slice(3, -3).filter((p) => run.obstacles.some((box) => p.every((v, k) => v > box.min[k] && v < box.max[k]))).length, 0)])),
   partFrame: (instanceId) => {
     const item = lastPlaced?.get(instanceId);
     return item ? { at: [...item.frame.at], quat: [...item.frame.quat], onBench: item.onBench } : null;
@@ -1364,6 +1548,10 @@ function fallbackSize(part: InstalledPart): Vec3 {
   return [dimensions?.lengthMm ?? 120, dimensions?.heightMm ?? 40, dimensions?.widthMm ?? 120];
 }
 
+const standsFirstId = (state: PCBuildState, instanceId: string) => {
+  const part = state.parts.find((item) => item.instanceId === instanceId);
+  return part ? standsFirst(part) : false;
+};
 const isAside = (part: InstalledPart) => catalogIndex.byId.get(part.catalogId)?.category === "monitor";
 /** The case stands first on the workbench: it is where the build happens. */
 const standsFirst = (part: InstalledPart) => catalogIndex.byId.get(part.catalogId)?.category === "case";
@@ -1431,6 +1619,31 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
   lastPlaced = placed;
   const rich = quality !== "low";
   const cableEnds = useMemo(() => placeCableEnds(state, placed, geometry), [state, placed, geometry]);
+  // What a lead must not pass through: every solid of every part (a cooler's fin stack, its fan, a
+  // card's shroud…), each as its own box, so a lead may run between them as real ones do. The case is
+  // a container, not an obstacle; places for other parts and keep-out volumes are not solid.
+  const cableObstacles = useMemo(() => {
+    const boxes: Obstacle[] = [];
+    const bounds = (corners: Vec3[]): Obstacle => ({
+      min: [0, 1, 2].map((k) => Math.min(...corners.map((c) => c[k]))) as unknown as Vec3,
+      max: [0, 1, 2].map((k) => Math.max(...corners.map((c) => c[k]))) as unknown as Vec3,
+    });
+    for (const part of state.parts) {
+      const item = placed.get(part.instanceId);
+      if (!item || standsFirst(part)) continue;
+      const own = geometry.get(part.catalogId);
+      if (!own) { boxes.push(bounds(boxCorners(item.frame, [0, 0, 0], item.size))); continue; }
+      for (const solid of own.solids) {
+        if (!drawable(solid) || PLACE_ROLES.has(solid.role)) continue;
+        const frame = (solid.group && item.groupFrames[solid.group]) || item.frame;
+        const box = solid.shape === "box" || solid.shape === "fins" ? (solid.size as Vec3)
+          : (["x", "y", "z"] as const).map((axis) => (axis === (solid.axis ?? "y") ? solid.height ?? 1 : 2 * (solid.radius ?? 1))) as unknown as Vec3;
+        const solidFrame = compose(frame, { at: solid.at, quat: (solid.rotation ?? [0, 0, 0, 1]) as Quat });
+        boxes.push(bounds(boxCorners(solidFrame, scale(box, -0.5), box)));
+      }
+    }
+    return boxes;
+  }, [placed, state, geometry]);
   const candidates = usePC((store) => (simple || store.assembly.phase === "idle" ? null : store.assembly.candidates));
   const markers = useMemo(() => (candidates ? candidateMarkers(candidates as readonly AssemblyCandidate[], placed, geometry, state) : []), [candidates, placed, geometry, state]);
   // The monitor stands behind the build and is left out of the default framing.
@@ -1508,17 +1721,25 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
         const lead = owner && geometry.get(cable.catalogId)?.leads[cable.cableSpecId];
         const fixedSource = spec?.attachment === "captive" && owner && lead ? compose(owner.frame, { at: lead.at, quat: [0, 0, 0, 1] }).at : undefined;
         const orientations = new Map<string, THREE.Quaternion>();
-        for (const [endId] of ends) {
+        // Each point of the lead is held by a part: the plug by the part it is plugged into, the source
+        // (and a loose end) by the lead's own part. The cable reads those parts' live transforms.
+        const anchors = new Map<string, CableAnchor>();
+        if (fixedSource && owner && lead) anchors.set("source", { hostId: owner.instanceId, local: lead.at });
+        for (const [endId, end] of ends) {
           const to = cable.ends[endId];
-          if (to?.kind !== "part") continue;
+          if (to?.kind !== "part") {
+            if (owner && !end.plugged) anchors.set(endId, { hostId: owner.instanceId, local: compose(inverse(owner.frame), { at: end.at, quat: [0, 0, 0, 1] }).at });
+            continue;
+          }
           const host = placed.get(to.instanceId);
           const hostCatalogId = state.parts.find((part) => part.instanceId === to.instanceId)?.catalogId;
           const port = hostCatalogId && geometry.get(hostCatalogId)?.ports[to.portId];
           if (!host || !port) continue;
           const local = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...port.facing).normalize());
           orientations.set(endId, new THREE.Quaternion(...host.frame.quat).multiply(local));
+          anchors.set(endId, { hostId: to.instanceId, local: port.at, turn: local.toArray() as unknown as Quat });
         }
-        return <Cable key={cable.id} cableId={cable.id} kind={spec?.kind ?? ""} ends={ends} fixedSource={fixedSource} orientations={orientations} simple={simple} selected={simple && selectedSimpleCableId === cable.id} onSelectSimpleCable={onSelectSimpleCable} />;
+        return <Cable key={cable.id} cableId={cable.id} kind={spec?.kind ?? ""} ends={ends} fixedSource={fixedSource} orientations={orientations} anchors={anchors} obstacles={cableObstacles} reducedMotion={reducedMotion} simple={simple} selected={simple && selectedSimpleCableId === cable.id} onSelectSimpleCable={onSelectSimpleCable} />;
       })}
       {!state.sidePanelOpen && state.parts.filter((part) => part.catalogId === "corsair-4000d-airflow-black").map((part) => {
         const item = placed.get(part.instanceId);
@@ -1572,18 +1793,20 @@ function KeyLight({ shadows, quality }: { shadows: boolean; quality: SceneQualit
   useEffect(() => {
     const node = light.current;
     if (!node) return;
-    node.target.position.set(450, 0, 250);
+    // Centred on the workbench; the light keeps its direction (same offset from target as before).
+    node.target.position.set(650, 0, 280);
     node.target.updateMatrixWorld();
     const camera = node.shadow.camera;
     // The whole workbench (case and rows of parts), in millimetres.
-    camera.left = -1300; camera.right = 1300; camera.top = 1300; camera.bottom = -1300; camera.near = 50; camera.far = 4200;
+    // Only the bench and the case: the same shadow map covers less, so contact shadows are crisper.
+    camera.left = -1050; camera.right = 1050; camera.top = 1050; camera.bottom = -1050; camera.near = 50; camera.far = 4200;
     camera.updateProjectionMatrix();
     node.shadow.bias = -0.0004;
-    node.shadow.normalBias = 1.2;
+    node.shadow.normalBias = 0.8;
     node.shadow.radius = 4;
   }, [quality]);
   const size = quality === "high" ? 2048 : 1024;
-  return <directionalLight ref={light} position={[950, 1500, 1350]} intensity={2.4} castShadow={shadows} shadow-mapSize={[size, size]} />;
+  return <directionalLight ref={light} position={[1150, 1500, 1380]} intensity={2.4} castShadow={shadows} shadow-mapSize={[size, size]} />;
 }
 
 /** A retired canvas must not report its intentional disposal as a failure of the next view. */
