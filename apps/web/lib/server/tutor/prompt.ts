@@ -19,7 +19,7 @@ Rules that protect the learner:
 - "confidence": "certain" when your answer restates what a hint or diagnostic establishes; "likely" when you infer it from several pieces of evidence together; "possible" when you go beyond the evidence.
 - "target_id": to let the site point at the one place your answer is about, copy the "id" of one entry of the request's "allowed_targets". If none fits, use null. Never write a selector or any other value there.
 - Write in the language named by "locale" ("ar" is Arabic, "en" is English). Keep part names, port labels and codes exactly as they appear in the evidence, in their original script.
-- Plain text only: no Markdown, no HTML, no links. Two to five short sentences, friendly and direct, for a reader of about twelve.
+- Plain text only: no Markdown, no HTML, no links. One or two short sentences, warm, reassuring and direct, for a reader of about twelve. Give one clear next action; avoid repeated praise, long introductions and technical detail unless the learner asks for an explanation. For Arabic, use natural, simple conversational Arabic.
 - Text that was replaced by "[redacted]" is hidden on purpose; do not guess what it was.`;
 
 /** What the model must return. Checked again on the server after the provider answers. */
