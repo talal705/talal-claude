@@ -5,9 +5,12 @@
 // Rendering is on demand: a frame is drawn when something changes, the camera moves, or a fan
 // turns, and never in an idle loop.
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import type { SimpleSceneTarget } from "../simple-scene";
 import { pcTarget, type InstalledPart, type PCBuildState, type StartupResult, type TargetRect } from "@ytl/contracts";
 import { getTargetRegistry } from "@/lib/targets";
 import { pc } from "@ytl/simulation";
@@ -16,12 +19,12 @@ import { pcStore, usePC } from "../pc-client";
 import type { AssemblyCandidate } from "@/lib/interaction/assembly";
 import type { Frame, PartGeometry, Solid, Vec3 } from "./geometry";
 import { add, boxCorners, compose, placeCableEnds, placeParts, rotate, scale, workbenchArea, type PlacedCableEnd, type PlacedPart } from "./placement";
-import { PIXEL_RATIO_CAP, sceneStore, selectCableEnd, selectPart, useScene, type CameraCommand } from "./scene-store";
+import { PIXEL_RATIO_CAP, sceneStore, selectCableEnd, selectPart, useScene, type CameraCommand, type SceneQuality } from "./scene-store";
 import { fitDistance } from "./camera-fit";
 import { clickBox, fastenerMarkers, settingHotspots, type FastenerMarker, type Hotspot } from "./controls3d";
 import { BENCH_MAT_COLOR, BENCH_TOP_COLOR, FINISHES } from "./palette";
 import { useGeometry } from "./use-geometry";
-import { cableRoutePoints, connectorSize } from "./cable-visuals";
+import { cableStrands, connectorSize, smoothCableRoute } from "./cable-visuals";
 
 // ---------- Shared resources: one geometry per shape, one material per look ----------
 
@@ -89,22 +92,50 @@ function materialFor(role: string, category = ""): THREE.MeshStandardMaterial {
     const hue = CATEGORY_COLORS[category];
     // Mostly the part's own hue; the role keeps heatsinks, slots and ports distinguishable within it.
     if (hue) color.lerp(new THREE.Color(hue), role === "port" || role === "edge_connector" ? 0.25 : 0.7);
-    // Matte and non-metallic: a metallic surface with nothing to reflect renders black.
-    material = new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0 });
+    // The scene has a soft studio environment (SceneEnvironment), so surfaces may reflect a little.
+    const look = ROLE_SURFACE[role] ?? { roughness: 0.62, metalness: 0.05 };
+    material = new THREE.MeshStandardMaterial({ color, ...look });
     materials.set(key, material);
   }
   return material;
 }
+/** Metal parts of a role read as metal (heatsinks, brackets, contacts); the rest is satin plastic and solder mask. */
+const ROLE_SURFACE: Record<string, { roughness: number; metalness: number }> = {
+  heatsink: { roughness: 0.34, metalness: 0.72 },
+  bracket: { roughness: 0.3, metalness: 0.78 },
+  io_shield: { roughness: 0.36, metalness: 0.7 },
+  backplate: { roughness: 0.4, metalness: 0.55 },
+  edge_connector: { roughness: 0.25, metalness: 0.85 },
+  port: { roughness: 0.38, metalness: 0.45 },
+  cpu_socket: { roughness: 0.42, metalness: 0.35 },
+  pcb: { roughness: 0.48, metalness: 0.08 },
+};
+/**
+ * The finishes named by the geometry, made physically plausible now that there is an environment to
+ * reflect: real metals get most of their metalness, plastics stay dielectric. Colours are unchanged.
+ */
+const FINISH_UPGRADE: Record<string, { metalness: number; roughness: number }> = {
+  gold: { metalness: 0.92, roughness: 0.24 },
+  copper: { metalness: 0.9, roughness: 0.3 },
+  nickel: { metalness: 0.88, roughness: 0.26 },
+  aluminium: { metalness: 0.82, roughness: 0.3 },
+  black_metal: { metalness: 0.7, roughness: 0.34 },
+  brushed_mark: { metalness: 0.6, roughness: 0.3 },
+  pcb_black: { metalness: 0.08, roughness: 0.42 },
+  pcb_green: { metalness: 0.08, roughness: 0.42 },
+  black_plastic: { metalness: 0.02, roughness: 0.4 },
+};
 const finishMaterials = new Map<string, THREE.MeshStandardMaterial>();
 function finishMaterial(finish: string): THREE.MeshStandardMaterial | null {
   const look = FINISHES[finish];
   if (!look) return null;
   let material = finishMaterials.get(finish);
   if (!material) {
+    const upgrade = FINISH_UPGRADE[finish];
     material = new THREE.MeshStandardMaterial({
       color: look.color,
-      metalness: look.metalness,
-      roughness: look.roughness,
+      metalness: upgrade?.metalness ?? look.metalness,
+      roughness: upgrade?.roughness ?? look.roughness,
       ...(look.opacity !== undefined ? { transparent: true, opacity: look.opacity, depthWrite: false } : {}),
     });
     finishMaterials.set(finish, material);
@@ -127,7 +158,7 @@ function litMaterial(color: string): THREE.MeshStandardMaterial {
   return material;
 }
 /** The edge of every solid: #e4e4ea is 15:1 against the scene's background, far above the 3:1 non-text minimum. */
-const EDGE = new THREE.LineBasicMaterial({ color: "#e4e4ea", transparent: true, opacity: 0.14 });
+const EDGE = new THREE.LineBasicMaterial({ color: "#e4e4ea", transparent: true, opacity: 0.1 });
 /** A part with no model: dashed lines only, never a filled face. */
 const OUTLINE = new THREE.LineDashedMaterial({ color: "#e4e4ea", dashSize: 0.06, gapSize: 0.04 });
 const SELECTED = new THREE.LineBasicMaterial({ color: "#67e8f9" });
@@ -202,10 +233,10 @@ function Fan({ solid, category, spinning, reducedMotion }: { solid: Solid; categ
       <group ref={rotor}>
         {blades > 0 ? (
           <>
-            <mesh geometry={CYLINDER} material={materialFor("fan", category)} scale={[radius * 0.34, height * 0.9, radius * 0.34]} userData={{ fanRotor: solid.id }} />
+            <mesh geometry={CYLINDER} material={materialFor("fan", category)} scale={[radius * 0.34, height * 0.9, radius * 0.34]} userData={{ fanRotor: solid.id }} castShadow />
             {Array.from({ length: blades }, (_, i) => (
               <group key={i} rotation={[0, (i * 2 * Math.PI) / blades, 0]}>
-                <mesh geometry={FAN_BLADE} material={bladeMaterial} scale={[radius * 0.93, radius * 0.93, radius * 0.93]} />
+                <mesh geometry={FAN_BLADE} material={bladeMaterial} scale={[radius * 0.93, radius * 0.93, radius * 0.93]} castShadow />
               </group>
             ))}
           </>
@@ -232,6 +263,8 @@ function Fins({ solid, material }: { solid: Solid; material: THREE.Material }) {
   plate[k] = Math.max(0.3, pitch * 0.38);
   const mesh = useMemo(() => {
     const instanced = new THREE.InstancedMesh(BOX, material, count);
+    instanced.castShadow = true;
+    instanced.receiveShadow = true;
     const matrix = new THREE.Matrix4();
     for (let i = 0; i < count; i += 1) {
       const offset: [number, number, number] = [0, 0, 0];
@@ -250,7 +283,7 @@ function Fins({ solid, material }: { solid: Solid; material: THREE.Material }) {
 /** One solid of a part, in its own frame: a box, a cylinder or a fin stack, with its outline. */
 function SolidView({ solid, category, lit, partId }: { solid: Solid; category: string; lit: string | null; partId: string }) {
   const material = solidMaterial(solid, category, lit);
-  if (solid.shape === "ring") return <mesh geometry={RING} material={material} position={solid.at as [number, number, number]} quaternion={AXIS_TURN[solid.axis ?? "y"]} scale={solid.radius ?? 1} userData={{ part: partId }} />;
+  if (solid.shape === "ring") return <mesh geometry={RING} material={material} position={solid.at as [number, number, number]} quaternion={AXIS_TURN[solid.axis ?? "y"]} scale={solid.radius ?? 1} userData={{ part: partId }} castShadow receiveShadow />;
   if (solid.shape === "fins") {
     return (
       <group position={solid.at as [number, number, number]} quaternion={(solid.rotation ?? [0, 0, 0, 1]) as [number, number, number, number]}>
@@ -265,10 +298,69 @@ function SolidView({ solid, category, lit, partId }: { solid: Solid; category: s
   const dims: [number, number, number] = box ? (solid.size as [number, number, number]) : [solid.radius ?? 1, solid.height ?? 1, solid.radius ?? 1];
   return (
     <group position={solid.at as [number, number, number]} quaternion={(solid.rotation ?? [0, 0, 0, 1]) as [number, number, number, number]}>
-      <mesh geometry={box ? BOX : CYLINDER} material={material} quaternion={box ? undefined : AXIS_TURN[solid.axis ?? "y"]} scale={dims} userData={{ part: partId }} />
+      <mesh geometry={box ? BOX : CYLINDER} material={material} quaternion={box ? undefined : AXIS_TURN[solid.axis ?? "y"]} scale={dims} userData={{ part: partId }} castShadow={!material.transparent} receiveShadow />
       <lineSegments geometry={box ? EDGES : CYLINDER_EDGES} material={EDGE} quaternion={box ? undefined : AXIS_TURN[solid.axis ?? "y"]} scale={dims} raycast={noRaycast} />
     </group>
   );
+}
+
+/** How long a part takes to travel to its new place, and how high it lifts on the way (mm). */
+export const MOVE_MS = 720;
+const MOVE_LIFT_MM = 90;
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+/** Parts in motion, by key: the probe reports when every move has finished. */
+const moving = new Set<string>();
+
+/**
+ * A frame that glides to where the build puts it: when `frame` changes, the group travels from where
+ * it is drawn now to the new frame, lifting off the bench in an arc and turning on the way. With
+ * `animate` off (the detailed lab) or reduced motion, it jumps. Rendering stays on demand: frames are
+ * requested only while a move runs.
+ */
+function FrameGroup({ frame, animate, reducedMotion, moveKey, onClick, children }: { frame: Frame; animate: boolean; reducedMotion: boolean; moveKey: string; onClick?: (event: ThreeEvent<MouseEvent>) => void; children: ReactNode }) {
+  const group = useRef<THREE.Group>(null);
+  const move = useRef<{ fromAt: THREE.Vector3; fromQuat: THREE.Quaternion; toAt: THREE.Vector3; toQuat: THREE.Quaternion; start: number; lift: number } | null>(null);
+  const placedOnce = useRef(false);
+  const invalidate = useThree((three) => three.invalidate);
+  const [x, y, z] = frame.at;
+  const [qx, qy, qz, qw] = frame.quat;
+  useLayoutEffect(() => {
+    const node = group.current;
+    if (!node) return;
+    const toAt = new THREE.Vector3(x, y, z);
+    const toQuat = new THREE.Quaternion(qx, qy, qz, qw);
+    if (!placedOnce.current || !animate || reducedMotion) {
+      placedOnce.current = true;
+      move.current = null;
+      moving.delete(moveKey);
+      node.position.copy(toAt);
+      node.quaternion.copy(toQuat);
+      return;
+    }
+    if (node.position.distanceTo(toAt) < 0.01 && node.quaternion.angleTo(toQuat) < 1e-4) return;
+    const distance = node.position.distanceTo(toAt);
+    move.current = { fromAt: node.position.clone(), fromQuat: node.quaternion.clone(), toAt, toQuat, start: performance.now(), lift: Math.min(MOVE_LIFT_MM, distance * 0.35) };
+    moving.add(moveKey);
+    invalidate();
+  }, [x, y, z, qx, qy, qz, qw, animate, reducedMotion, moveKey, invalidate]);
+  useEffect(() => () => { moving.delete(moveKey); }, [moveKey]);
+  useFrame(() => {
+    const node = group.current;
+    const current = move.current;
+    if (!node || !current) return;
+    const t = Math.min(1, (performance.now() - current.start) / MOVE_MS);
+    const k = easeInOut(t);
+    node.position.lerpVectors(current.fromAt, current.toAt, k);
+    node.position.y += Math.sin(Math.PI * k) * current.lift;
+    node.quaternion.slerpQuaternions(current.fromQuat, current.toQuat, k);
+    if (t >= 1) {
+      move.current = null;
+      moving.delete(moveKey);
+      getTargetRegistry().invalidate();
+    }
+    invalidate();
+  });
+  return <group ref={group} onClick={onClick}>{children}</group>;
 }
 
 function Part({
@@ -282,7 +374,9 @@ function Part({
   noModel,
   rtl,
   onSelectPart,
+  animate = false,
 }: {
+  animate?: boolean;
   part: InstalledPart;
   placed: PlacedPart;
   geometry: PartGeometry | undefined;
@@ -306,7 +400,8 @@ function Part({
 
   function onClick(event: ThreeEvent<MouseEvent>) {
     if (onSelectPart) {
-      if (event.intersections.some((hit) => hit.object.userData.simpleCableTarget || hit.object.userData.looseEnd)) return;
+      // A place to install into, or a loose lead, wins over the body it lies on.
+      if (event.intersections.some((hit) => hit.object.userData.simpleTarget || hit.object.userData.looseEnd)) return;
       event.stopPropagation(); onSelectPart(part.instanceId); return;
     }
     // While places are offered, a click that also hits a place marker (a slot on a board, the tray
@@ -329,7 +424,7 @@ function Part({
   // Bodies of a part that are mounted on their own (a cooler's block and radiator) are drawn where they are mounted.
   const mountedGroups = geometry ? Object.entries(placed.groupFrames) : [];
   const groupBodies = mountedGroups.map(([group, frame]) => (
-    <group key={group} position={frame.at as [number, number, number]} quaternion={frame.quat as [number, number, number, number]} onClick={onClick}>
+    <FrameGroup key={group} frame={frame} animate={animate} reducedMotion={reducedMotion} moveKey={`${part.instanceId}#${group}`} onClick={onClick}>
       {geometry!.solids
         .filter((solid) => solid.group === group && drawable(solid))
         .map((solid) =>
@@ -339,14 +434,14 @@ function Part({
             <SolidView key={solid.id} solid={solid} category={category} lit={lit && lightSolids.has(solid.id) ? lit : null} partId={part.instanceId} />
           ),
         )}
-    </group>
+    </FrameGroup>
   ));
 
   return (
     <>
     {groupBodies}
     {geometry && <Hoses geometry={geometry} placed={placed} category={category} />}
-    <group position={placed.frame.at as [number, number, number]} quaternion={placed.frame.quat as [number, number, number, number]} onClick={onClick}>
+    <FrameGroup frame={placed.frame} animate={animate} reducedMotion={reducedMotion} moveKey={part.instanceId} onClick={onClick}>
       {geometry ? (
         geometry.solids.filter((solid) => drawable(solid) && !(solid.group && placed.groupFrames[solid.group])).map((solid) =>
           PLACE_ROLES.has(solid.role) && solid.shape === "box" ? (
@@ -378,8 +473,31 @@ function Part({
           )}
         </>
       )}
-      {selected && <lineSegments geometry={EDGES} material={SELECTED} position={centre} scale={[width * 1.02, height * 1.02, depth * 1.02]} raycast={noRaycast} />}
-    </group>
+      {/* On the guided page a small part on the bench (a CPU, an M.2 drive) gets a finger-sized, invisible tap area. */}
+      {animate && placed.onBench && category !== "case" && (
+        <mesh geometry={BOX} material={PICK} position={centre} scale={[Math.max(width, 64), Math.max(height, 26), Math.max(depth, 28)]} userData={{ part: part.instanceId }} />
+      )}
+      {/* The detailed lab keeps its idle, on-demand rendering: only the guided page breathes. */}
+      {selected && <SelectionHalo centre={centre} size={[width, height, depth]} reducedMotion={reducedMotion || !animate} />}
+    </FrameGroup>
+    </>
+  );
+}
+
+const HALO = new THREE.MeshBasicMaterial({ color: "#22d3ee", transparent: true, opacity: 0.1, depthWrite: false });
+/** The selected part: a bright outline and a soft glowing shell that breathes, so it reads at a glance. */
+function SelectionHalo({ centre, size, reducedMotion }: { centre: [number, number, number]; size: [number, number, number]; reducedMotion: boolean }) {
+  const shell = useRef<THREE.Mesh>(null);
+  useFrame((state) => {
+    if (reducedMotion || !shell.current) return;
+    const k = 1.04 + Math.sin(state.clock.elapsedTime * 3.2) * 0.02;
+    shell.current.scale.set(size[0] * k + 6, size[1] * k + 6, size[2] * k + 6);
+    state.invalidate();
+  });
+  return (
+    <>
+      <lineSegments geometry={EDGES} material={SELECTED} position={centre} scale={[size[0] * 1.03 + 2, size[1] * 1.03 + 2, size[2] * 1.03 + 2]} raycast={noRaycast} />
+      <mesh ref={shell} geometry={BOX} material={HALO} position={centre} scale={[size[0] * 1.05 + 6, size[1] * 1.05 + 6, size[2] * 1.05 + 6]} raycast={noRaycast} renderOrder={5} />
     </>
   );
 }
@@ -422,16 +540,20 @@ function Hoses({ geometry, placed, category }: { geometry: PartGeometry; placed:
 // ---------- Cables ----------
 
 /** One colour per kind of cable, all clear of the selection cyan. */
+/**
+ * Sleeving colours: power and fan leads in charcoal (as supplied, but light enough to read against a
+ * black case), data and front-panel leads in their usual colours. The selection cyan is kept apart.
+ */
 const CABLE_COLORS: Record<string, string> = {
-  atx_main: "#c9c9d3",
-  cpu_power: "#c9c9d3",
-  gpu_power: "#c9c9d3",
-  gpu_power_adapter: "#c9c9d3",
-  sata_power: "#c9c9d3",
-  peripheral_power: "#c9c9d3",
+  atx_main: "#4a515e",
+  cpu_power: "#4a515e",
+  gpu_power: "#4a515e",
+  gpu_power_adapter: "#4a515e",
+  sata_power: "#4a515e",
+  peripheral_power: "#4a515e",
   sata_data: "#f472b6",
-  fan_lead: "#facc15",
-  pump_lead: "#facc15",
+  fan_lead: "#3f4550",
+  pump_lead: "#3f4550",
   lighting_lead: "#fb923c",
   front_panel_lead: "#a78bfa",
   display: "#60a5fa",
@@ -440,15 +562,43 @@ const cableMaterials = new Map<string, THREE.MeshStandardMaterial>();
 function cableMaterial(kind: string): THREE.MeshStandardMaterial {
   let material = cableMaterials.get(kind);
   if (!material) {
-    material = new THREE.MeshStandardMaterial({ color: CABLE_COLORS[kind] ?? "#c9c9d3", roughness: 0.6 });
+    // Braided sleeving: a soft sheen, not a plastic shine.
+    material = new THREE.MeshStandardMaterial({ color: CABLE_COLORS[kind] ?? "#4a515e", roughness: 0.46, metalness: 0.12 });
     cableMaterials.set(kind, material);
   }
   return material;
 }
 const LOOSE_END = new THREE.MeshStandardMaterial({ color: "#374151", emissive: "#fbbf24", emissiveIntensity: 0.3, roughness: 0.5 });
 const SELECTED_END = new THREE.MeshStandardMaterial({ color: "#0e7490", emissive: "#22d3ee", emissiveIntensity: 0.6, roughness: 0.4 });
-const CONNECTOR = new THREE.MeshStandardMaterial({ color: "#20252e", roughness: 0.48, metalness: 0.08 });
-const CONTACT = new THREE.MeshStandardMaterial({ color: "#d1b46d", roughness: 0.35, metalness: 0.5 });
+const CONNECTOR = new THREE.MeshStandardMaterial({ color: "#1c2027", roughness: 0.5, metalness: 0.05 });
+const CONTACT = new THREE.MeshStandardMaterial({ color: "#d1b46d", roughness: 0.25, metalness: 0.9 });
+const BOOT = new THREE.MeshStandardMaterial({ color: "#2a2f37", roughness: 0.7, metalness: 0 });
+
+/** One bundle along a route: `count` round conductors side by side, merged into one mesh. */
+function bundleGeometry(route: Vec3[], kind: string): THREE.BufferGeometry | null {
+  const { count, radius, pitch } = cableStrands(kind);
+  const start = new THREE.Vector3(...route[0]);
+  const end = new THREE.Vector3(...route[route.length - 1]);
+  const along = end.clone().sub(start);
+  if (along.length() < 2) return null;
+  // The strands lie side by side across the run, flat against the board like a real ribbon.
+  let across = along.clone().cross(new THREE.Vector3(0, 0, 1));
+  if (across.lengthSq() < 1e-6) across = new THREE.Vector3(1, 0, 0);
+  across.normalize();
+  const tubes: THREE.BufferGeometry[] = [];
+  for (let strand = 0; strand < count; strand++) {
+    const offset = (strand - (count - 1) / 2) * pitch;
+    // Strands converge into the plug at both ends and spread to their ribbon width between.
+    const path = route.map((at, i, all) => {
+      const share = i === 0 || i === all.length - 1 ? 0.35 : 1;
+      return new THREE.Vector3(...at).addScaledVector(across, offset * share);
+    });
+    tubes.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(path, false, "centripetal"), 56, radius, 8, false));
+  }
+  const merged = mergeGeometries(tubes);
+  tubes.forEach((tube) => tube.dispose());
+  return merged;
+}
 
 /** Sleeved wires and keyed connector housings. A captive lead includes its fixed source. */
 function Cable({ cableId, kind, ends, fixedSource, orientations, simple = false, selected = false, onSelectSimpleCable }: {
@@ -456,28 +606,28 @@ function Cable({ cableId, kind, ends, fixedSource, orientations, simple = false,
   simple?: boolean; selected?: boolean; onSelectSimpleCable?: (cableId: string) => void;
 }) {
   const assembly = usePC((store) => store.assembly);
-  const power = ["atx_main", "cpu_power", "gpu_power", "gpu_power_adapter"].includes(kind);
   const geometry = useMemo(() => {
     const points = fixedSource ? [fixedSource, ...ends.map(([, end]) => end.at)] : ends.map(([, end]) => end.at);
-    const tubes: THREE.TubeGeometry[] = [];
+    const parts: THREE.BufferGeometry[] = [];
     for (let pair = 1; pair < points.length; pair++) {
       const a = points[pair - 1], b = points[pair];
       if (Math.hypot(...a.map((v, i) => b[i] - v)) < 2) continue;
-      // Parallel strands make large power bundles distinct from thin fan/front-panel leads.
-      const strands = power ? 4 : 1;
-      for (let strand = 0; strand < strands; strand++) {
-        const offset = (strand - (strands - 1) / 2) * 2.8;
-        const path = cableRoutePoints(a, b).map((at, i, all) => new THREE.Vector3(at[0] + ((i === 0 || i === all.length - 1) ? offset * 0.4 : offset), at[1], at[2]));
-        tubes.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(path, false, "centripetal"), 32, power ? 1.5 : 1.8, 6, false));
-      }
+      const [, end] = ends[fixedSource ? pair - 1 : pair] ?? [];
+      // A plugged end arrives straight out of its port; a loose one simply lies where it fell.
+      const turn = end?.plugged ? orientations?.get(ends[fixedSource ? pair - 1 : pair][0]) : undefined;
+      const facing = turn ? (new THREE.Vector3(0, 1, 0).applyQuaternion(turn).toArray() as Vec3) : undefined;
+      const bundle = bundleGeometry(smoothCableRoute(a, b, facing), kind);
+      if (bundle) parts.push(bundle);
     }
-    return tubes;
-  }, [ends, fixedSource, power]);
+    return parts;
+  }, [ends, fixedSource, kind, orientations]);
   useEffect(() => () => geometry.forEach((tube) => tube.dispose()), [geometry]);
   const size = connectorSize(kind);
+  const strands = cableStrands(kind);
+  const bootRadius = Math.max(1.6, (strands.count * strands.pitch) / 2 * 0.7 + strands.radius);
   return (
     <group>
-      {geometry.map((tube, index) => <mesh key={index} geometry={tube} material={selected ? SELECTED_END : cableMaterial(kind)} raycast={noRaycast} />)}
+      {geometry.map((tube, index) => <mesh key={index} geometry={tube} material={selected ? SELECTED_END : cableMaterial(kind)} raycast={noRaycast} castShadow receiveShadow />)}
       {fixedSource && <mesh geometry={BOX} material={CONNECTOR} position={fixedSource as [number, number, number]} scale={[9, 8, 9]} raycast={noRaycast} />}
       {ends.map(([endId, end]) => (
         <group key={endId} position={end.at as [number, number, number]} quaternion={orientations?.get(endId)} onClick={(event) => {
@@ -487,9 +637,12 @@ function Cable({ cableId, kind, ends, fixedSource, orientations, simple = false,
           if (end.plugged) return;
           sceneStore.setState({ pickInScene: true }); pcStore.getState().selectCableEnd(cableId, endId);
         }}>
-          <mesh geometry={BOX} material={selected ? SELECTED_END : end.plugged ? CONNECTOR : LOOSE_END} scale={size} userData={{ cableEnd: `${cableId}/${endId}`, looseEnd: !end.plugged }} />
+          {/* Housing, contacts under it, the retention latch on its side and the boot where the wires enter. */}
+          <mesh geometry={BOX} material={selected ? SELECTED_END : end.plugged ? CONNECTOR : LOOSE_END} scale={size} userData={{ cableEnd: `${cableId}/${endId}`, looseEnd: !end.plugged }} castShadow />
           <mesh geometry={BOX} material={CONTACT} position={[0, -size[1] / 2 - 0.3, 0]} scale={[size[0] * 0.76, 0.8, size[2] * 0.76]} userData={{ looseEnd: !end.plugged }} />
           <mesh geometry={BOX} material={CONNECTOR} position={[size[0] / 2 + 0.7, 0, 0]} scale={[1.4, size[1] * 0.5, size[2] * 0.4]} userData={{ looseEnd: !end.plugged }} />
+          <mesh geometry={BOX} material={CONNECTOR} position={[size[0] / 2 + 1.2, size[1] * 0.2, 0]} scale={[1, size[1] * 0.35, Math.min(6, size[2] * 0.5)]} raycast={noRaycast} />
+          <mesh geometry={CYLINDER} material={BOOT} position={[0, size[1] / 2 + 2.2, 0]} scale={[Math.min(bootRadius, size[0] / 2), 4.4, Math.min(bootRadius * 0.6 + 1, size[2] / 2)]} raycast={noRaycast} />
           {!end.plugged && <mesh geometry={BOX} material={PICK} scale={size.map((s) => Math.max(22, s + 8)) as [number, number, number]} userData={{ cableEnd: `${cableId}/${endId}`, looseEnd: true }} />}
         </group>
       ))}
@@ -589,6 +742,127 @@ function Candidates({ markers }: { markers: CandidateMarker[] }) {
   );
 }
 
+
+// ---------- Places to click on the single-PC page ----------
+
+const TARGET_FILL = new THREE.MeshBasicMaterial({ color: "#22d3ee", transparent: true, opacity: 0.42, depthTest: false, depthWrite: false });
+const TARGET_RING = new THREE.MeshBasicMaterial({ color: "#a5f3fc", transparent: true, opacity: 0.9, depthTest: false, depthWrite: false });
+const TARGET_EDGE = new THREE.LineBasicMaterial({ color: "#67e8f9", depthTest: false, transparent: true });
+/** Rectangles of the simple targets by ID, for the probe: exactly what the learner taps. */
+const simpleTargetRects = new Map<string, () => TargetRect | null>();
+/** The smallest marker side, so a header a few millimetres wide is still a fair target for a finger. */
+const MIN_MARKER_MM = 24;
+/** A glowing place smaller than this on screen (CSS px) brings the camera closer. */
+const MIN_TAP_PX = 32;
+
+/**
+ * The place the selected part or lead goes glows and breathes; other slots or headers of the same
+ * kind are invisible but clickable, so a wrong choice gets an explanation instead of nothing.
+ */
+function SimpleTargets({ targets, placed, geometry, state, reducedMotion, onTarget }: {
+  targets: readonly SimpleSceneTarget[]; placed: ReadonlyMap<string, PlacedPart>; geometry: ReadonlyMap<string, PartGeometry>; state: PCBuildState; reducedMotion: boolean; onTarget?: (id: string) => void;
+}) {
+  const pulse = useRef<THREE.Group>(null);
+  // With look-alike slots or headers offered beside it, the glowing place keeps (about) its real size,
+  // so a click on the neighbour reaches the neighbour and gets its explanation.
+  const crowded = targets.some((target) => target.role === "decoy");
+  const markers = useMemo(() => targets.flatMap((target) => {
+    const host = placed.get(target.hostInstanceId);
+    const catalogId = state.parts.find((part) => part.instanceId === target.hostInstanceId)?.catalogId;
+    const own = catalogId ? geometry.get(catalogId) : undefined;
+    if (!host || !own) return [];
+    if (target.kind === "mount") {
+      const mount = own.mounts[target.placeId];
+      if (!mount) return [];
+      // The glowing place is enlarged to be easy to hit; a decoy stays its real size, so it never covers a neighbour.
+      const size = (mount.size ?? [24, 24, 24]).map((side) => (target.role === "target" && !crowded ? Math.max(MIN_MARKER_MM, side + 8) : side + (target.role === "target" ? 3 : 1))) as unknown as Vec3;
+      // Side by side, the places are thin plates on the board: a tall box would catch a ray aimed past it at its neighbour.
+      if (crowded) (size as unknown as number[])[1] = Math.min(size[1], 3);
+      const facing = rotate(host.frame.quat, mount.facing ?? scale(mount.insert, -1));
+      return [{ target, frame: compose(host.frame, { at: mount.at, quat: mount.quat }), size, facing }];
+    }
+    const port = own.ports[target.placeId];
+    if (!port) return [];
+    const size = (port.size ?? [14, 14, 14]).map((side) => (target.role === "target" && !crowded ? Math.max(MIN_MARKER_MM, side + 12) : side + (target.role === "target" ? 5 : 2))) as unknown as Vec3;
+    if (crowded) (size as unknown as number[])[1] = Math.min(size[1], 4);
+    // Just proud of the header, toward where the plug comes from.
+    return [{ target, frame: compose(host.frame, { at: add(port.at, scale(port.facing, 6)), quat: [0, 0, 0, 1] }), size, facing: rotate(host.frame.quat, port.facing) }];
+  }), [targets, placed, geometry, state, crowded]);
+
+  useEffect(() => {
+    for (const marker of markers) {
+      const half = scale(marker.size, -0.5);
+      simpleTargetRects.set(marker.target.id, () => screenRect(boxCorners(marker.frame, half, marker.size)));
+    }
+    getTargetRegistry().invalidate();
+    return () => simpleTargetRects.clear();
+  }, [markers]);
+
+  // A header is a few millimetres wide: when a lead is picked up, the camera glides in to its port,
+  // close enough to tap it (and to tell it from the headers beside it). Parts' places are big enough.
+  // The same for a part's place that is too small on screen to tap (a CPU socket on a phone).
+  const glowing = markers.find((marker) => marker.target.role === "target");
+  const tooSmall = (marker: typeof glowing) => {
+    if (!marker) return false;
+    const rect = screenRect(boxCorners(marker.frame, scale(marker.size, -0.5), marker.size));
+    return rect !== null && Math.min(rect.width, rect.height) < MIN_TAP_PX;
+  };
+  // Decided once per place: after the camera has come closer the place is no longer small, and must stay focused.
+  const focused = useRef<string | null>(null);
+  if (glowing && focused.current !== glowing.target.id && (glowing.target.kind === "port" || tooSmall(glowing))) focused.current = glowing.target.id;
+  const focusKey = glowing && focused.current === glowing.target.id ? glowing.target.id : null;
+  if (!glowing) focused.current = null;
+  useEffect(() => {
+    const marker = markers.find((item) => item.target.id === focusKey);
+    if (!marker || !api) return;
+    // Remember the learner's own view once, before the first glide in.
+    savedView ??= { target: api.controls.target.clone(), position: api.camera.position.clone() };
+    const distance = marker.target.kind === "port" ? 340 : Math.max(340, Math.max(...marker.size) * 3);
+    return glideCamera(marker.frame.at, marker.facing, distance, reducedMotion);
+    // Only a new port to aim at moves the camera; re-renders of the same one do not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey]);
+  // The lead is in (or put down): back to the view the learner had, so the next part is in sight.
+  useEffect(() => {
+    if (focusKey || !savedView || !api) return;
+    const view = savedView;
+    savedView = null;
+    glideCameraTo(view.target, view.position, reducedMotion);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey]);
+
+  useFrame((frame) => {
+    if (!pulse.current || reducedMotion || markers.length === 0) return;
+    const k = 1 + Math.sin(frame.clock.elapsedTime * 4) * 0.12;
+    pulse.current.scale.setScalar(k);
+    TARGET_FILL.opacity = 0.32 + Math.sin(frame.clock.elapsedTime * 4) * 0.12;
+    frame.invalidate();
+  });
+
+  return (
+    <>
+      {markers.map(({ target, frame, size }) => (
+        <group key={target.id} position={frame.at as [number, number, number]} quaternion={frame.quat as [number, number, number, number]}>
+          <mesh
+            geometry={BOX}
+            material={target.role === "target" ? TARGET_FILL : PICK}
+            scale={size as [number, number, number]}
+            renderOrder={30}
+            userData={{ simpleTarget: target.id }}
+            // The nearest place under the pointer answers; it stops the event, so one behind it does not.
+            onClick={(event) => { event.stopPropagation(); onTarget?.(target.id); }}
+          />
+          {target.role === "target" && (
+            <group ref={pulse}>
+              <lineSegments geometry={EDGES} material={TARGET_EDGE} scale={[size[0] + 4, size[1] + 4, size[2] + 4]} raycast={noRaycast} renderOrder={31} />
+              <mesh geometry={RING} material={TARGET_RING} scale={Math.min(60, Math.max(12, Math.min(size[0], size[2]) * 0.62 + 6))} raycast={noRaycast} renderOrder={31} />
+            </group>
+          )}
+        </group>
+      ))}
+    </>
+  );
+}
 
 // ---------- Fasteners and switches ----------
 
@@ -842,6 +1116,14 @@ interface SceneProbe {
   fastenerRect(instanceId: string, role: string, index: number): TargetRect | null;
   /** The case's power button and side panel, the power supply's switch and mains socket. */
   hotspotRect(name: "power-button" | "side-panel" | "psu-switch" | "wall-power"): TargetRect | null;
+  /** A place on the single-PC page (`target:dimm-a2`, `decoy:dimm-a1`), while it is offered. */
+  simpleTargetRect(id: string): TargetRect | null;
+  /** IDs of the places offered now on the single-PC page. */
+  simpleTargets(): string[];
+  /** True while any part is still travelling to its new place. */
+  moving(): boolean;
+  /** Where a part is drawn now (scene millimetres), for checking that installed parts reach their place. */
+  partFrame(instanceId: string): { at: number[]; quat: number[]; onBench: boolean } | null;
 }
 const probe: SceneProbe = {
   partRect: (instanceId) => targetRects.get(pcTarget.part(instanceId).id)?.() ?? null,
@@ -852,7 +1134,16 @@ const probe: SceneProbe = {
   cableEndRect: (cableId, endId) => targetRects.get(pcTarget.cableEnd(cableId, endId).id)?.() ?? null,
   fastenerRect: (instanceId, role, index) => fastenerRects.get(`${instanceId}/${role}#${index}`)?.() ?? null,
   hotspotRect: (name) => hotspotRects.get(name)?.() ?? null,
+  simpleTargetRect: (id) => simpleTargetRects.get(id)?.() ?? null,
+  simpleTargets: () => [...simpleTargetRects.keys()],
+  moving: () => moving.size > 0,
+  partFrame: (instanceId) => {
+    const item = lastPlaced?.get(instanceId);
+    return item ? { at: [...item.frame.at], quat: [...item.frame.quat], onBench: item.onBench } : null;
+  },
 };
+/** The placement last drawn, for the probe. */
+let lastPlaced: ReadonlyMap<string, PlacedPart> | null = null;
 const raycaster = new THREE.Raycaster();
 
 /** Screen rectangle of a set of scene points, or null when none is in front of the camera. */
@@ -899,6 +1190,51 @@ function hiddenBehindAnotherPart(centre: Vec3, ownerId: string): boolean {
     if (owner && owner !== ownerId) return true;
   }
   return false;
+}
+
+/**
+ * Moves the camera to look at `centre` from `distance` mm away, from between where it looks from now
+ * and the side the place faces (so the view turns a little, never flips). Returns a cancel function.
+ */
+/** The view the learner had before the camera glided in to a port, to return to afterwards. */
+let savedView: { target: THREE.Vector3; position: THREE.Vector3 } | null = null;
+
+function glideCamera(centre: Vec3, facing: Vec3, distance: number, reducedMotion: boolean): () => void {
+  if (!api) return () => {};
+  const { camera, controls } = api;
+  const toTarget = new THREE.Vector3(...centre);
+  const now = camera.position.clone().sub(controls.target).normalize();
+  const face = new THREE.Vector3(...facing).normalize();
+  // Look from above the place's facing side, blended with the current direction.
+  const direction = now.clone().multiplyScalar(0.55).add(face.multiplyScalar(0.45)).add(new THREE.Vector3(0, 0.35, 0)).normalize();
+  const toPosition = toTarget.clone().addScaledVector(direction, Math.max(controls.minDistance, distance));
+  return glideCameraTo(toTarget, toPosition, reducedMotion);
+}
+
+function glideCameraTo(toTarget: THREE.Vector3, toPosition: THREE.Vector3, reducedMotion: boolean): () => void {
+  if (!api) return () => {};
+  const { camera, controls } = api;
+  const fromTarget = controls.target.clone();
+  const fromPosition = camera.position.clone();
+  const settle = () => { api?.controls.update(); api?.invalidate(); getTargetRegistry().invalidate(); };
+  if (reducedMotion) {
+    controls.target.copy(toTarget);
+    camera.position.copy(toPosition);
+    settle();
+    return () => {};
+  }
+  const start = performance.now();
+  let frame = 0;
+  const step = () => {
+    const t = Math.min(1, (performance.now() - start) / 650);
+    const k = easeInOut(t);
+    controls.target.lerpVectors(fromTarget, toTarget, k);
+    camera.position.lerpVectors(fromPosition, toPosition, k);
+    settle();
+    if (t < 1) frame = requestAnimationFrame(step);
+  };
+  frame = requestAnimationFrame(step);
+  return () => cancelAnimationFrame(frame);
 }
 
 /** Turns the camera to look at a point from the given side, keeping its distance. */
@@ -1039,24 +1375,61 @@ const BENCH_TOP = new THREE.MeshStandardMaterial({ color: BENCH_TOP_COLOR, rough
 const BENCH_MAT = new THREE.MeshStandardMaterial({ color: BENCH_MAT_COLOR, roughness: 0.95, metalness: 0 });
 
 /** The workbench every part lies on until it is installed: a wooden top with an anti-static mat on it. */
-function Workbench({ placed }: { placed: ReadonlyMap<string, PlacedPart> }) {
-  // An empty workbench is still a workbench.
-  const area = workbenchArea(placed) ?? { min: [-80, -80] as [number, number], max: [1200, 600] as [number, number] };
+type BenchArea = { min: [number, number]; max: [number, number] };
+function Workbench({ placed, keep = false, slots }: { placed: ReadonlyMap<string, PlacedPart>; keep?: boolean; slots?: ReadonlyMap<string, { at: Vec3; size: Vec3 }> }) {
+  // An empty workbench is still a workbench. With fixed slots, it covers every slot, filled or not.
+  const slotParts = new Map<string, PlacedPart>([...(slots ?? new Map<string, { at: Vec3; size: Vec3 }>())].map(([id, slot]) => [id, { instanceId: id, frame: { at: slot.at, quat: [0, 0, 0, 1] }, size: slot.size, hostInstanceId: null, onBench: true, groupFrames: {} }]));
+  const now = workbenchArea(new Map([...placed, ...slotParts])) ?? { min: [-80, -80] as [number, number], max: [1200, 600] as [number, number] };
+  // On the guided page the bench keeps its size as parts leave it: it is furniture, not a frame.
+  const kept = useRef<BenchArea | null>(null);
+  let area: BenchArea = now;
+  if (keep) {
+    const before = kept.current;
+    area = before ? { min: [Math.min(before.min[0], now.min[0]), Math.min(before.min[1], now.min[1])], max: [Math.max(before.max[0], now.max[0]), Math.max(before.max[1], now.max[1])] } : now;
+    kept.current = area;
+  }
   const width = area.max[0] - area.min[0];
   const depth = area.max[1] - area.min[1];
   const centre: [number, number] = [(area.min[0] + area.max[0]) / 2, (area.min[1] + area.max[1]) / 2];
   return (
     <group>
-      <mesh geometry={BOX} material={BENCH_TOP} position={[centre[0], -BENCH_TOP_MM / 2 - 2, centre[1]]} scale={[width + 120, BENCH_TOP_MM, depth + 120]} raycast={noRaycast} />
-      <mesh geometry={BOX} material={BENCH_MAT} position={[centre[0], -1, centre[1]]} scale={[width, 2, depth]} raycast={noRaycast} />
+      <mesh geometry={BOX} material={BENCH_TOP} position={[centre[0], -BENCH_TOP_MM / 2 - 2, centre[1]]} scale={[width + 120, BENCH_TOP_MM, depth + 120]} raycast={noRaycast} receiveShadow />
+      <mesh geometry={BOX} material={BENCH_MAT} position={[centre[0], -1, centre[1]]} scale={[width, 2, depth]} raycast={noRaycast} receiveShadow />
     </group>
   );
 }
 
-function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false, viewId, onSelectPart, simpleCableIds, selectedSimpleCableId, onSelectSimpleCable, onConnectSimpleCable, simpleCableTarget }: PcSceneProps) {
+/**
+ * A soft studio environment for reflections (metals look like metal), generated once per renderer
+ * from three.js's built-in room; no files are downloaded. Off at low quality.
+ */
+function SceneEnvironment({ enabled }: { enabled: boolean }) {
+  const { gl, scene, invalidate } = useThree();
+  useEffect(() => {
+    if (!enabled) return;
+    const generator = new THREE.PMREMGenerator(gl);
+    const room = new RoomEnvironment();
+    const texture = generator.fromScene(room, 0.04).texture;
+    scene.environment = texture;
+    scene.environmentIntensity = 0.55;
+    invalidate();
+    return () => {
+      scene.environment = null;
+      texture.dispose();
+      generator.dispose();
+      room.traverse((node) => { if ((node as THREE.Mesh).isMesh) (node as THREE.Mesh).geometry.dispose(); });
+    };
+  }, [enabled, gl, scene, invalidate]);
+  return null;
+}
+
+function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false, viewId, onSelectPart, simpleCableIds, selectedSimpleCableId, onSelectSimpleCable, simpleTargets, onSimpleTarget, benchOrder, beside, quality }: PcSceneProps & { quality: SceneQuality }) {
   const projectId = usePC((store) => store.projectId);
   const { geometry, ready } = useGeometry(useMemo(() => state.parts.map((part) => part.catalogId), [state.parts]));
-  const placed = useMemo(() => placeParts({ state, geometry, fallbackSize, isAside, standsFirst, benchRowMm: BENCH_ROW_MM }), [state, geometry]);
+  const benchSlots = useMemo(() => new Map<string, { at: Vec3; size: Vec3 }>(), [state, geometry, benchOrder, beside]);
+  const placed = useMemo(() => placeParts({ state, geometry, fallbackSize, isAside, standsFirst, benchRowMm: BENCH_ROW_MM, benchOrder, beside, slotsOut: benchOrder ? benchSlots : undefined }), [state, geometry, benchOrder, beside, benchSlots]);
+  lastPlaced = placed;
+  const rich = quality !== "low";
   const cableEnds = useMemo(() => placeCableEnds(state, placed, geometry), [state, placed, geometry]);
   const candidates = usePC((store) => (simple || store.assembly.phase === "idle" ? null : store.assembly.candidates));
   const markers = useMemo(() => (candidates ? candidateMarkers(candidates as readonly AssemblyCandidate[], placed, geometry, state) : []), [candidates, placed, geometry, state]);
@@ -1093,16 +1466,18 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
 
   return (
     <>
-      {/* Bright, even light: this is a diagram to read, not a mood. */}
-      <ambientLight intensity={1.9} />
-      <hemisphereLight args={["#ffffff", "#5a6070", 1.2]} />
-      <directionalLight position={[500, 900, 700]} intensity={2.4} />
+      {/* Bright and even, still a diagram to read: the studio environment adds reflections, so the fill
+          lights are a little lower than before; the key light casts soft shadows onto the bench. */}
+      <SceneEnvironment enabled={rich} />
+      <ambientLight intensity={rich ? 1.15 : 1.9} />
+      <hemisphereLight args={["#ffffff", "#5a6070", rich ? 0.9 : 1.2]} />
+      <KeyLight shadows={rich} quality={quality} />
       <directionalLight position={[-600, 400, -500]} intensity={1.1} />
       {/* A rim light from behind and above: it lights the top and back edges of dark parts so their outlines
           separate from the bench. */}
       <directionalLight position={[200, 1200, -1400]} intensity={1.6} />
       <Camera key={viewId ?? projectId} placed={placed} aside={aside} ready={ready} />
-      <Workbench placed={placed} />
+      <Workbench placed={placed} keep={simple} slots={benchOrder ? benchSlots : undefined} />
       {state.parts.map((part) => {
         const item = placed.get(part.instanceId);
         return item ? (
@@ -1118,6 +1493,7 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
             noModel={noModel}
             rtl={rtl}
             onSelectPart={onSelectPart}
+            animate={simple}
           />
         ) : null;
       })}
@@ -1152,17 +1528,10 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
           <mesh geometry={BOX} material={finishMaterial("glass")!} position={[w / 2, h / 2, d - 3.5]} scale={[w - 18, h - 32, 1.2]} raycast={noRaycast} />
         </group>;
       })}
-      {simple && selectedSimpleCableId && simpleCableTarget && (() => {
-        const host = placed.get(simpleCableTarget.instanceId);
-        const catalogId = state.parts.find((part) => part.instanceId === simpleCableTarget.instanceId)?.catalogId;
-        const port = host && catalogId && geometry.get(catalogId)?.ports[simpleCableTarget.portId];
-        if (!host || !port) return null;
-        const at = compose(host.frame, { at: add(port.at, scale(port.facing, 10)), quat: [0, 0, 0, 1] }).at;
-        return <group position={at as [number, number, number]} quaternion={host.frame.quat as [number, number, number, number]} onClick={(event) => { event.stopPropagation(); onConnectSimpleCable?.(selectedSimpleCableId); }}>
-          <mesh geometry={BOX} material={CANDIDATE.ok} scale={(port.size ?? [14, 14, 14]).map((side) => Math.max(26, side + 12)) as [number, number, number]} userData={{ simpleCableTarget: true }} renderOrder={30} />
-          <mesh geometry={RING} material={SELECTED_END} scale={20} raycast={noRaycast} renderOrder={31} />
-        </group>;
-      })()}
+      {/* Mounted for the whole guided page (also with nothing offered), so the camera can return after a lead is in. */}
+      {simple && simpleTargets && (
+        <SimpleTargets targets={simpleTargets} placed={placed} geometry={geometry} state={state} reducedMotion={reducedMotion} onTarget={onSimpleTarget} />
+      )}
       <Candidates markers={markers} />
       {!simple && selectedPart && <Fasteners part={selectedPart} markers={fasteners} />}
       {!simple && <Hotspots spots={spots} state={state} />}
@@ -1186,9 +1555,35 @@ export interface PcSceneProps {
   onSelectPart?: (instanceId: string) => void;
   simpleCableIds?: readonly string[];
   selectedSimpleCableId?: string | null;
-  simpleCableTarget?: { instanceId: string; portId: string } | null;
   onSelectSimpleCable?: (cableId: string) => void;
-  onConnectSimpleCable?: (cableId: string) => void;
+  /** Places to click for what is in hand (the glowing target and same-kind decoys). */
+  simpleTargets?: readonly SimpleSceneTarget[];
+  onSimpleTarget?: (id: string) => void;
+  /** A click on the canvas that hit nothing (no part, place or lead). */
+  onSimpleMiss?: () => void;
+  /** A fixed workbench (see `placeParts`). */
+  benchOrder?: readonly string[];
+  beside?: Readonly<Record<string, string>>;
+}
+
+/** The main light, from the front and above; it casts the shadows at medium and high quality. */
+function KeyLight({ shadows, quality }: { shadows: boolean; quality: SceneQuality }) {
+  const light = useRef<THREE.DirectionalLight>(null);
+  useEffect(() => {
+    const node = light.current;
+    if (!node) return;
+    node.target.position.set(450, 0, 250);
+    node.target.updateMatrixWorld();
+    const camera = node.shadow.camera;
+    // The whole workbench (case and rows of parts), in millimetres.
+    camera.left = -1300; camera.right = 1300; camera.top = 1300; camera.bottom = -1300; camera.near = 50; camera.far = 4200;
+    camera.updateProjectionMatrix();
+    node.shadow.bias = -0.0004;
+    node.shadow.normalBias = 1.2;
+    node.shadow.radius = 4;
+  }, [quality]);
+  const size = quality === "high" ? 2048 : 1024;
+  return <directionalLight ref={light} position={[950, 1500, 1350]} intensity={2.4} castShadow={shadows} shadow-mapSize={[size, size]} />;
 }
 
 /** A retired canvas must not report its intentional disposal as a failure of the next view. */
@@ -1217,11 +1612,12 @@ export default function PcScene(props: PcSceneProps) {
       frameloop="demand"
       dpr={[1, PIXEL_RATIO_CAP[quality]]}
       gl={{ antialias: quality !== "low", powerPreference: "default" }}
+      shadows={quality === "low" ? false : "percentage"}
       camera={{ fov: 40, near: 10, far: 20000, position: [600, 500, 900] }}
-      onPointerMissed={() => { if (!props.simple) sceneStore.setState({ selectedPartId: null, selectedCableEnd: null }); }}
+      onPointerMissed={() => { if (!props.simple) sceneStore.setState({ selectedPartId: null, selectedCableEnd: null }); else props.onSimpleMiss?.(); }}
     >
       <ContextEvents onLost={onContextLost} />
-      <Contents {...props} />
+      <Contents {...props} quality={quality} />
     </Canvas>
   );
 }

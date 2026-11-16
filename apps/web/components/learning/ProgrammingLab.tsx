@@ -15,7 +15,8 @@ type Review = { explanation: string; correctedCode: string | null; line: number 
 type Drafts = Partial<Record<CodeTrack, string>>;
 const ACTIVE = new Set<ExecutionStatus>(["queued", "compiling", "running"]);
 
-export function ProgrammingLab({ guided, onGuidedChange }: { guided: boolean; onGuidedChange(value: boolean): void }) {
+/** `runnerConfigured` is false when the server has no execution service: C++, Java and C# are then unavailable without asking. */
+export function ProgrammingLab({ guided, onGuidedChange, runnerConfigured = true }: { guided: boolean; onGuidedChange(value: boolean): void; runnerConfigured?: boolean }) {
   const t = useTranslations("learning");
   const locale = useLocale();
   const [track, setTrack] = useState<CodeTrack>("javascript");
@@ -66,10 +67,11 @@ export function ProgrammingLab({ guided, onGuidedChange }: { guided: boolean; on
   }, []);
 
   useEffect(() => {
+    if (!runnerConfigured) { setServerAvailability({ cpp: false, java: false, csharp: false }); return; }
     const controller = new AbortController();
     void fetchServerAvailability(fetch, controller.signal).then((value) => { if (value && !controller.signal.aborted) setServerAvailability(value); });
     return () => controller.abort();
-  }, []);
+  }, [runnerConfigured]);
 
   useEffect(() => {
     if (ready) try { localStorage.setItem(CODE_SAVE_KEY, JSON.stringify({ drafts, track })); } catch { /* Keep editing. */ }

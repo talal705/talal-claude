@@ -80,6 +80,17 @@ export interface PlacementInput {
   benchRowMm?: number;
   /** How far behind the main row the aside row stands. */
   asideDepthMm?: number;
+  /**
+   * A fixed workbench: these instance IDs, in this order, each keep the place they have when all of
+   * them lie on the bench, whether or not the others have been installed since. Without it the
+   * rows close up as parts leave the bench.
+   */
+  benchOrder?: readonly string[];
+  /** Parts laid beside another bench part (by instance ID) instead of in the rows: in front of it, parallel. */
+  beside?: Readonly<Record<string, string>>;
+  besideGapMm?: number;
+  /** Filled with every bench slot laid out (also of parts installed since), so the bench can keep its size. */
+  slotsOut?: Map<string, { at: Vec3; size: Vec3 }>;
 }
 
 /**
@@ -87,7 +98,7 @@ export interface PlacementInput {
  * have geometry; when that is missing (the host has no model yet) it is drawn beside its host's
  * box rather than left out. The result is deterministic for the same state.
  */
-export function placeParts({ state, geometry, fallbackSize, benchGapMm = 60, isAside, standsFirst, benchRowMm = 1400, asideDepthMm = 700 }: PlacementInput): Map<string, PlacedPart> {
+export function placeParts({ state, geometry, fallbackSize, benchGapMm = 60, isAside, standsFirst, benchRowMm = 1400, asideDepthMm = 700, benchOrder, beside, besideGapMm = 30, slotsOut }: PlacementInput): Map<string, PlacedPart> {
   const placed = new Map<string, PlacedPart>();
   const byId = new Map(state.parts.map((part) => [part.instanceId, part]));
   const sizeOf = (part: InstalledPart): Vec3 => geometry.get(part.catalogId)?.bounds.size ?? fallbackSize(part);
@@ -95,11 +106,22 @@ export function placeParts({ state, geometry, fallbackSize, benchGapMm = 60, isA
     placed.set(part.instanceId, { instanceId: part.instanceId, frame: { at, quat: IDENTITY }, size, hostInstanceId: null, onBench: true, groupFrames: {} });
 
   // Standing parts first, left to right along +x: what is mounted nowhere.
-  const loose = state.parts.filter((part) => part.attachments.length === 0);
+  const isLoose = (part: InstalledPart) => part.attachments.length === 0;
+  const loose = state.parts.filter(isLoose);
+  // With a fixed bench, every listed part has its slot, installed or not; others follow.
+  const fixed = benchOrder ? benchOrder.flatMap((id) => byId.get(id) ?? []) : [];
+  const laidOut = benchOrder ? [...fixed, ...loose.filter((part) => !benchOrder.includes(part.instanceId))] : loose;
+  /** Where each laid-out part lies on the bench (also for a fixed slot whose part is installed now). */
+  const slots = new Map<string, { at: Vec3; size: Vec3 }>();
+  const lay = (part: InstalledPart, at: Vec3, size: Vec3) => {
+    slots.set(part.instanceId, { at, size });
+    slotsOut?.set(part.instanceId, { at, size });
+    if (isLoose(part)) bench(part, at, size);
+  };
   let cursor = 0;
-  for (const part of loose.filter((item) => standsFirst?.(item) ?? false)) {
+  for (const part of laidOut.filter((item) => standsFirst?.(item) ?? false)) {
     const size = sizeOf(part);
-    bench(part, [cursor, 0, 0], size);
+    lay(part, [cursor, 0, 0], size);
     cursor += size[0] + benchGapMm;
   }
   // Then the workbench, in rows that wrap toward the viewer.
@@ -107,11 +129,11 @@ export function placeParts({ state, geometry, fallbackSize, benchGapMm = 60, isA
   let rowZ = 0;
   let rowDepth = 0;
   let asideCursor = 0;
-  for (const part of loose) {
-    if (standsFirst?.(part)) continue;
+  for (const part of laidOut) {
+    if (standsFirst?.(part) || beside?.[part.instanceId]) continue;
     const size = sizeOf(part);
     if (isAside?.(part)) {
-      bench(part, [asideCursor, 0, -asideDepthMm - size[2]], size);
+      lay(part, [asideCursor, 0, -asideDepthMm - size[2]], size);
       asideCursor += size[0] + benchGapMm;
       continue;
     }
@@ -120,9 +142,25 @@ export function placeParts({ state, geometry, fallbackSize, benchGapMm = 60, isA
       rowZ += rowDepth + benchGapMm;
       rowDepth = 0;
     }
-    bench(part, [cursor, 0, rowZ], size);
+    lay(part, [cursor, 0, rowZ], size);
     cursor += size[0] + benchGapMm;
     rowDepth = Math.max(rowDepth, size[2]);
+  }
+  // A part laid beside another: in front of that part's slot, parallel to it, without moving anything.
+  for (const [id, anchorId] of Object.entries(beside ?? {})) {
+    const part = byId.get(id);
+    const anchor = slots.get(anchorId);
+    if (!part || !isLoose(part) || placed.has(id)) continue;
+    const size = sizeOf(part);
+    if (anchor) {
+      const at: Vec3 = [anchor.at[0], 0, anchor.at[2] + anchor.size[2] + besideGapMm];
+      bench(part, at, size);
+      slotsOut?.set(id, { at, size });
+    }
+    else {
+      bench(part, [cursor, 0, rowZ], size);
+      cursor += size[0] + benchGapMm;
+    }
   }
 
   const visiting = new Set<string>();

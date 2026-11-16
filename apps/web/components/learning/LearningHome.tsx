@@ -7,7 +7,7 @@ import { SimplePcLab } from "../pc/SimplePcLab";
 import { ProgrammingLab } from "./ProgrammingLab";
 import styles from "./learning.module.css";
 
-export function LearningHome() {
+export function LearningHome({ aiConfigured = false, runnerConfigured = false }: { aiConfigured?: boolean; runnerConfigured?: boolean }) {
   const t = useTranslations("learning");
   const [guided, setGuided] = useState(true);
   const [started, setStarted] = useState(false);
@@ -32,10 +32,10 @@ export function LearningHome() {
       {!started && <div className={styles.links}><TargetLink targetId="home:ui:lab-code" href="#programming">{t("codeNav")} ↓</TargetLink><TargetLink targetId="home:ui:lab-pc" href="#pc-builder">{t("pcNav")} ↓</TargetLink></div>}
       <p className={styles.helperNote}>{t("helperNote")}</p>
     </section>
-    <ProgrammingLab guided={guided} onGuidedChange={setGuided} />
+    <ProgrammingLab guided={guided} onGuidedChange={setGuided} runnerConfigured={runnerConfigured} />
     <section id="pc-builder" className={styles.pcSection} aria-label={t("pcNav")}>
       <div className={styles.sectionLabel}><span>02 /</span> {t("pcSection")}</div>
-      <SimplePcLab embedded />
+      <SimplePcLab embedded aiConfigured={aiConfigured} />
     </section>
     <footer className={styles.footer}>{t("footer")}</footer>
   </div>;
