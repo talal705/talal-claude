@@ -63,9 +63,20 @@ Moods come from `CompanionSay.mood`; the 3D state from `GuideFocus.reason`.
 ## Motion and options
 
 * View options under the 3D view, saved in `localStorage["ytl_simple_pc_view_v1"]` (separate from the build's
-  own progress): **Robot guide** (on), **Guide motion** (on), and RGB lighting (off; see the RGB section when present).
+  own progress): **Robot guide** (on), **Guide motion** (on), **RGB lighting** (off).
 * Reduced motion (site setting or the operating system) and "Guide motion" off: the 3D robot appears at its
   spot without flying, bobbing, blinking or breathing rings; the bubble robot stops its CSS animations.
+
+## RGB lighting (cosmetic only)
+
+* Diffuser rings are solids with role `rgb`, added in `scene/visual-details.ts`: both faces of each case fan,
+  the front of each 140 mm radiator fan and the pump cap. The RAM uses its own light bar (role `light`).
+* `PcScene` draws `rgb` solids only while the option is on. They light (one shared material, a slow hue
+  drift, faded in by `RgbDriver`) only while the build actually runs: `state.power.pressed` and the
+  engine's `operational` outcome. Otherwise they are plain unlit diffusers; with the option off nothing
+  changes from the original look.
+* Nothing in the simulation reads the option: power, compatibility, steps and startup results are the
+  engine's alone. Reduced motion keeps one still colour.
 
 ## Tests
 

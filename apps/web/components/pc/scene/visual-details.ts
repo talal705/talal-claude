@@ -2,6 +2,12 @@ import type { PartGeometry, Quat, Solid, Vec3 } from "./geometry";
 
 const box = (id: string, at: Vec3, size: Vec3, finish = "black_metal"): Solid => ({ id: `detail-${id}`, shape: "box", at, size, finish, role: "detail", basis: "schematic" });
 const ring = (id: string, at: Vec3, radius: number, axis: "x" | "y" | "z", finish = "black_metal"): Solid => ({ id: `detail-${id}`, shape: "ring", at, radius, height: 1, axis, finish, role: "detail", basis: "schematic" });
+/**
+ * A light diffuser ring for the optional RGB lighting. Role `rgb`: the scene draws it only while RGB is
+ * on (and lights it only while the build runs), so with RGB off the part looks exactly as before.
+ */
+const rgbRing = (id: string, at: Vec3, radius: number, axis: "x" | "y" | "z", group?: string): Solid =>
+  ({ id: `rgb-${id}`, shape: "ring", at, radius, height: 1, axis, role: "rgb", basis: "schematic", ...(group ? { group } : {}) });
 const screw = (id: string, at: Vec3, axis: "x" | "y" | "z" = "y"): Solid => ({ id: `detail-${id}`, shape: "cylinder", at, radius: 1.8, height: 1.2, axis, finish: "nickel", role: "detail", basis: "schematic" });
 
 /** Original schematic details. Mechanical anchors and catalog bounds remain unchanged. */
@@ -72,6 +78,8 @@ export function withVisualDetails(source: PartGeometry): PartGeometry {
     }
   }
   if (source.catalogId === "arctic-liquid-freezer-iii-280") liquidCooler280(solids, extra);
+  // The case's two fans: a light ring on each face of the frame, just outside the blades.
+  if (source.catalogId === "corsair-airguide-120-4000d") for (const z of [0.8, d - 0.8]) extra.push(rgbRing(`fan-${z}`, [w / 2, h / 2, z], 55.5, "z"));
   // The i9-14900K shares the i5's LGA1700 package and lid, so it gets the same lid markings.
   if (source.catalogId === "intel-core-i5-14600k" || source.catalogId === "intel-core-i9-14900k") {
     extra.push(box("cpu-lid-mark", [w / 2, h - 0.01, d / 2], [14, 0.02, 8], "brushed_mark"));
@@ -150,6 +158,7 @@ function liquidCooler280(solids: Solid[], extra: Solid[]) {
     }
     // The round duct of the frame, at both faces, and the motor mount with three struts on the radiator side.
     for (const face of [RT + 1.2, RT + FAN_T - 1.2]) extra.push(rad(ring(`${frame.id}-duct-${face}`, [cx, cy, face], half - 3, "z", "grey_plastic")));
+    extra.push(rgbRing(`${frame.id}-front`, [cx, cy, RT + FAN_T - 0.4], half - 5, "z", "radiator"));
     extra.push(rad({ id: `detail-${frame.id}-motor`, shape: "cylinder", at: [cx, cy, RT + 2.5], radius: 20, height: 3, axis: "z", finish: "black_plastic", role: "detail", basis: "schematic" }));
     for (const deg of [90, 210, 330]) {
       const a = (deg * Math.PI) / 180;
@@ -163,6 +172,7 @@ function liquidCooler280(solids: Solid[], extra: Solid[]) {
   const top = solids.find((solid) => solid.id === "pump-cap");
   if (top) { top.at = [369, 38.5, 48]; top.radius = 21; top.height = 5; top.finish = "black_metal"; }
   extra.push(blk(ring("pump-cap-rim", [369, 41.1, 48], 21.4, "y", "nickel")));
+  extra.push(rgbRing("pump-cap", [369, 41.4, 48], 17.5, "y", "block"));
   extra.push(blk({ id: "detail-pump-cap-disc", shape: "cylinder", at: [369, 41.2, 48], radius: 13, height: 0.4, axis: "y", finish: "brushed_mark", role: "detail", basis: "schematic" }));
   for (let i = 0; i < 4; i++) extra.push(blk(box(`pump-cap-line-${i}`, [369 - 4 + i * 2.6, 41.45, 48], [1, 0.1, 9 - Math.abs(i - 1.5) * 2], "nickel")));
   const routes = HOSE_ROUTES["arctic-liquid-freezer-iii-280"]!.block;

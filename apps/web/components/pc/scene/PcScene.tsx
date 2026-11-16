@@ -286,8 +286,8 @@ function Fins({ solid, material }: { solid: Solid; material: THREE.Material }) {
 }
 
 /** One solid of a part, in its own frame: a box, a cylinder or a fin stack, with its outline. */
-function SolidView({ solid, category, lit, partId }: { solid: Solid; category: string; lit: string | null; partId: string }) {
-  const material = solidMaterial(solid, category, lit);
+function SolidView({ solid, category, lit, partId, override }: { solid: Solid; category: string; lit: string | null; partId: string; override?: THREE.MeshStandardMaterial }) {
+  const material = override ?? solidMaterial(solid, category, lit);
   if (solid.shape === "ring") return <mesh geometry={RING} material={material} position={solid.at as [number, number, number]} quaternion={AXIS_TURN[solid.axis ?? "y"]} scale={solid.radius ?? 1} userData={{ part: partId }} castShadow receiveShadow />;
   if (solid.shape === "fins") {
     return (
@@ -398,8 +398,11 @@ function Part({
   onSelectPart,
   animate = false,
   hiddenSolids,
+  rgb = "off",
 }: {
   animate?: boolean;
+  /** Optional RGB lighting: `off` draws the part as always; `unlit` shows its diffusers; `lit` lights them. */
+  rgb?: "off" | "unlit" | "lit";
   /** Empty places of this part drawn nowhere: fan places covered by a fitted radiator, and that radiator's outline. */
   hiddenSolids?: ReadonlySet<string>;
   part: InstalledPart;
@@ -451,12 +454,12 @@ function Part({
   const groupBodies = mountedGroups.map(([group, frame]) => (
     <FrameGroup key={group} frame={frame} animate={animate} reducedMotion={reducedMotion} moveKey={`${part.instanceId}#${group}`} onClick={onClick}>
       {geometry!.solids
-        .filter((solid) => solid.group === group && drawable(solid))
+        .filter((solid) => solid.group === group && drawable(solid) && (solid.role !== "rgb" || rgb !== "off"))
         .map((solid) =>
           solid.role === "fan" && (solid.shape === "cylinder" || solid.shape === "rotor") ? (
             <Fan key={solid.id} solid={solid} category={category} spinning={spinning} reducedMotion={reducedMotion} />
           ) : (
-            <SolidView key={solid.id} solid={solid} category={category} lit={lit && lightSolids.has(solid.id) ? lit : null} partId={part.instanceId} />
+            <SolidView key={solid.id} solid={solid} category={category} lit={lit && lightSolids.has(solid.id) ? lit : null} partId={part.instanceId} override={rgbMaterial(solid, rgb)} />
           ),
         )}
     </FrameGroup>
@@ -468,7 +471,7 @@ function Part({
     {geometry && <Hoses geometry={geometry} placed={placed} category={category} />}
     <FrameGroup frame={placed.frame} animate={animate} reducedMotion={reducedMotion} moveKey={part.instanceId} onClick={onClick}>
       {geometry ? (
-        geometry.solids.filter((solid) => drawable(solid) && !(solid.group && placed.groupFrames[solid.group]) && !hiddenSolids?.has(solid.id)).map((solid) =>
+        geometry.solids.filter((solid) => drawable(solid) && !(solid.group && placed.groupFrames[solid.group]) && !hiddenSolids?.has(solid.id) && (solid.role !== "rgb" || rgb !== "off")).map((solid) =>
           PLACE_ROLES.has(solid.role) && solid.shape === "box" ? (
             <lineSegments
               key={solid.id}
@@ -482,7 +485,7 @@ function Part({
           ) : solid.role === "fan" && (solid.shape === "cylinder" || solid.shape === "rotor") ? (
             <Fan key={solid.id} solid={solid} category={category} spinning={spinning} reducedMotion={reducedMotion} />
           ) : (
-            <SolidView key={solid.id} solid={solid} category={category} lit={lit && lightSolids.has(solid.id) ? lit : null} partId={part.instanceId} />
+            <SolidView key={solid.id} solid={solid} category={category} lit={lit && lightSolids.has(solid.id) ? lit : null} partId={part.instanceId} override={rgbMaterial(solid, rgb)} />
           ),
         )
       ) : (
@@ -525,6 +528,40 @@ function SelectionHalo({ centre, size, reducedMotion }: { centre: [number, numbe
       <mesh ref={shell} geometry={BOX} material={HALO} position={centre} scale={[size[0] * 1.05 + 6, size[1] * 1.05 + 6, size[2] * 1.05 + 6]} raycast={noRaycast} renderOrder={5} />
     </>
   );
+}
+
+// ---------- Optional RGB lighting (cosmetic) ----------
+
+/**
+ * One shared light colour for every RGB diffuser, driven by `RgbDriver`: a slow hue drift, faded in
+ * when the build starts. Restrained: no bloom, emissive well under the parts' own highlights.
+ */
+const RGB_LIGHT = new THREE.MeshStandardMaterial({ color: "#3a4452", emissive: "#38bdf8", emissiveIntensity: 0, roughness: 0.6, metalness: 0 });
+/** A diffuser while the build is off: milky, unlit. */
+const RGB_DIFFUSER = new THREE.MeshStandardMaterial({ color: "#d7dde6", roughness: 0.55, metalness: 0, transparent: true, opacity: 0.85 });
+/** The material of a solid under the RGB option, or undefined for the part's own. */
+function rgbMaterial(solid: Solid, rgb: "off" | "unlit" | "lit"): THREE.MeshStandardMaterial | undefined {
+  if (solid.role === "rgb") return rgb === "lit" ? RGB_LIGHT : RGB_DIFFUSER;
+  // The RAM's own light bar: lit only with the option on and the build running; otherwise as always.
+  if (solid.role === "light" && rgb === "lit") return RGB_LIGHT;
+  return undefined;
+}
+
+/** Fades the RGB light in or out and drifts its hue; still under reduced motion. */
+function RgbDriver({ lit, reducedMotion }: { lit: boolean; reducedMotion: boolean }) {
+  const level = useRef(0);
+  const hue = useRef(0.53);
+  useFrame((frame, delta) => {
+    const want = lit ? 1 : 0;
+    level.current = reducedMotion ? want : THREE.MathUtils.damp(level.current, want, 2.2, Math.min(delta, 0.05));
+    if (!reducedMotion && lit) hue.current = (hue.current + Math.min(delta, 0.05) / 14) % 1;
+    // A saturated light on a dark diffuser: coloured, not white, and not brighter than it needs to be.
+    RGB_LIGHT.color.setHSL(hue.current, 0.7, 0.18 + 0.12 * (1 - level.current));
+    RGB_LIGHT.emissive.setHSL(hue.current, 1, 0.5);
+    RGB_LIGHT.emissiveIntensity = 1.15 * level.current;
+    if ((!reducedMotion && lit) || Math.abs(level.current - want) > 0.01) frame.invalidate();
+  });
+  return null;
 }
 
 // ---------- Liquid cooler hoses ----------
@@ -1638,7 +1675,7 @@ function SceneEnvironment({ enabled }: { enabled: boolean }) {
   return null;
 }
 
-function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false, viewId, onSelectPart, simpleCableIds, selectedSimpleCableId, onSelectSimpleCable, simpleTargets, onSimpleTarget, benchOrder, beside, quality, guide, guideAnimate = true }: PcSceneProps & { quality: SceneQuality }) {
+function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false, viewId, onSelectPart, simpleCableIds, selectedSimpleCableId, onSelectSimpleCable, simpleTargets, onSimpleTarget, benchOrder, beside, quality, guide, guideAnimate = true, rgb = false }: PcSceneProps & { quality: SceneQuality }) {
   const projectId = usePC((store) => store.projectId);
   const { geometry, ready } = useGeometry(useMemo(() => state.parts.map((part) => part.catalogId), [state.parts]));
   const benchSlots = useMemo(() => new Map<string, { at: Vec3; size: Vec3 }>(), [state, geometry, benchOrder, beside]);
@@ -1718,6 +1755,9 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
     }
     return result;
   }, [state.parts]);
+  // Lit only while the build really runs (pressed and operational): RGB never makes a build look on.
+  const rgbLit = rgb && state.power.pressed && startup.outcome === "operational";
+  const rgbState: "off" | "unlit" | "lit" = !rgb ? "off" : rgbLit ? "lit" : "unlit";
   const spinning = new Set(startup.observable.spinning);
   const lit = new Map(startup.observable.lighting.filter((item) => item.lit && item.color).map((item) => [item.instanceId, item.color!]));
 
@@ -1752,6 +1792,7 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
             onSelectPart={onSelectPart}
             animate={simple}
             hiddenSolids={coveredPlaces.get(part.instanceId)}
+            rgb={rgbState}
           />
         ) : null;
       })}
@@ -1798,6 +1839,7 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
       {simple && simpleTargets && (
         <SimpleTargets targets={simpleTargets} placed={placed} geometry={geometry} state={state} reducedMotion={reducedMotion} onTarget={onSimpleTarget} />
       )}
+      {rgb && <RgbDriver lit={rgbLit} reducedMotion={reducedMotion} />}
       {simple && guide !== undefined && (
         <GuideRobot focus={guide} placed={placed} geometry={geometry} state={state} obstacles={cableObstacles} caseId={state.parts.find(standsFirst)?.instanceId ?? null} animate={guideAnimate && !reducedMotion} />
       )}

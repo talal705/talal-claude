@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { parseGeometry } from "./geometry";
+import { parseGeometry, type PartGeometry } from "./geometry";
 import { withVisualDetails } from "./visual-details";
 import { cableRoutePoints, connectorSize } from "./cable-visuals";
 
@@ -45,5 +45,19 @@ describe("cable presentation", () => {
     expect(connectorSize("atx_main")[2]).toBeGreaterThan(connectorSize("gpu_power")[2]);
     expect(connectorSize("cpu_power")).toEqual(connectorSize("gpu_power"));
     expect(connectorSize("fan_lead")[0]).toBeLessThan(connectorSize("gpu_power")[0]);
+  });
+});
+
+describe("optional RGB diffusers", () => {
+  const read = (id: string) => JSON.parse(readFileSync(new URL(`../../../../../assets/pc/geometry/${id}.json`, import.meta.url), "utf8")) as PartGeometry;
+  it("exist only on the case fans and the liquid cooler, as their own role, so RGB off draws parts as before", () => {
+    const rgbOf = (id: string) => withVisualDetails(read(id)).solids.filter((s) => s.role === "rgb");
+    expect(rgbOf("corsair-airguide-120-4000d")).toHaveLength(2);
+    const aio = rgbOf("arctic-liquid-freezer-iii-280");
+    expect(aio.map((s) => s.group).sort()).toEqual(["block", "radiator", "radiator"]);
+    for (const id of ["intel-core-i5-14600k", "arctic-freezer-36", "asus-tuf-gaming-z790-plus-wifi", "corsair-vengeance-rgb-ddr5-6000-32gb-kit"]) expect(rgbOf(id), id).toEqual([]);
+    // Without its rings, a part is exactly what it was.
+    const fan = withVisualDetails(read("corsair-airguide-120-4000d"));
+    expect(fan.solids.filter((s) => s.role !== "rgb")).toEqual(read("corsair-airguide-120-4000d").solids);
   });
 });
