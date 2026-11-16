@@ -30,11 +30,50 @@ export const SIMPLE_PARTS = [
   { key: "psu", id: "psu-8", catalogId: "corsair-cx550", host: "case-1", mount: "psu-bay", screws: 4 },
 ] as const;
 
-export type SimplePartKey = (typeof SIMPLE_PARTS)[number]["key"];
+/**
+ * Alternatives to two of the parts above, added after every earlier instance (and every saved build
+ * that names one) so nothing older moves. Only one part of each slot can be in at a time: a CPU in
+ * the socket, a cooler on it. The liquid cooler's block goes on the CPU like the air cooler; its
+ * radiator goes in the case's front radiator position (Corsair lists 240, 280 and 360 mm there), so
+ * it is fitted once the board is in the case. That position covers the front fan places, so the two
+ * fans the case came with move to its top fan places, as exhaust, while the radiator is in; their
+ * leads stay on CHA_FAN1 and CHA_FAN2.
+ */
+export const SIMPLE_ALTERNATIVES = [
+  { key: "cpu2", id: "cpu-12", catalogId: "intel-core-i9-14900k", host: "motherboard-2", mount: "cpu-socket", screws: 1, slot: "cpu" },
+  { key: "aio", id: "cooling-13", catalogId: "arctic-liquid-freezer-iii-280", host: "motherboard-2", mount: "cooler-mount", screws: 4, slot: "cooler", radiator: { host: "case-1", mount: "rad-front", screws: 8, moveFans: [["fan-9", "fan-top-1"], ["fan-10", "fan-top-2"]] } },
+] as const;
+
+type BasePartKey = (typeof SIMPLE_PARTS)[number]["key"];
+export type SimpleAltKey = (typeof SIMPLE_ALTERNATIVES)[number]["key"];
+export type SimplePartKey = BasePartKey | SimpleAltKey;
+/** A place in the build that one part fills: the base part's key (`cpu` is filled by either CPU). */
+export type SimpleSlot = BasePartKey;
+interface PartSpec {
+  key: SimplePartKey; id: string; catalogId: string; host: string; mount: string; screws: number; slot?: SimpleSlot;
+  /** A liquid cooler's radiator: where it goes, and the case fans that make room for it (instance → new fan place). */
+  radiator?: { host: string; mount: string; screws: number; moveFans: readonly (readonly [string, string])[] };
+}
+/** Screws of a case fan place on the 4000D. */
+const FAN_SCREWS = 4;
+/** Every part on the bench: the base build, then the alternatives. */
+export const ALL_SIMPLE_PARTS: readonly PartSpec[] = [...SIMPLE_PARTS, ...SIMPLE_ALTERNATIVES];
+/** The order the parts are listed in: each alternative beside the part it replaces. */
+export const SIMPLE_PART_LIST: readonly SimplePartKey[] = ["cpu", "cpu2", "ram", "ram2", "cooler", "aio", "storage", "motherboard", "gpu", "psu"];
+export const slotOf = (key: SimplePartKey): SimpleSlot => (ALL_SIMPLE_PARTS.find((p) => p.key === key)?.slot ?? key) as SimpleSlot;
+/** The other parts that fill the same slot. */
+export const rivalsOf = (key: SimplePartKey): SimplePartKey[] => ALL_SIMPLE_PARTS.filter((p) => p.key !== key && slotOf(p.key) === slotOf(key)).map((p) => p.key);
+/** Parts that have an alternative: either one may be swapped for the other. */
+export const SWAPPABLE: readonly SimplePartKey[] = ["cpu", "cpu2", "cooler", "aio"];
+/** Parts a learner may also just take out: the coolers (a CPU is only ever swapped, so the board never stands without one). */
+export const REMOVABLE: readonly SimplePartKey[] = ["cooler", "aio"];
 const RAM_KEYS: readonly SimplePartKey[] = ["ram", "ram2"];
 export const isRamKey = (key: SimplePartKey) => RAM_KEYS.includes(key);
-/** Parts fitted to the motherboard while it is still on the workbench. */
-export const BOARD_PREP: readonly SimplePartKey[] = ["cpu", "ram", "ram2", "storage", "cooler"];
+/**
+ * Parts fitted to the motherboard while it is still on the workbench. The air cooler may go on here
+ * too (the helper suggests it); the liquid cooler waits for the board to be in the case.
+ */
+export const BOARD_PREP: readonly SimplePartKey[] = ["cpu", "ram", "ram2", "storage"];
 
 /** The supplied PSU has captive leads. Each step connects its free device end. */
 export const SIMPLE_CABLES = [
@@ -47,7 +86,15 @@ export const SIMPLE_CABLES = [
   { key: "caseFan2", id: "fan-10.fan", endId: "plug", instanceId: "motherboard-2", portId: "cha-fan-2", requires: ["motherboard"], essential: false },
 ] as const satisfies readonly { key: string; id: string; endId: string; instanceId: string; portId: string; requires: readonly SimplePartKey[]; essential: boolean }[];
 
-export type SimpleCableKey = (typeof SIMPLE_CABLES)[number]["key"];
+/** The liquid cooler's two leads, in place of the air cooler's fan lead when it is the cooler fitted. */
+export const SIMPLE_AIO_CABLES = [
+  { key: "aioPump", id: "cooling-13.pump", endId: "plug", instanceId: "motherboard-2", portId: "aio-pump", requires: ["aio", "motherboard"], essential: true },
+  { key: "aioFan", id: "cooling-13.fan", endId: "plug", instanceId: "motherboard-2", portId: "cpu-fan", requires: ["aio", "motherboard"], essential: true },
+] as const satisfies readonly { key: string; id: string; endId: string; instanceId: string; portId: string; requires: readonly SimplePartKey[]; essential: boolean }[];
+
+interface CableSpec { key: SimpleCableKey; id: string; endId: string; instanceId: string; portId: string; requires: readonly SimplePartKey[]; essential: boolean }
+export type SimpleCableKey = (typeof SIMPLE_CABLES)[number]["key"] | (typeof SIMPLE_AIO_CABLES)[number]["key"];
+export const ALL_SIMPLE_CABLES: readonly CableSpec[] = [...SIMPLE_CABLES, ...SIMPLE_AIO_CABLES];
 /** One learner step, in the order it was taken: `part:cpu`, `cable:atx`. */
 export type SimpleStep = `part:${SimplePartKey}` | `cable:${SimpleCableKey}`;
 /**
@@ -55,14 +102,20 @@ export type SimpleStep = `part:${SimplePartKey}` | `cable:${SimpleCableKey}`;
  * order they were taken, so the latest one can be undone without breaking what depends on it.
  */
 export type SimpleSnapshot = { version: 3; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean };
-export type SimpleBlock = "cpuFirst" | "boardFirst" | "prepareBoard" | "cannotFit";
+export type SimpleBlock = "cpuFirst" | "boardFirst" | "prepareBoard" | "cannotFit" | "socketTaken" | "coolerTaken";
 export type SimpleCableBlock = "fitCableParts" | "turnOffFirst" | "cannotConnect";
+export type SimpleRemoveBlock = "turnOffFirst" | "removeCoolerFirst" | "unplugCoolerFirst" | "notSwappable" | "boardFirst";
+/**
+ * The lab's own startup rule, on top of the engine: in this simulation the Core i9-14900K is set to
+ * need the 280 mm liquid cooler. An educational rule for this one CPU, not a claim about all CPUs.
+ */
+export type SimpleRule = "needsLiquidCooler";
 // Keep the original storage key so an existing learner's progress can migrate in place.
 export const SIMPLE_SAVE_KEY = "ytl_simple_pc_v1";
 export const emptySimpleSnapshot = (): SimpleSnapshot => ({ version: 3, placed: [], connected: [], history: [], powered: false });
 
-const partSpec = (key: SimplePartKey) => SIMPLE_PARTS.find((p) => p.key === key)!;
-const cableSpec = (key: SimpleCableKey) => SIMPLE_CABLES.find((c) => c.key === key)!;
+const partSpec = (key: SimplePartKey): PartSpec => ALL_SIMPLE_PARTS.find((p) => p.key === key)!;
+const cableSpec = (key: SimpleCableKey): CableSpec => ALL_SIMPLE_CABLES.find((c) => c.key === key)!;
 
 function run(state: PCBuildState, actions: readonly PCAction[]): PCBuildState {
   for (const action of actions) {
@@ -81,6 +134,8 @@ export function createSimpleBuild(): PCBuildState {
     ...order.map((catalogId): PCAction => ({ type: "add_part", catalogId })),
     ...suppliedPartActions(order[0], "case-1", 9).actions,
     { type: "add_part", catalogId: RAM_ID },
+    // The alternatives: cpu-12 and cooling-13.
+    ...SIMPLE_ALTERNATIVES.map((p): PCAction => ({ type: "add_part", catalogId: p.catalogId })),
     { type: "update_bios", instanceId: "motherboard-2", version: "1840" },
   ];
   return run(pc.createBuild(pcCatalog), actions);
@@ -99,21 +154,42 @@ export function simpleTarget(state: PCBuildState, key: SimplePartKey): { hostIns
 export function simplePartInstalled(state: PCBuildState, key: SimplePartKey): boolean {
   const spec = partSpec(key);
   const mounts: readonly string[] = isRamKey(key) ? RAM_SLOTS : [spec.mount];
-  return state.parts.some((p) => p.instanceId === spec.id && p.attachments.some((a) => a.target.hostInstanceId === spec.host && mounts.includes(a.target.mountPointId) && a.seating === "seated" && a.fastenersSecured >= spec.screws));
+  const part = state.parts.find((p) => p.instanceId === spec.id);
+  if (!part) return false;
+  const fitted = (host: string, ids: readonly string[], screws: number) =>
+    part.attachments.some((a) => a.target.hostInstanceId === host && ids.includes(a.target.mountPointId) && a.seating === "seated" && a.fastenersSecured >= screws);
+  return fitted(spec.host, mounts, spec.screws) && (!spec.radiator || fitted(spec.radiator.host, [spec.radiator.mount], spec.radiator.screws));
 }
+
+/** The part filling a slot, or null: `cpu` → the i5 or the i9, `cooler` → the air or the liquid cooler. */
+export function simpleSlotPart(state: PCBuildState, slot: SimpleSlot): SimplePartKey | null {
+  return ALL_SIMPLE_PARTS.find((p) => slotOf(p.key) === slot && simplePartInstalled(state, p.key))?.key ?? null;
+}
+export const simpleSlotFilled = (state: PCBuildState, slot: SimpleSlot) => simpleSlotPart(state, slot) !== null;
+/** Every slot filled: one CPU, both RAM sticks, storage, one cooler, the board, the card and the PSU. */
+export const simpleAllPartsIn = (state: PCBuildState) => SIMPLE_PARTS.every((p) => simpleSlotFilled(state, p.key));
+/** How many of the eight slots are filled. */
+export const simplePartsProgress = (state: PCBuildState) => SIMPLE_PARTS.filter((p) => simpleSlotFilled(state, p.key)).length;
+/** A part a lead or another part needs: `cpu` is met by either CPU; any other key by that part. */
+const requirementMet = (state: PCBuildState, key: SimplePartKey) => (key === "cpu" ? simpleSlotFilled(state, "cpu") : simplePartInstalled(state, key));
 
 /** Parts that must be in before this one, in the order a learner would fit them. */
 export function simplePrerequisites(key: SimplePartKey): SimplePartKey[] {
   if (key === "cooler") return ["cpu"];
+  if (key === "aio") return ["cpu", "motherboard"];
   if (key === "motherboard") return [...BOARD_PREP];
   if (key === "gpu" || key === "psu") return ["motherboard"];
   return [];
 }
 
 export function simpleBlock(state: PCBuildState, key: SimplePartKey): SimpleBlock | null {
-  if (key === "cooler" && !simplePartInstalled(state, "cpu")) return "cpuFirst";
-  if (key === "motherboard" && !BOARD_PREP.every((k) => simplePartInstalled(state, k))) return "prepareBoard";
-  if ((key === "gpu" || key === "psu") && !simplePartInstalled(state, "motherboard")) return "boardFirst";
+  if (!simplePartInstalled(state, key)) {
+    if (slotOf(key) === "cpu" && rivalsOf(key).some((k) => simplePartInstalled(state, k))) return "socketTaken";
+    if (slotOf(key) === "cooler" && rivalsOf(key).some((k) => simplePartInstalled(state, k))) return "coolerTaken";
+  }
+  if ((key === "cooler" || key === "aio") && !simpleSlotFilled(state, "cpu")) return "cpuFirst";
+  if (key === "motherboard" && !BOARD_PREP.every((k) => requirementMet(state, k))) return "prepareBoard";
+  if ((key === "gpu" || key === "psu" || key === "aio") && !simplePartInstalled(state, "motherboard")) return "boardFirst";
   return null;
 }
 
@@ -122,13 +198,66 @@ export function installSimplePart(state: PCBuildState, key: SimplePartKey): { ok
   const blocked = simpleBlock(state, key);
   if (blocked) return { ok: false, reason: blocked };
   const spec = partSpec(key);
+  // A liquid cooler has two bodies: the pump block on the CPU, then the radiator in the case.
+  const role = (name: string) => (spec.radiator ? { role: name } : {});
   try {
     return { ok: true, state: run(state, [
-      { type: "mount_part", instanceId: spec.id, target: simpleTarget(state, key) },
-      { type: "set_seating", instanceId: spec.id, seating: "seated" },
-      ...(spec.screws ? [{ type: "set_fasteners", instanceId: spec.id, secured: spec.screws } as PCAction] : []),
+      { type: "mount_part", instanceId: spec.id, target: simpleTarget(state, key), ...role("block") },
+      { type: "set_seating", instanceId: spec.id, seating: "seated", ...role("block") },
+      ...(spec.screws ? [{ type: "set_fasteners", instanceId: spec.id, secured: spec.screws, ...role("block") } as PCAction] : []),
+      ...(spec.radiator ? [
+        ...spec.radiator.moveFans.flatMap(([fan, place]): PCAction[] => [
+          { type: "unmount_part", instanceId: fan },
+          { type: "mount_part", instanceId: fan, target: { hostInstanceId: spec.radiator!.host, mountPointId: place } },
+          { type: "set_seating", instanceId: fan, seating: "seated" },
+          { type: "set_fasteners", instanceId: fan, secured: FAN_SCREWS },
+        ]),
+        { type: "mount_part", instanceId: spec.id, role: "radiator", target: { hostInstanceId: spec.radiator.host, mountPointId: spec.radiator.mount } } as PCAction,
+        { type: "set_seating", instanceId: spec.id, role: "radiator", seating: "seated" } as PCAction,
+        { type: "set_fasteners", instanceId: spec.id, role: "radiator", secured: spec.radiator.screws } as PCAction,
+      ] : []),
     ]) };
   } catch { return { ok: false, reason: "cannotFit" }; }
+}
+
+/** Where the radiator of a liquid cooler goes, for the 3D view; null for every other part. */
+export function simpleRadiatorTarget(key: SimplePartKey): { hostInstanceId: string; mountPointId: string } | null {
+  const radiator = partSpec(key).radiator;
+  return radiator ? { hostInstanceId: radiator.host, mountPointId: radiator.mount } : null;
+}
+
+/** The leads of the build as it stands: the liquid cooler's two in place of the air cooler's one when it is fitted. */
+export function simpleCablesFor(state: PCBuildState): CableSpec[] {
+  const liquid = simplePartInstalled(state, "aio");
+  return [...SIMPLE_CABLES.filter((c) => !(liquid && c.key === "cpuFan")), ...(liquid ? SIMPLE_AIO_CABLES : [])];
+}
+
+/** Why a fitted part cannot come out (a cooler, or a CPU as part of a swap), or null when it can. */
+export function simpleRemoveBlock(state: PCBuildState, key: SimplePartKey): SimpleRemoveBlock | null {
+  if (!SWAPPABLE.includes(key)) return "notSwappable";
+  if (state.power.pressed) return "turnOffFirst";
+  if (slotOf(key) === "cpu" && simpleSlotFilled(state, "cooler")) return "removeCoolerFirst";
+  if (key === "cooler" && simpleCableConnected(state, "cpuFan")) return "unplugCoolerFirst";
+  if (key === "aio" && (simpleCableConnected(state, "aioPump") || simpleCableConnected(state, "aioFan"))) return "unplugCoolerFirst";
+  return null;
+}
+
+/**
+ * Why `key` cannot replace the part of its slot that is fitted now, or null when it can. Null too
+ * when nothing is to be replaced (then it is an ordinary install).
+ */
+export function simpleSwapBlock(state: PCBuildState, key: SimplePartKey): SimpleRemoveBlock | null {
+  const rival = simpleSlotPart(state, slotOf(key));
+  if (!rival || rival === key) return null;
+  const out = simpleRemoveBlock(state, rival);
+  if (out) return out;
+  if (key === "aio" && !simplePartInstalled(state, "motherboard")) return "boardFirst";
+  return null;
+}
+
+/** The lab rule that stops this build from starting, if any (see `SimpleRule`). */
+export function simpleRuleBlock(state: PCBuildState): SimpleRule | null {
+  return simplePartInstalled(state, "cpu2") && !simplePartInstalled(state, "aio") ? "needsLiquidCooler" : null;
 }
 
 export function simpleCableConnected(state: PCBuildState, key: SimpleCableKey): boolean {
@@ -140,8 +269,11 @@ export function simpleCableConnected(state: PCBuildState, key: SimpleCableKey): 
 export function simpleCableBlock(state: PCBuildState, key: SimpleCableKey): SimpleCableBlock | null {
   if (state.power.pressed) return "turnOffFirst";
   const spec = cableSpec(key);
-  return spec.requires.every((part) => simplePartInstalled(state, part)) ? null : "fitCableParts";
+  return spec.requires.every((part) => requirementMet(state, part)) ? null : "fitCableParts";
 }
+
+/** The parts a lead still waits for (either CPU meets `cpu`). */
+export const simpleCableMissingParts = (state: PCBuildState, key: SimpleCableKey): SimplePartKey[] => cableSpec(key).requires.filter((part) => !requirementMet(state, part));
 
 export function connectSimpleCable(state: PCBuildState, key: SimpleCableKey): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleCableBlock } {
   const blocked = simpleCableBlock(state, key);
@@ -161,8 +293,8 @@ export function disconnectSimpleCable(state: PCBuildState, key: SimpleCableKey):
 }
 
 /** Only mains/PSU switches remain automatic; internal leads must be connected by the learner. */
-export function startSimplePC(state: PCBuildState): { ok: boolean; state: PCBuildState; startup: StartupResult } {
-  if (!SIMPLE_PARTS.every((p) => simplePartInstalled(state, p.key))) return { ok: false, state, startup: pc.evaluateStartup(state, pcCatalog) };
+export function startSimplePC(state: PCBuildState): { ok: boolean; state: PCBuildState; startup: StartupResult; rule: SimpleRule | null } {
+  if (!simpleAllPartsIn(state)) return { ok: false, state, startup: pc.evaluateStartup(state, pcCatalog), rule: null };
   if (!state.power.pressed) {
     state = run(state, [
       { type: "set_side_panel", open: false },
@@ -172,15 +304,16 @@ export function startSimplePC(state: PCBuildState): { ok: boolean; state: PCBuil
     ]);
   }
   const startup = pc.evaluateStartup(state, pcCatalog);
-  const ok = startup.outcome === "operational";
+  const rule = simpleRuleBlock(state);
+  const ok = startup.outcome === "operational" && !rule;
   // A failed try leaves wiring editable. Preserve its diagnostics for the caller's feedback.
   if (!ok && state.power.pressed) state = run(state, [{ type: "power_off" }]);
-  return { ok, state, startup };
+  return { ok, state, startup, rule };
 }
 
 /** Every part fitted and every lead connected, case fans included: the whole build, not only what boots. */
 export function simpleAssemblyComplete(state: PCBuildState): boolean {
-  return SIMPLE_PARTS.every((p) => simplePartInstalled(state, p.key)) && SIMPLE_CABLES.every((c) => simpleCableConnected(state, c.key));
+  return simpleAllPartsIn(state) && simpleCablesFor(state).every((c) => simpleCableConnected(state, c.key));
 }
 
 export function simpleBuildFromSnapshot(snapshot: SimpleSnapshot): PCBuildState {
@@ -210,6 +343,21 @@ export const withCable = (snapshot: SimpleSnapshot, key: SimpleCableKey): Simple
 export const withoutCable = (snapshot: SimpleSnapshot, key: SimpleCableKey): SimpleSnapshot =>
   ({ ...snapshot, connected: snapshot.connected.filter((k) => k !== key), history: snapshot.history.filter((step) => step !== `cable:${key}`) });
 
+/** Takes a cooler back out (`simpleRemoveBlock` must allow it): its step leaves the history. */
+export const withoutPart = (snapshot: SimpleSnapshot, key: SimplePartKey): SimpleSnapshot =>
+  ({ ...snapshot, placed: snapshot.placed.filter((k) => k !== key), history: snapshot.history.filter((step) => step !== `part:${key}`) });
+
+/**
+ * Puts `to` in place of `from`, the part of the same slot (`simpleSwapBlock` must allow it). A CPU
+ * takes the other CPU's step where it was, so the board still had a CPU before it went into the
+ * case; a cooler leaves its step and the new one is fitted now.
+ */
+export function withSwap(snapshot: SimpleSnapshot, from: SimplePartKey, to: SimplePartKey): SimpleSnapshot {
+  if (slotOf(from) !== "cpu") return withPart(withoutPart(snapshot, from), to);
+  const swap = <T extends string>(item: T) => (item === `part:${from}` ? `part:${to}` : item === from ? to : item) as T;
+  return { ...snapshot, placed: snapshot.placed.map(swap), history: snapshot.history.map(swap) };
+}
+
 /** The step `undoSimpleStep` would take back, or null when there is none (or the PC is on). */
 export function lastSimpleStep(snapshot: SimpleSnapshot): SimpleStep | null {
   return snapshot.powered ? null : (snapshot.history.at(-1) ?? null);
@@ -234,8 +382,8 @@ export function undoSimpleStep(snapshot: SimpleSnapshot): SimpleSnapshot | null 
 
 // ---------- Saved progress ----------
 
-const isPartKey = (k: unknown): k is SimplePartKey => SIMPLE_PARTS.some((p) => p.key === k);
-const isCableKey = (k: unknown): k is SimpleCableKey => SIMPLE_CABLES.some((c) => c.key === k);
+const isPartKey = (k: unknown): k is SimplePartKey => ALL_SIMPLE_PARTS.some((p) => p.key === k);
+const isCableKey = (k: unknown): k is SimpleCableKey => ALL_SIMPLE_CABLES.some((c) => c.key === k);
 
 export function parseSimpleSnapshot(value: unknown): SimpleSnapshot | null {
   if (!value || typeof value !== "object") return null;
@@ -262,7 +410,7 @@ export function parseSimpleSnapshot(value: unknown): SimpleSnapshot | null {
   const migrated: SimpleSnapshot = { version: 3, placed, connected: cables, history, powered: data.powered };
   try {
     const state = simpleBuildFromSnapshot(migrated);
-    if (migrated.powered && pc.evaluateStartup(state, pcCatalog).outcome !== "operational") return null;
+    if (migrated.powered && (pc.evaluateStartup(state, pcCatalog).outcome !== "operational" || simpleRuleBlock(state))) return null;
     // Every prefix of the history must have been a valid build, so undoing never meets an impossible state.
     let replay = emptySimpleSnapshot();
     for (const step of history) {

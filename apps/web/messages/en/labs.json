@@ -781,14 +781,16 @@
     "progress": "{count} of {total} parts installed",
     "partsLabel": "Your parts",
     "parts": {
-      "cpu": "CPU",
+      "cpu": "CPU · Core i5",
       "ram": "RAM stick 1",
       "storage": "Storage",
-      "cooler": "Cooler",
+      "cooler": "Air cooler",
       "motherboard": "Motherboard",
       "gpu": "Graphics card",
       "psu": "Power supply",
-      "ram2": "RAM stick 2"
+      "ram2": "RAM stick 2",
+      "cpu2": "CPU · Core i9",
+      "aio": "Liquid cooler 280"
     },
     "inCase": "Into the case",
     "onBoard": "On the motherboard",
@@ -796,7 +798,7 @@
     "install": "Install at the highlighted spot",
     "cpuFirst": "Fit the CPU first.",
     "boardFirst": "Fit the motherboard in the case first.",
-    "prepareBoard": "Fit the CPU, both RAM sticks, storage and cooler first.",
+    "prepareBoard": "Fit a CPU, both RAM sticks and storage first.",
     "cannotFit": "Fit the earlier parts first.",
     "readyToTry": "Fit the parts and connect their cables, then try starting it.",
     "power": "Start the PC",
@@ -864,6 +866,16 @@
         "name": "Case fan 2",
         "route": "Second case fan → CHA_FAN2 on the motherboard",
         "connector": "CHA_FAN2"
+      },
+      "aioPump": {
+        "name": "Liquid cooler pump",
+        "route": "Pump block → AIO_PUMP on the motherboard",
+        "connector": "AIO_PUMP · 4-pin PWM"
+      },
+      "aioFan": {
+        "name": "Radiator fans",
+        "route": "Two 140 mm radiator fans → CPU_FAN on the motherboard",
+        "connector": "CPU_FAN · 4-pin PWM"
       }
     },
     "selectFirst": "Tap a part on the bench or in this list to select it.",
@@ -905,7 +917,10 @@
         "cable": "Next cable: the {cable} lead. Select it, then tap its glowing port.",
         "power": "Everything is fitted and connected. Press Start the PC to test it!",
         "turnOff": "Turn the PC off, then plug in the case fans to finish.",
-        "done": "Your PC is built and running. Great work!"
+        "done": "Your PC is built and running. Great work!",
+        "cpu2": "Fit the Core i9 in the CPU socket.",
+        "aio": "Now the liquid cooler: its block goes on the CPU and its radiator in the top of the case.",
+        "swapCooler": "In this lab the Core i9 needs the liquid cooler. Unplug the air cooler's fan, take the air cooler out, then fit the liquid cooler."
       },
       "selected": {
         "part": "Great! Now tap the highlighted {place}.",
@@ -922,7 +937,13 @@
         "cannotFit": "That can't go in yet. Fit the earlier parts first.",
         "cableParts": "The {cable} lead needs these parts in first: {parts}.",
         "turnOff": "Turn the PC off before changing cables.",
-        "cannotConnect": "That lead didn't connect. Check the parts and try again."
+        "cannotConnect": "That lead didn't connect. Check the parts and try again.",
+        "socketTaken": "The {other} is in the socket, and only one CPU fits. Press “Swap” to put the {part} in its place.",
+        "coolerTaken": "The {other} is on the CPU, and only one cooler fits. Press “Swap” to fit the {part} instead.",
+        "removeCoolerFirst": "The cooler sits on top of the CPU. Take the cooler out before you swap the CPU.",
+        "unplugCoolerFirst": "Unplug the {part}'s leads first, in the Cables tab.",
+        "turnOffFirst": "Turn the PC off before swapping the {part}.",
+        "notSwappable": "Use Undo to take the {part} back out."
       },
       "installed": {
         "cpu": "The processor is seated and its lever is closed.",
@@ -933,7 +954,9 @@
         "motherboard": "The board is in the case, with everything on it.",
         "gpu": "The graphics card is in the PCIe slot.",
         "psu": "The power supply is in its bay.",
-        "allParts": "That's all 8 parts!"
+        "allParts": "That's all 8 parts!",
+        "cpu2": "The Core i9 is seated and its lever is closed.",
+        "aio": "The pump block is on the CPU and the 280 mm radiator is screwed into the top of the case."
       },
       "connected": {
         "one": "The {cable} lead is connected.",
@@ -962,14 +985,16 @@
         "cableMissing": "It didn't start: the {cable} lead isn't connected yet.",
         "failed": "It didn't start yet. Check the remaining cables.",
         "bootsFansMissing": "It boots! To finish, turn it off and plug in both case fans.",
-        "off": "The PC is off. You can change cables now."
+        "off": "The PC is off. You can change cables now.",
+        "needsLiquid": "It didn't start: in this lab, the Core i9 needs the 280 mm liquid cooler. Swap the air cooler for the liquid cooler and connect its pump and fan leads."
       },
       "complete": {
         "title": "You did it! Your PC is complete and running.",
         "summary": "8 parts fitted and 7 cables connected. Every check passed.",
         "heading": "What you built",
         "parts": "Parts",
-        "cables": "Cables"
+        "cables": "Cables",
+        "summaryLiquid": "8 parts fitted and 8 cables connected, with the 280 mm liquid cooler. Both radiator fans are spinning."
       },
       "help": {
         "part": "The {part} goes in the glowing {place}. Tap it there.",
@@ -991,7 +1016,12 @@
         "powerSwitch": "These tiny pins connect the case's power button to the board.",
         "caseFan": "Case fans move air through the case to keep everything cool.",
         "power": "Start runs the same checks as a real first boot: power, CPU, memory and storage.",
-        "done": "Every part and cable is in place, and the PC passed its startup checks."
+        "done": "Every part and cable is in place, and the PC passed its startup checks.",
+        "cpu2": "The Core i9-14900K uses the same LGA1700 socket and looks almost the same as the i5. Here it is set to need the liquid cooler.",
+        "aio": "A liquid cooler pumps coolant from the block on the CPU through two hoses to a radiator, where two 140 mm fans blow the heat out of the case.",
+        "aioPump": "AIO_PUMP powers the pump that moves the coolant. Without it the liquid stands still.",
+        "aioFan": "The radiator fans plug into CPU_FAN, so the board speeds them up as the CPU warms.",
+        "liquidRule": "This is a lab rule for this one CPU: the Core i9 here starts only with the 280 mm liquid cooler. Real PCs depend on the cooler's rating and the CPU's power limits."
       },
       "noAi": "I can answer What next?, Help me and Explain this step. Open questions need the AI tutor set up on the server.",
       "places": {
@@ -1004,9 +1034,31 @@
         "cooler-mount": "cooler mount over the CPU",
         "motherboard-tray": "motherboard tray in the case",
         "pcie-x16-1": "top PCIe x16 slot",
-        "psu-bay": "power supply bay"
-      }
-    }
+        "psu-bay": "power supply bay",
+        "rad-top": "280 mm radiator position at the top of the case"
+      },
+      "alreadySwap": "The {part} is fitted. To change it, press “Take it out” or select the other cooler and press Swap.",
+      "removed": "I took the {part} out. Its alternative can go in now.",
+      "swapped": "Done: the {other} is out and the {part} is in."
+    },
+    "partNotes": {
+      "cpu": "i5-14600K · air or liquid cooler",
+      "cpu2": "i9-14900K · needs the liquid cooler here",
+      "cooler": "Freezer 36 · on the bench",
+      "aio": "280 mm · after the board is in the case"
+    },
+    "socketTaken": "The other CPU is in the socket. Press Swap to replace it.",
+    "coolerTaken": "The other cooler is on the CPU. Press Swap to replace it.",
+    "remove": "Take it out",
+    "removeCoolerFirst": "Take the cooler off first. It sits on top of the CPU.",
+    "unplugCoolerFirst": "Unplug this cooler's leads in the Cables tab first.",
+    "turnOffToSwap": "Turn the PC off before swapping a part.",
+    "needsLiquid": "In this lab, the Core i9-14900K needs the 280 mm liquid cooler. Unplug the air cooler's fan lead, swap the air cooler for the liquid cooler, then connect its pump lead to AIO_PUMP and its fan lead to CPU_FAN.",
+    "ruleNote": "This is a rule of this simulation for this one CPU, not a real-world rule for every CPU like it.",
+    "cablesIntroLiquid": "Six connections for startup (the liquid cooler has a pump lead and a fan lead), plus two case fan leads. Select a lead, then tap its glowing port.",
+    "swap": "Swap it in for the {other}",
+    "swapHint": "The {other} is fitted now. Swapping takes it out and puts this one in its place.",
+    "swapCpuHint": "To change the CPU, select the other CPU and press Swap."
   },
   "learning": {
     "name": "Your Tech Lab",

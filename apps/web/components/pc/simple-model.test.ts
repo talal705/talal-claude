@@ -3,8 +3,8 @@ import { pc } from "@ytl/simulation";
 import { pcCatalog } from "./catalog";
 import {
   connectSimpleCable, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, lastSimpleStep, parseSimpleSnapshot, RAM_SLOTS,
-  SIMPLE_CABLES, SIMPLE_PARTS, simpleAssemblyComplete, simpleBuildFromSnapshot, simpleCableConnected, simplePartInstalled, simpleTarget, startSimplePC,
-  undoSimpleStep, withCable, withPart, type SimplePartKey, type SimpleSnapshot,
+  SIMPLE_CABLES, SIMPLE_PARTS, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot, simpleCableConnected, simpleCablesFor, simplePartInstalled,
+  simpleRemoveBlock, simpleSwapBlock, simpleTarget, startSimplePC, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap, type SimpleCableKey, type SimplePartKey, type SimpleSnapshot,
 } from "./simple-model";
 
 function fitted() {
@@ -29,7 +29,7 @@ const slotOf = (state: ReturnType<typeof createSimpleBuild>, instanceId: string)
   state.parts.find((p) => p.instanceId === instanceId)?.attachments[0]?.target.mountPointId;
 const ALL_PARTS = SIMPLE_PARTS.map((p) => p.key);
 const ALL_CABLES = SIMPLE_CABLES.map((c) => c.key);
-function snapshotOf(parts: readonly SimplePartKey[], cables: readonly (typeof ALL_CABLES)[number][] = [], powered = false): SimpleSnapshot {
+function snapshotOf(parts: readonly SimplePartKey[], cables: readonly SimpleCableKey[] = [], powered = false): SimpleSnapshot {
   let snapshot = emptySimpleSnapshot();
   for (const key of parts) snapshot = withPart(snapshot, key);
   for (const key of cables) snapshot = withCable(snapshot, key);
@@ -50,7 +50,8 @@ describe("the single-PC page", () => {
   it("keeps every earlier instance ID, so saved builds and cable IDs still match", () => {
     const ids = createSimpleBuild().parts.map((p) => p.instanceId);
     expect(ids).toEqual(expect.arrayContaining(["case-1", "motherboard-2", "cpu-3", "ram-4", "storage-5", "cooling-6", "gpu-7", "psu-8", "fan-9", "fan-10", "ram-11"]));
-    expect(ids.indexOf("ram-11")).toBe(ids.length - 1);
+    // The CPU and cooler alternatives come after every earlier part.
+    expect(ids.slice(-3)).toEqual(["ram-11", "cpu-12", "cooling-13"]);
   });
 
   it("uses the board manual's two-module layout, A2 then B2, whichever stick goes in first", () => {
@@ -210,5 +211,127 @@ describe("undo and saved progress", () => {
       // A lead before the parts it needs: a history that could never have happened.
       { version: 3, placed: ["cpu", "cooler"], connected: ["cpuFan"], history: ["cable:cpuFan", "part:cpu", "part:cooler"], powered: false },
     ]) expect(parseSimpleSnapshot(value)).toBeNull();
+  });
+});
+
+describe("the CPU and cooler alternatives", () => {
+  const LIQUID_PARTS: SimplePartKey[] = ["cpu2", "ram", "ram2", "storage", "motherboard", "aio", "gpu", "psu"];
+  const LIQUID_CABLES = ["atx", "cpuPower", "gpuPower", "aioPump", "aioFan", "powerSwitch", "caseFan1", "caseFan2"] as const;
+  function built(parts: readonly SimplePartKey[], skip: readonly string[] = []) {
+    let state = createSimpleBuild();
+    for (const key of parts) {
+      const step = installSimplePart(state, key);
+      if (!step.ok) throw new Error(`${key}: ${step.reason}`);
+      state = step.state;
+    }
+    for (const cable of simpleCablesFor(state).filter((c) => !skip.includes(c.key))) {
+      if (!parts.includes("psu") || !parts.includes("gpu")) break;
+      const step = connectSimpleCable(state, cable.key);
+      if (!step.ok) throw new Error(`${cable.key}: ${step.reason}`);
+      state = step.state;
+    }
+    return state;
+  }
+
+  it("keeps one CPU in the socket and one cooler on it", () => {
+    const state = built(["cpu"]);
+    expect(installSimplePart(state, "cpu2")).toMatchObject({ ok: false, reason: "socketTaken" });
+    const air = built(["cpu", "cooler"]);
+    expect(simpleBlock(air, "aio")).toBe("coolerTaken");
+    const liquid = built(["cpu2", "ram", "ram2", "storage", "motherboard", "aio"]);
+    expect(installSimplePart(liquid, "cooler")).toMatchObject({ ok: false, reason: "coolerTaken" });
+    expect(installSimplePart(liquid, "cpu")).toMatchObject({ ok: false, reason: "socketTaken" });
+  });
+
+  it("fits the liquid cooler after the board is in the case: block on the CPU, radiator in front, case fans to the top", () => {
+    const early = built(["cpu2", "ram", "ram2", "storage"]);
+    expect(installSimplePart(early, "aio")).toMatchObject({ ok: false, reason: "boardFirst" });
+    expect(installSimplePart(createSimpleBuild(), "aio")).toMatchObject({ ok: false, reason: "cpuFirst" });
+    const state = built(["cpu2", "ram", "ram2", "storage", "motherboard", "aio"]);
+    const aio = state.parts.find((p) => p.instanceId === "cooling-13")!;
+    expect(aio.attachments.map((a) => [a.role, a.target.hostInstanceId, a.target.mountPointId, a.seating])).toEqual([
+      ["block", "motherboard-2", "cooler-mount", "seated"],
+      ["radiator", "case-1", "rad-front", "seated"],
+    ]);
+    expect(state.parts.filter((p) => p.instanceId === "fan-9" || p.instanceId === "fan-10").map((p) => p.attachments[0]!.target.mountPointId)).toEqual(["fan-top-1", "fan-top-2"]);
+    expect(simpleCablesFor(state).map((c) => c.key)).toEqual(["atx", "cpuPower", "gpuPower", "powerSwitch", "caseFan1", "caseFan2", "aioPump", "aioFan"]);
+  });
+
+  it("starts the original i5 build with the air cooler, exactly as before", () => {
+    const result = startSimplePC(wired());
+    expect(result.ok).toBe(true);
+    expect(result.rule).toBeNull();
+    expect(result.startup.observable.spinning).toContain("cooling-6");
+  });
+
+  it("refuses to start the Core i9 on the air cooler (a lab rule), then starts it on the liquid cooler with both radiator fans turning", () => {
+    const air = startSimplePC(built(["cpu2", "ram", "ram2", "storage", "cooler", "motherboard", "gpu", "psu"]));
+    expect(air.ok).toBe(false);
+    expect(air.rule).toBe("needsLiquidCooler");
+    // The engine itself would pass this build: the rule is the lab's, for this CPU only.
+    expect(air.startup.outcome).toBe("operational");
+    expect(air.state.power.pressed).toBe(false);
+    const liquid = startSimplePC(built(LIQUID_PARTS));
+    expect(liquid.ok).toBe(true);
+    expect(liquid.rule).toBeNull();
+    expect(liquid.startup.observable.spinning).toEqual(expect.arrayContaining(["cooling-13", "fan-9", "fan-10"]));
+    expect(simpleAssemblyComplete(liquid.state)).toBe(true);
+  });
+
+  it.each(["aioPump", "aioFan"])("fails without the liquid cooler's %s lead, then starts once it is connected", (key) => {
+    const failed = startSimplePC(built(LIQUID_PARTS, [key]));
+    expect(failed.ok).toBe(false);
+    expect(failed.rule).toBeNull();
+    const fixed = connectSimpleCable(failed.state, key as "aioPump");
+    expect(fixed.ok).toBe(true);
+    if (fixed.ok) expect(startSimplePC(fixed.state).ok).toBe(true);
+  });
+
+  it("also runs the i5 on the liquid cooler", () => {
+    expect(startSimplePC(built(["cpu", "ram", "ram2", "storage", "motherboard", "aio", "gpu", "psu"])).ok).toBe(true);
+  });
+
+  it("swaps parts: the cooler comes off before the CPU, and its leads are unplugged first", () => {
+    const state = built(["cpu2", "ram", "ram2", "storage", "cooler", "motherboard", "gpu", "psu"]);
+    expect(simpleSwapBlock(state, "cpu")).toBe("removeCoolerFirst");
+    expect(simpleSwapBlock(state, "aio")).toBe("unplugCoolerFirst");
+    expect(simpleRemoveBlock(state, "cooler")).toBe("unplugCoolerFirst");
+    expect(simpleRemoveBlock(state, "gpu")).toBe("notSwappable");
+    // From the i9 on air to the i9 on liquid, the way a learner does it: unplug, swap coolers, plug in.
+    let snapshot = snapshotOf(["cpu2", "ram", "ram2", "storage", "cooler", "motherboard", "gpu", "psu"], ALL_CABLES);
+    snapshot = withoutCable(snapshot, "cpuFan");
+    expect(simpleSwapBlock(simpleBuildFromSnapshot(snapshot), "aio")).toBeNull();
+    snapshot = withSwap(snapshot, "cooler", "aio");
+    snapshot = withCable(withCable(snapshot, "aioPump"), "aioFan");
+    expect(startSimplePC(simpleBuildFromSnapshot(snapshot)).ok).toBe(true);
+    // Back to the i5 on air, with the board in the case: leads out, cooler out, CPU swapped in its place, air cooler on.
+    snapshot = withoutCable(withoutCable(snapshot, "aioPump"), "aioFan");
+    snapshot = withoutPart(snapshot, "aio");
+    expect(simpleSwapBlock(simpleBuildFromSnapshot(snapshot), "cpu")).toBeNull();
+    snapshot = withSwap(snapshot, "cpu2", "cpu");
+    expect(snapshot.history[0]).toBe("part:cpu");
+    snapshot = withCable(withPart(snapshot, "cooler"), "cpuFan");
+    expect(parseSimpleSnapshot(JSON.parse(JSON.stringify(snapshot)))).toEqual(snapshot);
+    const back = simpleBuildFromSnapshot(snapshot);
+    expect(simpleAssemblyComplete(back)).toBe(true);
+    expect(back.parts.find((p) => p.instanceId === "fan-9")!.attachments[0]!.target.mountPointId).toBe("fan-front-1");
+    expect(startSimplePC(back).ok).toBe(true);
+    // Undo still takes steps back newest first through a swapped history.
+    let undo: SimpleSnapshot | null = snapshot;
+    while (undo && lastSimpleStep(undo)) { undo = undoSimpleStep(undo); expect(() => simpleBuildFromSnapshot(undo!)).not.toThrow(); }
+    // A running PC is never taken apart.
+    expect(simpleRemoveBlock(startSimplePC(back).state, "cooler")).toBe("turnOffFirst");
+  });
+
+  it("saves and restores either build, and refuses a saved 'running' i9 on air", () => {
+    const liquid = snapshotOf(LIQUID_PARTS, LIQUID_CABLES, true);
+    expect(parseSimpleSnapshot(JSON.parse(JSON.stringify(liquid)))).toEqual(liquid);
+    const swapped = withSwap(snapshotOf(["cpu", "ram"]), "cpu", "cpu2");
+    expect(parseSimpleSnapshot(JSON.parse(JSON.stringify(swapped)))).toEqual(swapped);
+    const airI9 = snapshotOf(["cpu2", "ram", "ram2", "storage", "cooler", "motherboard", "gpu", "psu"], ALL_CABLES, true);
+    expect(parseSimpleSnapshot(airI9)).toBeNull();
+    expect(parseSimpleSnapshot({ ...airI9, powered: false })).toEqual({ ...airI9, powered: false });
+    // Two CPUs or two coolers could never have been fitted together.
+    expect(parseSimpleSnapshot({ version: 3, placed: ["cpu", "cpu2"], connected: [], history: ["part:cpu", "part:cpu2"], powered: false })).toBeNull();
   });
 });

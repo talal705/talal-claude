@@ -13,17 +13,22 @@ import { askCompanionAi, companionAskRequest, fetchTutorStatus, type AiStatus } 
 import { buildContext, companionSay, intentOf, nextLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
 import { moveCamera, selectPart } from "./scene/scene-store";
 import {
-  connectSimpleCable, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, isRamKey, lastSimpleStep, parseSimpleSnapshot,
-  SIMPLE_CABLES, SIMPLE_PARTS, SIMPLE_SAVE_KEY, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot, simpleCableBlock, simpleCableConnected,
-  simplePartInstalled, simpleTarget, startSimplePC, undoSimpleStep, withCable, withoutCable, withPart,
-  type SimpleCableKey, type SimplePartKey, type SimpleSnapshot,
+  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, connectSimpleCable, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, isRamKey, lastSimpleStep,
+  parseSimpleSnapshot, SIMPLE_PART_LIST, SIMPLE_PARTS, SIMPLE_SAVE_KEY, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot,
+  simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
+  simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap,
+  type SimpleCableKey, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
 } from "./simple-model";
 import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-scene";
 import styles from "./simple-pc.module.css";
+import arLabs from "../../messages/ar/labs.json";
 
-const CABLE_IDS = SIMPLE_CABLES.map((c) => c.id);
-const partSpec = (key: SimplePartKey) => SIMPLE_PARTS.find((p) => p.key === key)!;
-const cableSpec = (key: SimpleCableKey) => SIMPLE_CABLES.find((c) => c.key === key)!;
+/** The fix for the liquid-cooling rule, in Arabic, shown on the English page as well. */
+const NEEDS_LIQUID_AR = arLabs.simplePc.needsLiquid;
+
+const CABLE_IDS = ALL_SIMPLE_CABLES.map((c) => c.id);
+const partSpec = (key: SimplePartKey) => ALL_SIMPLE_PARTS.find((p) => p.key === key)!;
+const cableSpec = (key: SimpleCableKey) => ALL_SIMPLE_CABLES.find((c) => c.key === key)!;
 // Computed once: where every part lies on the bench at the start, and the second stick beside the first.
 const BENCH = simpleBenchLayout(createSimpleBuild());
 
@@ -65,6 +70,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
   const [selection, setSelection] = useState<Selection>(null);
   const [tab, setTab] = useState<"parts" | "cables">("parts");
   const [verdict, setVerdict] = useState<"success" | "failure" | null>(null);
+  /** The lab rule behind the last failed start, if one was: shown with its fix. */
+  const [failedRule, setFailedRule] = useState<SimpleRule | null>(null);
   const [sceneVersion, setSceneVersion] = useState(0);
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [message, setMessage] = useState<CompanionMessage>({ id: 0, say: { lines: [{ key: "hello" }], mood: "wave" } });
@@ -77,8 +84,10 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
   const state = useMemo(() => simpleBuildFromSnapshot(saved), [saved]);
   const startup = useMemo(() => pc.evaluateStartup(state, pcCatalog), [state]);
   const targets = useMemo(() => simpleSceneTargets(state, selection), [state, selection]);
-  const progress = SIMPLE_PARTS.filter((p) => simplePartInstalled(state, p.key)).length;
-  const cableProgress = SIMPLE_CABLES.filter((c) => simpleCableConnected(state, c.key)).length;
+  const progress = simplePartsProgress(state);
+  /** The leads of this build: the liquid cooler's two replace the air cooler's one when it is fitted. */
+  const leads = useMemo(() => simpleCablesFor(state), [state]);
+  const cableProgress = leads.filter((c) => simpleCableConnected(state, c.key)).length;
   const complete = saved.powered && simpleAssemblyComplete(state);
 
   /** The robot speaks: a new bubble, from the build as it is after the action. */
@@ -99,7 +108,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
     if (restored) {
       setSaved(restored);
       setVerdict(restored.powered ? "success" : null);
-      if (restored.placed.length === SIMPLE_PARTS.length) setTab("cables");
+      if (simpleAllPartsIn(simpleBuildFromSnapshot(restored))) setTab("cables");
     }
     speak(companionSay(snapshot.history.length > 0 ? { type: "resume" } : { type: "start" }, simpleBuildFromSnapshot(snapshot), snapshot.powered, null));
     setWebgl(supportsWebgl());
@@ -157,14 +166,44 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
 
   function install(key: SimplePartKey) {
     if (saved.powered) return;
+    const rival = simpleSlotPart(state, slotOf(key));
+    if (rival && rival !== key) { swap(rival, key); return; }
     const step = installSimplePart(state, key);
     if (!step.ok) { react({ type: "select", selection: { kind: "part", key } }); return; }
     if (simplePartInstalled(state, key)) return;
     setSaved((previous) => withPart(previous, key));
     setSelection(null);
     setVerdict(null);
-    if (SIMPLE_PARTS.every((p) => simplePartInstalled(step.state, p.key))) setTab("cables");
+    if (simpleAllPartsIn(step.state)) setTab("cables");
     react({ type: "installed", key }, step.state, false, null);
+  }
+
+  /** Replaces the CPU or cooler that is in with its alternative. */
+  function swap(from: SimplePartKey, to: SimplePartKey) {
+    const blocked = simpleSwapBlock(state, to);
+    if (blocked) { react({ type: "removeBlocked", key: from, reason: blocked }); return; }
+    const next = withSwap(saved, from, to);
+    let after: ReturnType<typeof simpleBuildFromSnapshot>;
+    try { after = simpleBuildFromSnapshot(next); } catch { react({ type: "select", selection: { kind: "part", key: to } }); return; }
+    if (!simplePartInstalled(after, to)) return;
+    setSaved(next);
+    setSelection(null);
+    setVerdict(null);
+    react({ type: "swapped", from, key: to }, after, false, null);
+  }
+
+  /** Takes a cooler back out, so the other one can go in (or the CPU under it can be swapped). */
+  function remove(key: SimplePartKey) {
+    const blocked = simpleRemoveBlock(state, key);
+    if (blocked) { react({ type: "removeBlocked", key, reason: blocked }); return; }
+    if (!simplePartInstalled(state, key)) return;
+    const next = withoutPart(saved, key);
+    const after = simpleBuildFromSnapshot(next);
+    setSaved(next);
+    setSelection(null);
+    setVerdict(null);
+    setTab("parts");
+    react({ type: "removed", key }, after, false, null);
   }
 
   function connect(key: SimpleCableKey) {
@@ -195,11 +234,11 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
       return;
     }
     if (selection.kind === "part") react({ type: "wrongPlace", key: selection.key, place });
-    else react({ type: "wrongPort", key: selection.key, portOf: cableOfPort(place) });
+    else react({ type: "wrongPort", key: selection.key, portOf: cableOfPort(place, state) });
   }
 
   function onScenePart(instanceId: string) {
-    const part = SIMPLE_PARTS.find((p) => p.id === instanceId);
+    const part = ALL_SIMPLE_PARTS.find((p) => p.id === instanceId);
     if (part && !simplePartInstalled(state, part.key)) { choosePart(part.key); return; }
     // An installed part, the case or a case fan: not a place for what is in hand, and not something to pick up.
     if (selection?.kind === "part") react({ type: "wrongPlace", key: selection.key, place: instanceId });
@@ -208,7 +247,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
   }
 
   function onSceneCable(cableId: string) {
-    const cable = SIMPLE_CABLES.find((c) => c.id === cableId);
+    const cable = ALL_SIMPLE_CABLES.find((c) => c.id === cableId);
     if (cable) chooseCable(cable.key);
   }
 
@@ -247,15 +286,17 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
     }
     const result = startSimplePC(state);
     setVerdict(result.ok ? "success" : "failure");
+    setFailedRule(result.ok ? null : result.rule);
     setSelection(null);
     if (result.ok) {
       setSaved((previous) => ({ ...previous, powered: true }));
       react({ type: "powerOn" }, result.state, true, null);
       return;
     }
-    const missing = SIMPLE_CABLES.find((c) => c.essential && !simpleCableConnected(state, c.key))?.key ?? null;
-    if (progress === SIMPLE_PARTS.length) setTab("cables");
-    react({ type: "powerFail", missingCable: missing }, state, false, null);
+    const missing = leads.find((c) => c.essential && !simpleCableConnected(state, c.key))?.key ?? null;
+    if (result.rule) setTab("parts");
+    else if (progress === SIMPLE_PARTS.length) setTab("cables");
+    react({ type: "powerFail", missingCable: missing, rule: result.rule }, state, false, null);
   }
 
   function quick(intent: "next" | "help" | "explain") {
@@ -296,13 +337,21 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
   const partBlocked = selectedPart ? simpleBlock(state, selectedPart) : null;
   const cableDone = selectedCable ? simpleCableConnected(state, selectedCable) : false;
   const cableBlocked = selectedCable ? simpleCableBlock(state, selectedCable) : null;
-  const firstMissingCable = SIMPLE_CABLES.find((c) => c.essential && !simpleCableConnected(state, c.key));
-  const missingMessage = progress < SIMPLE_PARTS.length ? t("missing") : firstMissingCable ? t("missingCable", { cable: t(`cables.${firstMissingCable.key}.name`) }) : t("checkCables");
+  const firstMissingCable = leads.find((c) => c.essential && !simpleCableConnected(state, c.key));
+  // The lab rule wins when it is still broken; otherwise the first missing part or lead.
+  const rule = failedRule && simpleRuleBlock(state) ? failedRule : null;
+  const missingMessage = rule ? t("needsLiquid") : progress < SIMPLE_PARTS.length ? t("missing") : firstMissingCable ? t("missingCable", { cable: t(`cables.${firstMissingCable.key}.name`) }) : t("checkCables");
   const placeName = (key: SimplePartKey) => t(`companion.places.${simpleTarget(state, key).mountPointId}`);
   const summary = complete ? {
-    parts: SIMPLE_PARTS.map((p) => (isRamKey(p.key) ? `${t(`parts.${p.key}`)} · ${placeName(p.key)}` : t(`parts.${p.key}`))),
-    cables: SIMPLE_CABLES.map((c) => t(`cables.${c.key}.name`)),
+    parts: SIMPLE_PARTS.flatMap((p) => simpleSlotPart(state, p.key) ?? []).map((key) => (isRamKey(key) ? `${t(`parts.${key}`)} · ${placeName(key)}` : t(`parts.${key}`))),
+    cables: leads.map((c) => t(`cables.${c.key}.name`)),
   } : null;
+  const removable = selectedPart ? REMOVABLE.includes(selectedPart) : false;
+  const removeBlocked = selectedPart && partInstalled && removable ? simpleRemoveBlock(state, selectedPart) : null;
+  /** The part this one would replace: the other CPU or cooler, when that one is in. */
+  const rival = selectedPart && !partInstalled && SWAPPABLE.includes(selectedPart) ? simpleSlotPart(state, slotOf(selectedPart)) : null;
+  const swapBlocked = selectedPart && rival ? simpleSwapBlock(state, selectedPart) : null;
+  const blockHint = (reason: string) => t(reason === "turnOffFirst" ? "turnOffToSwap" : reason);
   const canUndo = Boolean(lastSimpleStep(saved));
 
   return (
@@ -359,17 +408,20 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
           <div className={styles.controls}>
             <div className={styles.tabs} role="group" aria-label={t("assemblySteps")}>
               <button type="button" aria-pressed={tab === "parts"} onClick={() => setTab("parts")}>{t("partsTab")} <span dir="ltr">{t("progressShort", { count: progress, total: SIMPLE_PARTS.length })}</span></button>
-              <button type="button" aria-pressed={tab === "cables"} onClick={() => setTab("cables")}>{t("cablesTab")} <span dir="ltr">{t("progressShort", { count: cableProgress, total: SIMPLE_CABLES.length })}</span></button>
+              <button type="button" aria-pressed={tab === "cables"} onClick={() => setTab("cables")}>{t("cablesTab")} <span dir="ltr">{t("progressShort", { count: cableProgress, total: leads.length })}</span></button>
             </div>
 
             <div hidden={tab !== "parts"}>
               <div ref={partsTarget} className={styles.parts} role="group" aria-label={t("partsLabel")}>
-                {SIMPLE_PARTS.map((part) => {
+                {SIMPLE_PART_LIST.map((key) => {
+                  const part = partSpec(key);
                   const done = simplePartInstalled(state, part.key);
                   const active = selectedPart === part.key;
-                  return <button key={part.key} type="button" className={styles.part} data-selected={active} data-installed={done} aria-pressed={active} onClick={() => choosePart(part.key)}>
+                  // An alternative whose slot the other part fills: still selectable, shown as the other choice.
+                  const other = !done && SWAPPABLE.includes(key) && simpleSlotPart(state, slotOf(key)) !== null;
+                  return <button key={part.key} type="button" className={styles.part} data-selected={active} data-installed={done} data-alternative={other || undefined} aria-pressed={active} onClick={() => choosePart(part.key)}>
                     <img src={`/assets/pc/thumbnails/${part.catalogId}.svg`} alt="" width={58} height={44} />
-                    <span>{t(`parts.${part.key}`)}</span>
+                    <span>{t(`parts.${part.key}`)}{SWAPPABLE.includes(key) && <small>{t(`partNotes.${key}`)}</small>}</span>
                     {done && <CheckIcon />}
                   </button>;
                 })}
@@ -378,17 +430,24 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
               <div className={styles.install}>
                 {selectedPart ? <>
                   <div className={styles.selection}><strong>{t(`parts.${selectedPart}`)}</strong><span>{partInstalled ? t("installed") : placeName(selectedPart)}</span></div>
-                  <button className={styles.installButton} type="button" onClick={() => install(selectedPart)} disabled={!ready || partInstalled || Boolean(partBlocked) || saved.powered}>{partInstalled ? t("installed") : t("install")}</button>
-                  {partBlocked && !partInstalled && <p className={styles.hint}>{t(partBlocked)}</p>}
+                  {partInstalled && removable
+                    ? <button className={styles.installButton} type="button" onClick={() => remove(selectedPart)} disabled={!ready || Boolean(removeBlocked)}>{t("remove")}</button>
+                    : rival
+                      ? <button className={styles.installButton} type="button" onClick={() => swap(rival, selectedPart)} disabled={!ready || Boolean(swapBlocked)}>{t("swap", { other: t(`parts.${rival}`) })}</button>
+                      : <button className={styles.installButton} type="button" onClick={() => install(selectedPart)} disabled={!ready || partInstalled || Boolean(partBlocked) || saved.powered}>{partInstalled ? t("installed") : t("install")}</button>}
+                  {partBlocked && !partInstalled && !rival && <p className={styles.hint}>{t(partBlocked)}</p>}
+                  {rival && <p className={styles.hint}>{swapBlocked ? blockHint(swapBlocked) : t("swapHint", { other: t(`parts.${rival}`) })}</p>}
+                  {partInstalled && SWAPPABLE.includes(selectedPart) && !removable && <p className={styles.hint}>{t("swapCpuHint")}</p>}
+                  {removeBlocked && removeBlocked !== "notSwappable" && <p className={styles.hint}>{blockHint(removeBlocked)}</p>}
                   <button className={styles.cancel} type="button" onClick={cancel}>{t("cancel")}</button>
                 </> : <p className={styles.hint}>{t("selectFirst")}</p>}
               </div>
             </div>
 
             <div ref={cablesTarget} hidden={tab !== "cables"}>
-              <p className={styles.cablesIntro}>{t("cablesIntro")}</p>
+              <p className={styles.cablesIntro}>{t(simplePartInstalled(state, "aio") ? "cablesIntroLiquid" : "cablesIntro")}</p>
               <div className={styles.cables} role="group" aria-label={t("cablesLabel")}>
-                {SIMPLE_CABLES.map((item) => {
+                {leads.map((item) => {
                   const done = simpleCableConnected(state, item.key);
                   const active = selectedCable === item.key;
                   return <button type="button" key={item.key} className={styles.cable} data-selected={active} data-connected={done} aria-pressed={active} onClick={() => chooseCable(item.key)}>
@@ -403,7 +462,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
                 <p>{t(`cables.${selectedCable}.route`)}</p>
                 <code dir="ltr">{t(`cables.${selectedCable}.connector`)}</code>
                 <button className={styles.installButton} type="button" onClick={() => cableDone ? unplug(selectedCable) : connect(selectedCable)} disabled={!ready || saved.powered || (!cableDone && Boolean(cableBlocked))}>{cableDone ? t("disconnect") : t("connect")}</button>
-                {cableBlocked && !cableDone && <p className={styles.hint}>{cableBlocked === "turnOffFirst" ? t("turnOffFirst") : t("fitCableParts", { parts: cableSpec(selectedCable).requires.map((key) => t(`parts.${key}`)).join(locale === "ar" ? "، " : ", ") })}</p>}
+                {cableBlocked && !cableDone && <p className={styles.hint}>{cableBlocked === "turnOffFirst" ? t("turnOffFirst") : t("fitCableParts", { parts: simpleCableMissingParts(state, selectedCable).map((key) => t(`parts.${key}`)).join(locale === "ar" ? "، " : ", ") })}</p>}
                 {saved.powered && cableDone && <p className={styles.hint}>{t("turnOffFirst")}</p>}
                 <button className={styles.cancel} type="button" onClick={cancel}>{t("cancel")}</button>
               </div>}
@@ -412,7 +471,11 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
 
             <div className={styles.power}>
               <div className={styles.result} data-result={verdict ?? "idle"} role="status" aria-live="polite">
-                {verdict === "success" ? <><CheckIcon /><strong>{t("success")}</strong></> : verdict === "failure" ? <><CrossIcon /><div><strong>{t("failure")}</strong><p>{missingMessage}</p></div></> : <span>{t("readyToTry")}</span>}
+                {verdict === "success" ? <><CheckIcon /><strong>{t("success")}</strong></> : verdict === "failure" ? <><CrossIcon /><div><strong>{t("failure")}</strong><p>{missingMessage}</p>
+                  {/* The fix for the liquid-cooling rule is also given in Arabic on the English page. */}
+                  {rule && locale !== "ar" && <p lang="ar" dir="rtl" className={styles.ruleArabic}>{NEEDS_LIQUID_AR}</p>}
+                  {rule && <p className={styles.ruleNote}>{t("ruleNote")}</p>}
+                </div></> : <span>{t("readyToTry")}</span>}
               </div>
               <button className={styles.powerButton} type="button" onClick={power} disabled={!ready}><span aria-hidden="true">⏻</span>{t(saved.powered ? "powerOff" : "power")}</button>
               <div className={styles.steps}>

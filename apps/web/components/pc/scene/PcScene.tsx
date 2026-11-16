@@ -24,6 +24,7 @@ import { fitDistance } from "./camera-fit";
 import { clickBox, fastenerMarkers, settingHotspots, type FastenerMarker, type Hotspot } from "./controls3d";
 import { BENCH_MAT_COLOR, BENCH_TOP_COLOR, FINISHES } from "./palette";
 import { useGeometry } from "./use-geometry";
+import { HOSE_ROUTES } from "./visual-details";
 import { avoidObstacles, cableStrands, connectorSize, smoothCableRoute, type Obstacle } from "./cable-visuals";
 import { applyDetail, boxRaycast, cylinderRaycast, detailedBox, detailedCylinder, stretchTubeUv, surfaceSet } from "./surface-details";
 
@@ -394,8 +395,11 @@ function Part({
   rtl,
   onSelectPart,
   animate = false,
+  hiddenSolids,
 }: {
   animate?: boolean;
+  /** Empty places of this part drawn nowhere: fan places covered by a fitted radiator, and that radiator's outline. */
+  hiddenSolids?: ReadonlySet<string>;
   part: InstalledPart;
   placed: PlacedPart;
   geometry: PartGeometry | undefined;
@@ -462,7 +466,7 @@ function Part({
     {geometry && <Hoses geometry={geometry} placed={placed} category={category} />}
     <FrameGroup frame={placed.frame} animate={animate} reducedMotion={reducedMotion} moveKey={part.instanceId} onClick={onClick}>
       {geometry ? (
-        geometry.solids.filter((solid) => drawable(solid) && !(solid.group && placed.groupFrames[solid.group])).map((solid) =>
+        geometry.solids.filter((solid) => drawable(solid) && !(solid.group && placed.groupFrames[solid.group]) && !hiddenSolids?.has(solid.id)).map((solid) =>
           PLACE_ROLES.has(solid.role) && solid.shape === "box" ? (
             <lineSegments
               key={solid.id}
@@ -523,6 +527,9 @@ function SelectionHalo({ centre, size, reducedMotion }: { centre: [number, numbe
 
 // ---------- Liquid cooler hoses ----------
 
+/** Black sleeved rubber, as on the Liquid Freezer III. */
+const HOSE_SLEEVE = new THREE.MeshStandardMaterial({ color: "#1c1f25", roughness: 0.82, metalness: 0.02 });
+
 /**
  * The two hoses of a liquid cooler, from the stubs on its pump block to the fittings on its
  * radiator, wherever each body is (mounted, or on the bench). Drawn only for parts that have both.
@@ -530,9 +537,27 @@ function SelectionHalo({ centre, size, reducedMotion }: { centre: [number, numbe
 function Hoses({ geometry, placed, category }: { geometry: PartGeometry; placed: PlacedPart; category: string }) {
   const stubs = geometry.solids.filter((solid) => solid.role === "tube");
   const fitting = geometry.solids.find((solid) => solid.id === "hose-fittings") ?? geometry.solids.find((solid) => solid.group === "radiator" && solid.role !== "fan");
+  const route = HOSE_ROUTES[geometry.catalogId];
   const tubes = useMemo(() => {
-    if (stubs.length === 0 || !fitting) return [];
     const frameOf = (group: string | undefined) => (group && placed.groupFrames[group]) || placed.frame;
+    if (route) {
+      // Fittings with a direction: each hose leaves its fitting straight, then bends to the other one,
+      // so it clears what lies between (memory, the case's top fans) instead of arching over it.
+      const at = (frame: Frame, local: Vec3) => new THREE.Vector3(...compose(frame, { at: local, quat: [0, 0, 0, 1] }).at);
+      const way = (frame: Frame, local: Vec3) => new THREE.Vector3(...rotate(frame.quat, local));
+      return route.block.flatMap((from, index) => {
+        const to = route.radiator[index];
+        if (!to) return [];
+        const blockFrame = frameOf("block");
+        const radiatorFrame = frameOf("radiator");
+        const a = at(blockFrame, from.at);
+        const b = at(radiatorFrame, to.at);
+        const reach = Math.min(48, Math.max(22, a.distanceTo(b) * 0.22));
+        const points = [a, a.clone().add(way(blockFrame, from.dir).multiplyScalar(reach * 0.75)), b.clone().add(way(radiatorFrame, to.dir).multiplyScalar(reach)), b];
+        return [new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points, false, "centripetal"), 64, route.radius, 14, false)];
+      });
+    }
+    if (stubs.length === 0 || !fitting) return [];
     return stubs.map((stub, index) => {
       const from = compose(frameOf(stub.group), { at: stub.at, quat: [0, 0, 0, 1] }).at;
       const fittingFrame = frameOf(fitting.group);
@@ -550,7 +575,7 @@ function Hoses({ geometry, placed, category }: { geometry: PartGeometry; placed:
   return (
     <>
       {tubes.map((tube, index) => (
-        <mesh key={index} geometry={tube} material={materialFor("tube", category)} raycast={noRaycast} />
+        <mesh key={index} geometry={tube} material={route ? HOSE_SLEEVE : materialFor("tube", category)} raycast={noRaycast} castShadow />
       ))}
     </>
   );
@@ -1674,6 +1699,23 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
     invalidate();
   }, [invalidate, placed, selectedId, startup]);
 
+  // A fitted radiator covers the fan places behind it (catalog `blocks`): their empty markers would show through it.
+  const coveredPlaces = useMemo(() => {
+    const result = new Map<string, Set<string>>();
+    for (const host of state.parts) {
+      const radiators = catalogIndex.byId.get(host.catalogId)?.mountPoints.filter((mount) => mount.kind === "radiator_mount") ?? [];
+      for (const mount of radiators) {
+        if (!state.parts.some((part) => part.attachments.some((a) => a.target.hostInstanceId === host.instanceId && a.target.mountPointId === mount.id))) continue;
+        const set = result.get(host.instanceId) ?? new Set<string>();
+        set.add(mount.id);
+        for (const id of mount.blocks ?? []) set.add(id);
+        // The fans moved aside for it fill their new places: those are not empty either.
+        for (const part of state.parts) for (const a of part.attachments) if (a.target.hostInstanceId === host.instanceId && a.target.mountPointId.startsWith("fan-")) set.add(a.target.mountPointId);
+        result.set(host.instanceId, set);
+      }
+    }
+    return result;
+  }, [state.parts]);
   const spinning = new Set(startup.observable.spinning);
   const lit = new Map(startup.observable.lighting.filter((item) => item.lit && item.color).map((item) => [item.instanceId, item.color!]));
 
@@ -1707,6 +1749,7 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
             rtl={rtl}
             onSelectPart={onSelectPart}
             animate={simple}
+            hiddenSolids={coveredPlaces.get(part.instanceId)}
           />
         ) : null;
       })}

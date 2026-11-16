@@ -10,6 +10,8 @@ const S = Math.SQRT1_2;
 const STAND_UP: Quat = [S, 0, 0, S];
 /** Quarter turn about -x: a child's +z points along the host's +y (a fan blowing upward). */
 const FACE_UP: Quat = [-S, 0, 0, S];
+/** A radiator on the front wall: its length (x) up, its width (y) across the case (z), its fan side (z) toward the front (x). */
+const RAD_UPRIGHT_FRONT: Quat = [0.5, 0.5, 0.5, 0.5];
 
 interface Extras {
   attach?: Record<string, Frame>;
@@ -117,6 +119,8 @@ export function caseGeometry(entry: CaseEntry, v: string): PartGeometry {
     list.forEach((m, i) => {
       if (!place) return;
       const p = place(i, list.length);
+      // A top fan hangs under the roof's filter (a 25 mm fan pushes up from here), not through the roof.
+      if (location === "top") p.at = [p.at[0], H - wall - 1 - 25, p.at[2]];
       const s = b.cylinder(m.id, "fan_mount", p.at, 60, 4, p.axis);
       s.label = "FAN";
       b.mount(m.id, s, p.at, p.quat, p.insert, 40, [0, 0, 1]);
@@ -131,8 +135,11 @@ export function caseGeometry(entry: CaseEntry, v: string): PartGeometry {
       const longest = Math.max(...rad.radiatorSizesMm);
       const centre: Vec3 = [(a[0] + z[0]) / 2, (a[1] + z[1]) / 2, (a[2] + z[2]) / 2];
       const size: Vec3 = location === "top" ? [Math.min(longest + 37, L - 80), 6, 120] : [6, location === "rear" ? 157 : Math.min(longest + 37, H - shroudH - 30), 120];
+      // A front radiator stands upright above the power-supply shroud (its long side vertical, its
+      // fans facing the front panel), so it never reaches into the shroud below it.
+      if (location === "front") centre[1] = feet + wall + shroudH + 4 + size[1] / 2;
       const s = b.box(rad.id, "radiator_mount", [centre[0] - size[0] / 2 + (location === "front" ? -8 : location === "rear" ? 8 : 0), centre[1] - size[1] / 2 + (location === "top" ? -8 : 0), centre[2] - size[2] / 2], size, "schematic", { label: `RAD ${longest}` });
-      b.mount(rad.id, s, s.at, place(0, n).quat, place(0, n).insert, 40, [0, 0, 1]);
+      b.mount(rad.id, s, s.at, location === "front" ? RAD_UPRIGHT_FRONT : place(0, n).quat, place(0, n).insert, 40, [0, 0, 1]);
     }
   }
   const bays = entry.mountPoints.filter((m) => m.kind === "drive_bay");

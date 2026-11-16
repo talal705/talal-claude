@@ -8,6 +8,9 @@ An English/Arabic learning website by Talal: build a PC in an interactive 3D sce
 - Connect motherboard ATX, CPU EPS, GPU PCIe, CPU fan and case power-button cables. Two case fan leads are optional for boot and control their fan motion.
 - Startup is checked by the simulation engine; missing required connections fail and can be corrected.
 - Refined original educational procedural models, centred camera, English/Arabic and local progress saving.
+- Two alternatives in the same lists: a second CPU (Intel Core i9-14900K) beside the Core i5-14600K, and a 280 mm all-in-one liquid cooler (ARCTIC Liquid Freezer III 280) beside the air cooler. One CPU and one cooler at a time; **Swap** replaces one with the other, **Take it out** removes a cooler.
+- The liquid cooler goes in after the board is in the case: its pump block on the CPU, its radiator upright in the case's front 280 mm position (Corsair lists 240/280/360 mm there). That position covers the front fan places, so the two supplied case fans move to the top as exhaust while it is in. Its pump lead goes to AIO_PUMP and its radiator fan lead to CPU_FAN.
+- Lab rule (educational, this CPU only): the Core i9-14900K starts only with the liquid cooler fitted and both of its leads connected. Otherwise Start shows the failure with a short fix in Arabic. It is not a real-world claim that every similar CPU needs liquid cooling.
 
 ## Run locally
 

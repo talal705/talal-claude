@@ -33,6 +33,12 @@ export const ARCHIVED_CATALOG_IDS: ReadonlySet<string> = new Set([
   "generic-monitor",
 ]);
 
+/**
+ * Entries offered only on the guided build page (owner decision 2026-11-16: a second CPU and a 280 mm
+ * liquid cooler as alternatives there). The detailed lab keeps its two options per category.
+ */
+export const GUIDED_ONLY_IDS: ReadonlySet<string> = new Set(["arctic-liquid-freezer-iii-280"]);
+
 export const pcCatalog: PCCatalog = {
   version: "2026.10.31-1",
   // Each data file starts every entry with "no asset"; the generated visuals are attached here.
@@ -57,10 +63,10 @@ export const SUPPLIED_PARTS: Readonly<Record<string, readonly { catalogId: strin
 const SUPPLIED_IDS = new Set(Object.values(SUPPLIED_PARTS).flatMap((list) => list.map((item) => item.catalogId)));
 
 /** Every entry the picker never lists: archived ones and the parts that only come fitted in a case. */
-export const NOT_OFFERED_IDS: ReadonlySet<string> = new Set([...ARCHIVED_CATALOG_IDS, ...SUPPLIED_IDS]);
+export const NOT_OFFERED_IDS: ReadonlySet<string> = new Set([...ARCHIVED_CATALOG_IDS, ...SUPPLIED_IDS, ...GUIDED_ONLY_IDS]);
 
 /** True when the lab offers the entry for adding to a build. */
-export const isOffered = (catalogId: string): boolean => !ARCHIVED_CATALOG_IDS.has(catalogId) && !SUPPLIED_IDS.has(catalogId) && pcCatalog.entries.some((e) => e.id === catalogId);
+export const isOffered = (catalogId: string): boolean => !ARCHIVED_CATALOG_IDS.has(catalogId) && !SUPPLIED_IDS.has(catalogId) && !GUIDED_ONLY_IDS.has(catalogId) && pcCatalog.entries.some((e) => e.id === catalogId);
 
 /** The entries learners can choose from, in catalog order. */
 export const offeredEntries: readonly CatalogEntry[] = pcCatalog.entries.filter((e) => isOffered(e.id));

@@ -4,8 +4,9 @@
 // when the server has one configured.
 import type { PCBuildState } from "@ytl/contracts";
 import {
-  isRamKey, RAM_SLOTS, SIMPLE_CABLES, SIMPLE_PARTS, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected,
-  simplePartInstalled, simplePrerequisites, simpleTarget, type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimplePartKey, type SimpleStep,
+  isRamKey, RAM_SLOTS, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
+  simpleCablesFor, simplePartInstalled, simplePrerequisites, simpleRuleBlock, REMOVABLE, simpleSlotFilled, simpleSlotPart, simpleTarget, slotOf,
+  type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,
 } from "./simple-model";
 
 export type Selection = { kind: "part"; key: SimplePartKey } | { kind: "cable"; key: SimpleCableKey } | null;
@@ -27,6 +28,7 @@ export type NextAction =
   | { kind: "part"; key: SimplePartKey }
   | { kind: "cable"; key: SimpleCableKey }
   | { kind: "power" }
+  | { kind: "swapCooler" }
   | { kind: "turnOff" }
   | { kind: "done" };
 
@@ -45,28 +47,42 @@ export type CompanionEvent =
   | { type: "undo"; step: SimpleStep }
   | { type: "nothingToUndo" }
   | { type: "restart" }
-  | { type: "powerFail"; missingCable: SimpleCableKey | null }
+  | { type: "powerFail"; missingCable: SimpleCableKey | null; rule?: SimpleRule | null }
+  | { type: "removed"; key: SimplePartKey }
+  | { type: "swapped"; from: SimplePartKey; key: SimplePartKey }
+  | { type: "removeBlocked"; key: SimplePartKey; reason: SimpleRemoveBlock }
   | { type: "powerOn" }
   | { type: "powerOff" }
   | { type: "ask"; intent: "next" | "help" | "explain" }
   | { type: "question"; text: string };
 
-/** The order a builder would follow; the learner may take another valid order. */
-const PART_ORDER: readonly SimplePartKey[] = ["cpu", "ram", "ram2", "storage", "cooler", "motherboard", "gpu", "psu"];
-const CABLE_ORDER: readonly SimpleCableKey[] = ["atx", "cpuPower", "gpuPower", "cpuFan", "powerSwitch", "caseFan1", "caseFan2"];
+/**
+ * The order a builder would follow; the learner may take another valid order. With the air cooler it
+ * goes on the board on the bench; with the Core i9 (or once the liquid cooler is chosen) the board
+ * goes into the case first and the liquid cooler follows, its radiator in the top of the case.
+ */
+function partOrder(state: PCBuildState): SimplePartKey[] {
+  const cpu = simpleSlotPart(state, "cpu") ?? "cpu";
+  const cooler = simpleSlotPart(state, "cooler") ?? (cpu === "cpu2" ? "aio" : "cooler");
+  return [cpu, "ram", "ram2", "storage", ...(cooler === "aio" ? ["motherboard", "aio"] as const : ["cooler", "motherboard"] as const), "gpu", "psu"];
+}
+const CABLE_ORDER: readonly SimpleCableKey[] = ["atx", "cpuPower", "gpuPower", "cpuFan", "aioPump", "aioFan", "powerSwitch", "caseFan1", "caseFan2"];
 
 export const partName = (key: SimplePartKey): { part: SimplePartKey } => ({ part: key });
 
 /** What the learner should do next, from the build alone. */
 export function nextAction(state: PCBuildState, powered: boolean): NextAction {
   if (powered) return simpleAssemblyComplete(state) ? { kind: "done" } : { kind: "turnOff" };
-  const part = PART_ORDER.find((key) => !simplePartInstalled(state, key) && !simpleBlock(state, key));
+  const order = partOrder(state);
+  const open = (key: SimplePartKey) => !simpleSlotFilled(state, slotOf(key));
+  const part = order.find((key) => open(key) && !simpleBlock(state, key));
   if (part) return { kind: "part", key: part };
-  const blockedPart = PART_ORDER.find((key) => !simplePartInstalled(state, key));
+  const blockedPart = order.find(open);
   if (blockedPart) return { kind: "part", key: blockedPart };
-  const cable = CABLE_ORDER.find((key) => !simpleCableConnected(state, key) && !simpleCableBlock(state, key));
+  const leads = new Set(simpleCablesFor(state).map((c) => c.key));
+  const cable = CABLE_ORDER.find((key) => leads.has(key) && !simpleCableConnected(state, key) && !simpleCableBlock(state, key));
   if (cable) return { kind: "cable", key: cable };
-  return { kind: "power" };
+  return simpleRuleBlock(state) ? { kind: "swapCooler" } : { kind: "power" };
 }
 
 const RAM_IN = (state: PCBuildState) => (["ram", "ram2"] as const).filter((key) => simplePartInstalled(state, key)).length;
@@ -79,14 +95,14 @@ export function nextLine(state: PCBuildState, powered: boolean): CompanionLine {
     return { key: `next.${next.key}` };
   }
   if (next.kind === "cable") {
-    const first = SIMPLE_CABLES.every((c) => !simpleCableConnected(state, c.key));
+    const first = simpleCablesFor(state).every((c) => !simpleCableConnected(state, c.key));
     return { key: first ? "next.firstCable" : "next.cable", values: { cable: { cable: next.key } } };
   }
   return { key: `next.${next.kind}` };
 }
 
 function pointFor(next: NextAction): CompanionSay["point"] {
-  return next.kind === "part" ? "scene" : next.kind === "cable" ? "cables" : next.kind === "power" || next.kind === "turnOff" ? "power" : undefined;
+  return next.kind === "part" ? "scene" : next.kind === "cable" ? "cables" : next.kind === "swapCooler" ? "parts" : next.kind === "power" || next.kind === "turnOff" ? "power" : undefined;
 }
 
 /** The place a selected part goes, for the bubble: a mount ID the page names (`places.*`). */
@@ -95,28 +111,31 @@ export function placeOf(state: PCBuildState, key: SimplePartKey): string {
 }
 
 function blockLine(state: PCBuildState, key: SimplePartKey, reason: SimpleBlock): CompanionLine {
+  if (reason === "socketTaken" || reason === "coolerTaken") {
+    const other = simpleSlotPart(state, slotOf(key));
+    return { key: `blocked.${reason}`, values: { part: partName(key), other: partName(other ?? key) } };
+  }
   if (reason === "prepareBoard") {
-    const missing = simplePrerequisites(key).filter((k) => !simplePartInstalled(state, k));
+    const missing = simplePrerequisites(key).filter((k) => !simpleSlotFilled(state, slotOf(k)));
     return { key: "blocked.prepareBoard", values: { parts: { parts: missing } } };
   }
   return { key: `blocked.${reason}`, values: { part: partName(key) } };
 }
 
 function cableBlockLine(key: SimpleCableKey, reason: SimpleCableBlock, state: PCBuildState): CompanionLine {
-  if (reason === "fitCableParts") {
-    const spec = SIMPLE_CABLES.find((c) => c.key === key)!;
-    return { key: "blocked.cableParts", values: { cable: { cable: key }, parts: { parts: spec.requires.filter((p) => !simplePartInstalled(state, p)) } } };
-  }
+  if (reason === "fitCableParts") return { key: "blocked.cableParts", values: { cable: { cable: key }, parts: { parts: simpleCableMissingParts(state, key) } } };
   return { key: reason === "turnOffFirst" ? "blocked.turnOff" : "blocked.cannotConnect" };
 }
 
 /** Lines that explain why the current (or selected) step matters. */
+const cableTopic = (key: SimpleCableKey) => (key.startsWith("caseFan") ? "caseFan" : key);
 function explainLines(state: PCBuildState, powered: boolean, selection: Selection): CompanionLine[] {
   if (selection?.kind === "part") return [{ key: `explain.${isRamKey(selection.key) ? "ram" : selection.key}` }];
-  if (selection?.kind === "cable") return [{ key: `explain.${selection.key.startsWith("caseFan") ? "caseFan" : selection.key}` }];
+  if (selection?.kind === "cable") return [{ key: `explain.${cableTopic(selection.key)}` }];
   const next = nextAction(state, powered);
   if (next.kind === "part") return [{ key: `explain.${isRamKey(next.key) ? "ram" : next.key}` }];
-  if (next.kind === "cable") return [{ key: `explain.${next.key.startsWith("caseFan") ? "caseFan" : next.key}` }];
+  if (next.kind === "cable") return [{ key: `explain.${cableTopic(next.key)}` }];
+  if (next.kind === "swapCooler") return [{ key: "explain.liquidRule" }];
   return [{ key: next.kind === "done" ? "explain.done" : "explain.power" }];
 }
 
@@ -160,10 +179,14 @@ export function topicOf(text: string): string | null {
     ["atx", /24[- ]?pin|\batx\b|motherboard power|طاقة اللوحة/],
     ["cpuPower", /\beps\b|8[- ]?pin cpu|cpu power|طاقة المعالج/],
     ["gpuPower", /pcie power|gpu power|graphics card power|طاقة كرت/],
+    ["aioPump", /\bpump\b|aio[_ ]pump|مضخة|المضخة/],
+    ["aioFan", /radiator fans?|مراوح الرادياتير/],
     ["cpuFan", /cpu[_ ]fan|cooler fan|مروحة المبرد|مروحة المبرّد/],
     ["powerSwitch", /power (button|switch)|pwr_?sw|f_panel|front panel|زر التشغيل|زر تشغيل/],
     ["caseFan", /case fan|cha[_ ]fan|مراوح الكيس|مروحة الكيس/],
     ["ram", /\bram\b|memory|dimm|\ba2\b|\bb2\b|dual channel|رام|الذاكرة|ذاكرة/],
+    ["liquidRule", /\bi9\b|14900|liquid.*(need|requir)|(need|requir).*liquid|يحتاج.*مائي|ليش.*مائي/],
+    ["aio", /liquid|\baio\b|radiator|water cool|مائي|رادياتير|الرادياتير/],
     ["cpu", /\bcpu\b|processor|\bsocket\b|المعالج|معالج/],
     ["cooler", /cooler|heatsink|المبرد|المبرّد|مبرد/],
     ["storage", /\bssd\b|m\.?2|storage|\bdrive\b|القرص|قرص|التخزين/],
@@ -186,7 +209,9 @@ export function companionSay(event: CompanionEvent, state: PCBuildState, powered
     case "select": {
       if (event.selection.kind === "part") {
         const key = event.selection.key;
-        if (simplePartInstalled(state, key)) return nextSay([{ key: "already", values: { part: partName(key) } }], "idle");
+        if (simplePartInstalled(state, key)) return REMOVABLE.includes(key)
+          ? { lines: [{ key: "alreadySwap", values: { part: partName(key) } }], mood: "idle", point: "parts" }
+          : nextSay([{ key: "already", values: { part: partName(key) } }], "idle");
         const blocked = simpleBlock(state, key);
         if (blocked) return { lines: [blockLine(state, key, blocked)], mood: "concerned" };
         const place = placeOf(state, key);
@@ -203,12 +228,13 @@ export function companionSay(event: CompanionEvent, state: PCBuildState, powered
       let line: CompanionLine;
       if (isRamKey(event.key)) line = { key: RAM_IN(state) === 2 ? "installed.ramBoth" : "installed.ramFirst" };
       else line = { key: `installed.${event.key}` };
-      const partsDone = SIMPLE_PARTS.every((p) => simplePartInstalled(state, p.key));
+      const partsDone = simpleAllPartsIn(state);
       return nextSay(partsDone ? [line, { key: "installed.allParts" }] : [line], "happy");
     }
     case "connected": {
-      const essentialsDone = SIMPLE_CABLES.filter((c) => c.essential).every((c) => simpleCableConnected(state, c.key));
-      const all = SIMPLE_CABLES.every((c) => simpleCableConnected(state, c.key));
+      const leads = simpleCablesFor(state);
+      const essentialsDone = leads.filter((c) => c.essential).every((c) => simpleCableConnected(state, c.key));
+      const all = leads.every((c) => simpleCableConnected(state, c.key));
       return nextSay([{ key: all ? "connected.all" : essentialsDone && !event.key.startsWith("caseFan") ? "connected.essentials" : "connected.one", values: { cable: { cable: event.key } } }], "happy");
     }
     case "unplugged":
@@ -239,14 +265,22 @@ export function companionSay(event: CompanionEvent, state: PCBuildState, powered
     case "restart":
       return nextSay([{ key: "restart" }], "wave");
     case "powerFail":
-      if (!SIMPLE_PARTS.every((p) => simplePartInstalled(state, p.key))) return nextSay([{ key: "power.partsMissing" }], "concerned");
+      if (!simpleAllPartsIn(state)) return nextSay([{ key: "power.partsMissing" }], "concerned");
+      if (event.rule === "needsLiquidCooler") return { lines: [{ key: "power.needsLiquid" }], mood: "concerned", point: "parts" };
       return {
         lines: event.missingCable ? [{ key: "power.cableMissing", values: { cable: { cable: event.missingCable } } }] : [{ key: "power.failed" }],
         mood: "concerned",
         point: "cables",
       };
+    case "removed":
+      return nextSay([{ key: "removed", values: { part: partName(event.key) } }], "idle");
+    case "swapped":
+      return nextSay([{ key: "swapped", values: { part: partName(event.key), other: partName(event.from) } }], "happy");
+    case "removeBlocked":
+      if (event.reason === "boardFirst") return { lines: [{ key: "blocked.boardFirst", values: { part: partName("aio") } }], mood: "concerned", point: "parts" };
+      return { lines: [{ key: `blocked.${event.reason}`, values: { part: partName(event.key) } }], mood: "concerned", point: event.reason === "turnOffFirst" ? "power" : event.reason === "unplugCoolerFirst" ? "cables" : "parts" };
     case "powerOn":
-      if (simpleAssemblyComplete(state)) return { lines: [{ key: "complete.title" }, { key: "complete.summary" }], mood: "celebrate" };
+      if (simpleAssemblyComplete(state)) return { lines: [{ key: "complete.title" }, { key: simplePartInstalled(state, "aio") ? "complete.summaryLiquid" : "complete.summary" }], mood: "celebrate" };
       return { lines: [{ key: "power.bootsFansMissing" }], mood: "happy", point: "power" };
     case "powerOff":
       return nextSay([{ key: "power.off" }], "idle");
@@ -264,13 +298,17 @@ export function companionSay(event: CompanionEvent, state: PCBuildState, powered
  * what is in hand and what comes next. Only facts from the engine; no names the page did not show.
  */
 export function buildContext(state: PCBuildState, powered: boolean, selection: Selection): string {
-  const fitted = SIMPLE_PARTS.filter((p) => simplePartInstalled(state, p.key)).map((p) => (isRamKey(p.key) ? `${p.key} (${simpleTarget(state, p.key).mountPointId})` : p.key));
-  const missing = SIMPLE_PARTS.filter((p) => !simplePartInstalled(state, p.key)).map((p) => p.key);
-  const connected = SIMPLE_CABLES.filter((c) => simpleCableConnected(state, c.key)).map((c) => c.key);
-  const loose = SIMPLE_CABLES.filter((c) => !simpleCableConnected(state, c.key)).map((c) => c.key);
+  const filled = SIMPLE_PARTS.flatMap((p) => simpleSlotPart(state, p.key) ?? []);
+  const fitted = filled.map((key) => (isRamKey(key) ? `${key} (${simpleTarget(state, key).mountPointId})` : key));
+  const missing = SIMPLE_PARTS.filter((p) => !simpleSlotFilled(state, p.key)).map((p) => p.key);
+  const leads = simpleCablesFor(state);
+  const connected = leads.filter((c) => simpleCableConnected(state, c.key)).map((c) => c.key);
+  const loose = leads.filter((c) => !simpleCableConnected(state, c.key)).map((c) => c.key);
   const next = nextAction(state, powered);
   return [
-    "PC: ASUS TUF GAMING Z790-PLUS WIFI motherboard, Intel Core i5-14600K, 2 x Corsair Vengeance DDR5 (slots A2 and B2), Samsung 990 PRO M.2, Arctic Freezer 36, ASUS Dual RTX 4060, Corsair CX550, Corsair 4000D case.",
+    "PC: ASUS TUF GAMING Z790-PLUS WIFI motherboard, 2 x Corsair Vengeance DDR5 (slots A2 and B2), Samsung 990 PRO M.2, ASUS Dual RTX 4060, Corsair CX550, Corsair 4000D case.",
+    "CPU: one of Intel Core i5-14600K (key cpu) or Intel Core i9-14900K (key cpu2). Cooler: one of ARCTIC Freezer 36 air cooler (key cooler, lead cpuFan to CPU_FAN) or ARCTIC Liquid Freezer III 280 AIO (key aio: block on the CPU, radiator in the case's top 280 mm position, leads aioPump to AIO_PUMP and aioFan to CPU_FAN).",
+    "Lab rule (educational, for this simulation only): the Core i9-14900K starts only with the 280 mm liquid cooler fitted and connected. It is not a general real-world rule.",
     `Fitted: ${fitted.join(", ") || "nothing"}. Not fitted: ${missing.join(", ") || "none"}.`,
     `Cables connected: ${connected.join(", ") || "none"}. Not connected: ${loose.join(", ") || "none"}.`,
     `Powered on: ${powered ? "yes" : "no"}. In hand: ${selection ? `${selection.kind} ${selection.key}` : "nothing"}.`,

@@ -1,4 +1,4 @@
-import type { PartGeometry, Solid, Vec3 } from "./geometry";
+import type { PartGeometry, Quat, Solid, Vec3 } from "./geometry";
 
 const box = (id: string, at: Vec3, size: Vec3, finish = "black_metal"): Solid => ({ id: `detail-${id}`, shape: "box", at, size, finish, role: "detail", basis: "schematic" });
 const ring = (id: string, at: Vec3, radius: number, axis: "x" | "y" | "z", finish = "black_metal"): Solid => ({ id: `detail-${id}`, shape: "ring", at, radius, height: 1, axis, finish, role: "detail", basis: "schematic" });
@@ -71,7 +71,9 @@ export function withVisualDetails(source: PartGeometry): PartGeometry {
       for (let i = 0; i < pins; i++) extra.push(box(`pin-${port.solid}-${i}`, [x + (i - (pins - 1) / 2) * Math.min(2, port.size[0] / pins), y + 0.3, z], [0.6, 0.6, 1.8], "gold"));
     }
   }
-  if (source.catalogId === "intel-core-i5-14600k") {
+  if (source.catalogId === "arctic-liquid-freezer-iii-280") liquidCooler280(solids, extra);
+  // The i9-14900K shares the i5's LGA1700 package and lid, so it gets the same lid markings.
+  if (source.catalogId === "intel-core-i5-14600k" || source.catalogId === "intel-core-i9-14900k") {
     extra.push(box("cpu-lid-mark", [w / 2, h - 0.01, d / 2], [14, 0.02, 8], "brushed_mark"));
     for (let i = 0; i < 4; i++) extra.push(box(`cpu-mark-line-${i}`, [w / 2 - 1, h, d / 2 - 2.7 + i * 1.6], [9 - i, 0.02, 0.3], "nickel"));
   }
@@ -86,4 +88,101 @@ export function withVisualDetails(source: PartGeometry): PartGeometry {
     }
   }
   return extra.length ? { ...source, solids: [...solids, ...extra] } : source;
+}
+
+// ---------- ARCTIC Liquid Freezer III 280 ----------
+//
+// The generator draws every AIO from its catalog size (here 317 x 138 x 38 mm, two 140 mm fans). This
+// adds what makes it read as one: real 25 mm fan frames with an opening, corner screws and motor
+// struts; the flat coolant tubes running through the fins; end tanks with a fill port; and a square
+// pump block with an offset cap and two hose fittings, matched by two fittings on the radiator's
+// end tank. Every added solid moves with its own body (`group`), so nothing is left on the bench.
+// Coordinates are the part's own frame as generated: radiator x 0..317, y 0..138, z 0..63 (fans on +z);
+// the block's cold plate centred at x 375, z 48, on y 0.
+
+const RL = 317;
+const RW = 138;
+const RT = 38;
+const FAN_T = 25;
+/** Where each hose meets its body, and the way it leaves (in the part's frame): block first, radiator second. */
+export const HOSE_ROUTES: Record<string, { block: { at: Vec3; dir: Vec3 }[]; radiator: { at: Vec3; dir: Vec3 }[]; radius: number }> = {
+  "arctic-liquid-freezer-iii-280": {
+    block: [{ at: [397, 46, 37], dir: [0, 1, 0] }, { at: [397, 46, 59], dir: [0, 1, 0] }],
+    // Both on the end tank's back, side by side across the radiator, so the two hoses run beside each other.
+    radiator: [{ at: [303, RW / 2 - 13, -10], dir: [0, 0, -1] }, { at: [303, RW / 2 + 13, -10], dir: [0, 0, -1] }],
+    radius: 6.2,
+  },
+};
+
+const turnZ = (deg: number): Quat => [0, 0, Math.sin((deg * Math.PI) / 360), Math.cos((deg * Math.PI) / 360)];
+
+function liquidCooler280(solids: Solid[], extra: Solid[]) {
+  const rad = (s: Solid): Solid => ({ ...s, group: "radiator" });
+  const blk = (s: Solid): Solid => ({ ...s, group: "block" });
+  // Radiator core: denser fins, and the flat tubes the coolant runs through.
+  const core = solids.find((solid) => solid.id === "radiator-core");
+  if (core) core.count = 150;
+  for (let k = 0; k < 12; k++) extra.push(rad(box(`rad-tube-${k}`, [14 + 277 / 2, 2 + 11 * (k + 0.5), RT / 2], [277, 1.4, RT - 1], "black_metal")));
+  for (const y of [1, RW - 1]) extra.push(rad(box(`rad-rail-${y}`, [14 + 277 / 2, y, RT / 2], [277, 2, RT], "black_metal")));
+  // End tanks: a fill port on the far one; the near one carries the two hose fittings.
+  extra.push(rad({ ...screw("rad-fill-port", [-0.6, RW / 2, RT / 2], "x"), radius: 5 }));
+  const cap = solids.find((solid) => solid.id === "hose-fittings");
+  if (cap) { cap.at = [311, RW / 2, RT / 2]; cap.size = [12, RW - 12, RT]; cap.finish = "black_plastic"; }
+  for (const route of HOSE_ROUTES["arctic-liquid-freezer-iii-280"]!.radiator) {
+    const [x, y] = route.at;
+    extra.push(rad({ id: `detail-rad-fitting-${y}`, shape: "cylinder", at: [x, y, -4.5], radius: 7, height: 11, axis: "z", finish: "black_metal", role: "detail", basis: "schematic" }));
+    extra.push(rad(ring(`rad-fitting-collar-${y}`, [x, y, -1.5], 7.4, "z", "nickel")));
+  }
+  // Fans: the generator's plate behind each rotor becomes a real 25 mm frame with a round opening.
+  for (const frame of solids.filter((solid) => solid.id.startsWith("fan-frame-") && solid.size)) {
+    const [cx, cy] = frame.at;
+    const half = frame.size![0] / 2;
+    const z = RT + FAN_T / 2;
+    frame.at = [cx - half + 3.5, cy, z];
+    frame.size = [7, half * 2, FAN_T];
+    frame.finish = "black_plastic";
+    extra.push(rad(box(`${frame.id}-right`, [cx + half - 3.5, cy, z], [7, half * 2, FAN_T], "black_plastic")));
+    for (const side of [-1, 1]) extra.push(rad(box(`${frame.id}-edge-${side}`, [cx, cy + side * (half - 3.5), z], [half * 2 - 14, 7, FAN_T], "black_plastic")));
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+      const at: Vec3 = [cx + sx * (half - 9), cy + sy * (half - 9), z];
+      extra.push(rad(box(`${frame.id}-corner-${sx}-${sy}`, at, [16, 16, FAN_T], "black_plastic")));
+      extra.push(rad(screw(`${frame.id}-screw-${sx}-${sy}`, [at[0] + sx * 1.5, at[1] + sy * 1.5, RT + FAN_T + 0.6], "z")));
+    }
+    // The round duct of the frame, at both faces, and the motor mount with three struts on the radiator side.
+    for (const face of [RT + 1.2, RT + FAN_T - 1.2]) extra.push(rad(ring(`${frame.id}-duct-${face}`, [cx, cy, face], half - 3, "z", "grey_plastic")));
+    extra.push(rad({ id: `detail-${frame.id}-motor`, shape: "cylinder", at: [cx, cy, RT + 2.5], radius: 20, height: 3, axis: "z", finish: "black_plastic", role: "detail", basis: "schematic" }));
+    for (const deg of [90, 210, 330]) {
+      const a = (deg * Math.PI) / 180;
+      const len = half - 22;
+      extra.push(rad({ ...box(`${frame.id}-strut-${deg}`, [cx + Math.cos(a) * (20 + len / 2), cy + Math.sin(a) * (20 + len / 2), RT + 2.5], [len, 3.2, 3]), rotation: turnZ(deg) }));
+    }
+  }
+  // Pump block: a square housing with rounded edges, an offset round cap and the two hose fittings.
+  const pump = solids.find((solid) => solid.id === "pump-block");
+  if (pump) { pump.shape = "box"; pump.at = [375, 20, 48]; pump.size = [64, 32, 64]; delete pump.radius; delete pump.height; delete pump.axis; pump.finish = "black_plastic"; }
+  const top = solids.find((solid) => solid.id === "pump-cap");
+  if (top) { top.at = [369, 38.5, 48]; top.radius = 21; top.height = 5; top.finish = "black_metal"; }
+  extra.push(blk(ring("pump-cap-rim", [369, 41.1, 48], 21.4, "y", "nickel")));
+  extra.push(blk({ id: "detail-pump-cap-disc", shape: "cylinder", at: [369, 41.2, 48], radius: 13, height: 0.4, axis: "y", finish: "brushed_mark", role: "detail", basis: "schematic" }));
+  for (let i = 0; i < 4; i++) extra.push(blk(box(`pump-cap-line-${i}`, [369 - 4 + i * 2.6, 41.45, 48], [1, 0.1, 9 - Math.abs(i - 1.5) * 2], "nickel")));
+  const routes = HOSE_ROUTES["arctic-liquid-freezer-iii-280"]!.block;
+  solids.filter((solid) => solid.role === "tube").forEach((stub, i) => {
+    const route = routes[i];
+    if (!route) return;
+    stub.at = [route.at[0], route.at[1] - 5, route.at[2]];
+    stub.axis = "y";
+    stub.radius = 6.6;
+    stub.height = 10;
+    stub.finish = "black_metal";
+    extra.push(blk(ring(`pump-fitting-collar-${i}`, [route.at[0], route.at[1] - 1.5, route.at[2]], 7, "y", "nickel")));
+    extra.push(blk({ id: `detail-pump-fitting-base-${i}`, shape: "cylinder", at: [route.at[0], 36.8, route.at[2]], radius: 8.5, height: 1.6, axis: "y", finish: "black_metal", role: "detail", basis: "schematic" }));
+  });
+  // Mounting bracket: a cross of two bars over the cold plate, with a thumb screw at each end.
+  extra.push(blk(box("bracket-bar-z", [375, 5.5, 48], [12, 3, 56], "black_metal")));
+  for (const [x, z] of [[343, 48], [407, 48], [375, 23], [375, 73]] as [number, number][]) {
+    extra.push(blk({ id: `detail-thumb-screw-${x}-${z}`, shape: "cylinder", at: [x, 9, z], radius: 3.6, height: 6, axis: "y", finish: "nickel", role: "detail", basis: "schematic" }));
+  }
+  // Small marks on the housing's sides: the seam of the lid and a short vent slot row.
+  for (const side of [-1, 1]) extra.push(blk(box(`pump-seam-${side}`, [375, 30.5, 48 + side * 32.05], [60, 0.8, 0.2], "grey_plastic")));
+  for (let i = 0; i < 5; i++) extra.push(blk(box(`pump-vent-${i}`, [343 - 0.05, 14 + i * 3.4, 48], [0.2, 1.6, 34], "silicon")));
 }

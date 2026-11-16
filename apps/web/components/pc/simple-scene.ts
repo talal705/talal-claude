@@ -3,16 +3,20 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { catalogIndex } from "./catalog";
 import type { Selection } from "./companion";
-import { SIMPLE_CABLES, SIMPLE_PARTS, simpleBlock, simpleCableBlock, simpleCableConnected, simplePartInstalled, simpleTarget } from "./simple-model";
+import { ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCablesFor, simplePartInstalled, simpleRadiatorTarget, simpleTarget } from "./simple-model";
 
 /** The second stick lies beside the first; every other part keeps the place it always had. */
 export const SECOND_RAM_ID = "ram-11";
 const FIRST_RAM_ID = "ram-4";
+/** The second CPU lies beside the first, like the second RAM stick; the liquid cooler takes the next free bench place. */
+export const SECOND_CPU_ID = "cpu-12";
+const FIRST_CPU_ID = "cpu-3";
+const BESIDE: Record<string, string> = { [SECOND_RAM_ID]: FIRST_RAM_ID, [SECOND_CPU_ID]: FIRST_CPU_ID };
 
 export function simpleBenchLayout(initial: PCBuildState): { benchOrder: string[]; beside: Record<string, string> } {
   return {
-    benchOrder: initial.parts.filter((part) => part.attachments.length === 0 && part.instanceId !== SECOND_RAM_ID).map((part) => part.instanceId),
-    beside: { [SECOND_RAM_ID]: FIRST_RAM_ID },
+    benchOrder: initial.parts.filter((part) => part.attachments.length === 0 && !BESIDE[part.instanceId]).map((part) => part.instanceId),
+    beside: { ...BESIDE },
   };
 }
 
@@ -43,20 +47,23 @@ export function simpleSceneTargets(state: PCBuildState, selection: Selection): S
     const host = state.parts.find((part) => part.instanceId === target.hostInstanceId);
     if (!host) return [];
     const taken = new Set(state.parts.flatMap((part) => part.attachments.filter((a) => a.target.hostInstanceId === host.instanceId).map((a) => a.target.mountPointId)));
+    // A liquid cooler's radiator position in the case glows too: one tap fits block and radiator.
+    const radiator = simpleRadiatorTarget(selection.key);
     return [
       { id: `target:${target.mountPointId}`, kind: "mount", hostInstanceId: host.instanceId, placeId: target.mountPointId, role: "target" },
+      ...(radiator ? [{ id: `target:${radiator.mountPointId}`, kind: "mount", hostInstanceId: radiator.hostInstanceId, placeId: radiator.mountPointId, role: "target" } as SimpleSceneTarget] : []),
       ...siblingMounts(host.catalogId, target.mountPointId)
         .filter((id) => !taken.has(id))
         .map((id): SimpleSceneTarget => ({ id: `decoy:${id}`, kind: "mount", hostInstanceId: host.instanceId, placeId: id, role: "decoy" })),
     ];
   }
   if (simpleCableConnected(state, selection.key) || simpleCableBlock(state, selection.key)) return [];
-  const own = SIMPLE_CABLES.find((cable) => cable.key === selection.key)!;
-  const hostReady = (instanceId: string) => SIMPLE_PARTS.some((part) => part.id === instanceId && simplePartInstalled(state, part.key));
+  const own = ALL_SIMPLE_CABLES.find((cable) => cable.key === selection.key)!;
+  const hostReady = (instanceId: string) => ALL_SIMPLE_PARTS.some((part) => part.id === instanceId && simplePartInstalled(state, part.key));
   const free = (instanceId: string, portId: string) => !state.cables.some((cable) => Object.values(cable.ends).some((end) => end?.kind === "part" && end.instanceId === instanceId && end.portId === portId));
   // Other leads' free ports, and the look-alike headers next to this one (CPU_OPT beside CPU_FAN, EPS_2 beside EPS_1, …).
   const decoys = new Map<string, string>();
-  for (const cable of SIMPLE_CABLES) if (cable.key !== own.key && !simpleCableConnected(state, cable.key) && hostReady(cable.instanceId)) decoys.set(`${cable.instanceId}/${cable.portId}`, cable.portId);
+  for (const cable of simpleCablesFor(state)) if (cable.key !== own.key && !simpleCableConnected(state, cable.key) && hostReady(cable.instanceId)) decoys.set(`${cable.instanceId}/${cable.portId}`, cable.portId);
   const family = PORT_FAMILIES.find((prefixes) => prefixes.some((prefix) => own.portId.startsWith(prefix)));
   const host = state.parts.find((part) => part.instanceId === own.instanceId);
   if (family && host) {
@@ -74,4 +81,4 @@ export function simpleSceneTargets(state: PCBuildState, selection: Selection): S
 const PORT_FAMILIES: readonly (readonly string[])[] = [["cpu-fan", "cpu-opt", "aio-pump", "cha-fan-"], ["eps-"], ["panel-"]];
 
 /** The lead whose port this is, for "that port is for …". */
-export const cableOfPort = (portId: string) => SIMPLE_CABLES.find((cable) => cable.portId === portId)?.key ?? null;
+export const cableOfPort = (portId: string, state?: PCBuildState) => (state ? simpleCablesFor(state) : ALL_SIMPLE_CABLES).find((cable) => cable.portId === portId)?.key ?? null;

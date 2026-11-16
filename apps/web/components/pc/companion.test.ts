@@ -81,7 +81,8 @@ describe("the build companion", () => {
     const board = companionSay({ type: "select", selection: { kind: "part", key: "motherboard" } }, state, false, null);
     expectSpoken(board);
     expect(board.mood).toBe("concerned");
-    expect(board.lines[0]).toEqual({ key: "blocked.prepareBoard", values: { parts: { parts: ["cpu", "ram", "ram2", "storage", "cooler"] } } });
+    // The air cooler may also go on in the case now (the liquid cooler must), so the board waits for the CPU, RAM and storage only.
+    expect(board.lines[0]).toEqual({ key: "blocked.prepareBoard", values: { parts: { parts: ["cpu", "ram", "ram2", "storage"] } } });
     const cooler = companionSay({ type: "select", selection: { kind: "part", key: "cooler" } }, state, false, null);
     expect(cooler.lines[0].key).toBe("blocked.cpuFirst");
     const lead = companionSay({ type: "select", selection: { kind: "cable", key: "gpuPower" } }, state, false, null);
@@ -156,5 +157,65 @@ describe("the build companion", () => {
     expect(context).toContain("ram2 (dimm-a2)");
     expect(context).toContain("In hand: part cpu");
     expect(context).toContain("Next step: part cpu");
+  });
+
+  it("guides the Core i9 build: board into the case, then the liquid cooler, its two leads, and a spinning finish", () => {
+    let state = createSimpleBuild();
+    const say = (event: CompanionEvent, selection: Selection = null, powered = false) => {
+      const result = companionSay(event, state, powered, selection);
+      expectSpoken(result);
+      return result;
+    };
+    const fit = (key: SimplePartKey) => {
+      const step = installSimplePart(state, key);
+      if (!step.ok) throw new Error(step.reason);
+      state = step.state;
+      say({ type: "installed", key });
+    };
+    fit("cpu2");
+    for (const key of ["ram", "ram2", "storage", "motherboard", "aio", "gpu", "psu"] as const) {
+      expect(nextAction(state, false)).toEqual({ kind: "part", key });
+      fit(key);
+    }
+    const leads = ["atx", "cpuPower", "gpuPower", "aioPump", "aioFan", "powerSwitch", "caseFan1", "caseFan2"] as const;
+    for (const key of leads) {
+      expect(nextAction(state, false)).toEqual({ kind: "cable", key });
+      const step = connectSimpleCable(state, key);
+      if (!step.ok) throw new Error(step.reason);
+      state = step.state;
+      say({ type: "connected", key });
+    }
+    const started = startSimplePC(state);
+    expect(started.ok).toBe(true);
+    state = started.state;
+    expect(say({ type: "powerOn" }, null, true).lines.map((l) => l.key)).toEqual(["complete.title", "complete.summaryLiquid"]);
+  });
+
+  it("explains the liquid-cooling rule when the Core i9 is tried on the air cooler, and how to swap", () => {
+    let state = createSimpleBuild();
+    for (const key of ["cpu2", "ram", "ram2", "storage", "cooler", "motherboard", "gpu", "psu"] as const) {
+      const step = installSimplePart(state, key);
+      if (!step.ok) throw new Error(step.reason);
+      state = step.state;
+    }
+    for (const cable of SIMPLE_CABLES) {
+      const step = connectSimpleCable(state, cable.key);
+      if (step.ok) state = step.state;
+    }
+    const tried = startSimplePC(state);
+    expect(tried.rule).toBe("needsLiquidCooler");
+    const fail = companionSay({ type: "powerFail", missingCable: null, rule: tried.rule }, tried.state, false, null);
+    expectSpoken(fail);
+    expect(fail.lines[0]!.key).toBe("power.needsLiquid");
+    expect(nextAction(tried.state, false)).toEqual({ kind: "swapCooler" });
+    const picking = companionSay({ type: "select", selection: { kind: "part", key: "aio" } }, tried.state, false, { kind: "part", key: "aio" });
+    expectSpoken(picking);
+    expect(picking.lines[0]!.key).toBe("blocked.coolerTaken");
+    expectSpoken(companionSay({ type: "removeBlocked", key: "cooler", reason: "unplugCoolerFirst" }, tried.state, false, null));
+    expectSpoken(companionSay({ type: "swapped", from: "cooler", key: "aio" }, tried.state, false, null));
+    expectSpoken(companionSay({ type: "ask", intent: "explain" }, tried.state, false, null));
+    expect(topicOf("why does the i9 need liquid cooling?")).toBe("liquidRule");
+    expect(topicOf("وش فايدة المضخة")).toBe("aioPump");
+    expect(topicOf("what is the radiator for")).toBe("aio");
   });
 });

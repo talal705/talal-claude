@@ -30,6 +30,8 @@ const EDUCATIONAL = new Set<string>([
   "fractal-aspect-14-pwm-north",
   "arctic-freezer-36",
   "arctic-liquid-freezer-iii-240-argb",
+  // Same AIO generator as the 240 above, at 280 mm with two 140 mm fans.
+  "arctic-liquid-freezer-iii-280",
   "generic-low-profile-air-cooler",
   "corsair-4000d-airflow-black",
   "fractal-north-charcoal-black-mesh",
