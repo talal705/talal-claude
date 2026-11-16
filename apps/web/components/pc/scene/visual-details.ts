@@ -95,6 +95,7 @@ export function withVisualDetails(source: PartGeometry): PartGeometry {
       extra.push(box(`ram-badge-${z}`, [w / 2, 22, z], [23, 8, 0.05], "brushed_mark"));
     }
   }
+  refine(source, solids, extra);
   return extra.length ? { ...source, solids: [...solids, ...extra] } : source;
 }
 
@@ -195,4 +196,116 @@ function liquidCooler280(solids: Solid[], extra: Solid[]) {
   // Small marks on the housing's sides: the seam of the lid and a short vent slot row.
   for (const side of [-1, 1]) extra.push(blk(box(`pump-seam-${side}`, [375, 30.5, 48 + side * 32.05], [60, 0.8, 0.2], "grey_plastic")));
   for (let i = 0; i < 5; i++) extra.push(blk(box(`pump-vent-${i}`, [343 - 0.05, 14 + i * 3.4, 48], [0.2, 1.6, 34], "silicon")));
+}
+
+// ---------- Finer surface detail (visual only) ----------
+//
+// Small parts real hardware shows at a glance: mounting screws, surface-mount parts, audio capacitors,
+// heatsink grooves, vents, heat-pipe ends, fan clips. Each one sits on a surface of its part, inside the
+// part's catalog size, keeps the part's colours, and never covers a place where something is installed
+// or plugged in (slots, socket, cooler area, headers, ports): `clear()` checks that against the part's
+// own solids for those places.
+
+/** Solids that are places to install into or plug into: nothing decorative may cover them. */
+const PLACE_ROLE = /^(cpu_socket|dimm_slot|m2_slot|pcie_slot|cooler_keepout|port|io_shield|edge_connector)$/;
+type Box3 = { min: Vec3; max: Vec3 };
+const boxOf = (s: Solid): Box3 => {
+  const size = (s.size ?? (["x", "y", "z"] as const).map((a) => (a === (s.axis ?? "y") ? s.height ?? 1 : 2 * (s.radius ?? 1)))) as Vec3;
+  return { min: [s.at[0] - size[0] / 2, s.at[1] - size[1] / 2, s.at[2] - size[2] / 2], max: [s.at[0] + size[0] / 2, s.at[1] + size[1] / 2, s.at[2] + size[2] / 2] };
+};
+const apart = (a: Box3, b: Box3, gap: number) => [0, 2].some((k) => a.max[k] + gap <= b.min[k] || b.max[k] + gap <= a.min[k]);
+/** A deterministic sequence, so every load draws the same parts in the same places. */
+function sequence(seed: number) {
+  let state = seed >>> 0;
+  return () => { state = (state * 1664525 + 1013904223) >>> 0; return state / 4294967296; };
+}
+
+function refine(source: PartGeometry, solids: Solid[], extra: Solid[]) {
+  const [w, h, d] = source.bounds.size;
+  const places = solids.filter((solid) => PLACE_ROLE.test(solid.role)).map(boxOf);
+  /** Adds a detail only where it covers no place (seen from above, with a small margin). */
+  const clear = (detail: Solid, gap = 1.5) => { if (places.every((place) => apart(boxOf(detail), place, gap))) extra.push(detail); };
+  const id = source.catalogId;
+
+  if (id === "asus-tuf-gaming-z790-plus-wifi") {
+    // Mounting screws in the nine standoff holes: a pan head with a cross slot.
+    for (const hole of solids.filter((solid) => solid.id.startsWith("mount-hole-"))) {
+      const [x, , z] = hole.at;
+      clear({ id: `detail-board-screw-${hole.id}`, shape: "cylinder", at: [x, 2.2, z], radius: 3.4, height: 1.2, axis: "y", finish: "nickel", role: "detail", basis: "schematic" }, 0.5);
+      clear(box(`board-screw-slot-${hole.id}-a`, [x, 2.85, z], [4.2, 0.1, 0.7], "black_metal"), 0.5);
+      clear(box(`board-screw-slot-${hole.id}-b`, [x, 2.85, z], [0.7, 0.1, 4.2], "black_metal"), 0.5);
+    }
+    // Surface-mount resistors and capacitors scattered over the free board.
+    const random = sequence(7);
+    for (let i = 0; i < 90; i++) {
+      const at: Vec3 = [8 + random() * (w - 16), 1.9, 8 + random() * (d - 16)];
+      const long = random() > 0.5;
+      clear(box(`board-smd-${i}`, at, long ? [1.6, 0.55, 0.8] : [0.8, 0.55, 1.6], random() > 0.7 ? "nickel" : "silicon"), 2);
+    }
+    // Audio corner: capacitors beside the audio isolation line.
+    for (let i = 0; i < 6; i++) clear({ id: `detail-audio-cap-${i}`, shape: "cylinder", at: [14 + (i % 2) * 9, 4.6, 258 + Math.floor(i / 2) * 11], radius: 3.1, height: 6, axis: "y", finish: "gold", role: "detail", basis: "schematic" }, 1);
+    clear(box("audio-isolation-line", [36, 1.62, 262], [0.5, 0.06, 70], "gold"), 0.5);
+    // Grooves across the chipset heatsink, and fine ridges along the top of the VRM heatsinks.
+    const chipset = solids.find((solid) => solid.id === "chipset");
+    if (chipset?.size) for (let i = 0; i < 6; i++) extra.push(box(`chipset-groove-${i}`, [chipset.at[0], chipset.at[1] + chipset.size[1] / 2 + 0.03, chipset.at[2] - chipset.size[2] / 2 + 8 + i * ((chipset.size[2] - 16) / 5)], [chipset.size[0] - 6, 0.1, 1.1], "silicon"));
+    for (const sink of solids.filter((solid) => solid.id === "vrm-left" || solid.id === "vrm-top")) {
+      if (!sink.size) continue;
+      extra.push(box(`${sink.id}-cap`, [sink.at[0], sink.at[1] + sink.size[1] / 2 + 0.2, sink.at[2]], [sink.size[0] - 1, 0.4, sink.size[2] - 1], "brushed_mark"));
+    }
+  }
+
+  if (id === "corsair-4000d-airflow-black") {
+    // Vent slots in the power-supply shroud's top, thumbscrews on the rear, a grille behind the rear fan place.
+    const shroud = solids.find((solid) => solid.id === "psu-shroud");
+    if (shroud?.size) for (let i = 0; i < 14; i++) extra.push(box(`shroud-vent-${i}`, [shroud.at[0] - shroud.size[0] * 0.38 + i * 9, shroud.at[1] + shroud.size[1] / 2 + 0.05, shroud.at[2]], [4, 0.2, shroud.size[2] * 0.5], "black_plastic"));
+    for (const [y, z] of [[30, 20], [30, d - 20], [h - 30, 20], [h - 30, d - 20]] as [number, number][]) {
+      extra.push({ id: `detail-rear-thumbscrew-${y}-${z}`, shape: "cylinder", at: [0.8, y, z], radius: 4, height: 1.6, axis: "x", finish: "black_metal", role: "detail", basis: "schematic" });
+    }
+    const rear = source.mounts["fan-rear-1"];
+    if (rear) for (const r of [14, 28, 42, 54]) extra.push(ring(`rear-grille-${r}`, [1.2, rear.at[1], rear.at[2]], r, "x", "black_metal"));
+  }
+
+  if (id === "asus-dual-rtx4060-o8g") {
+    // Fan hub caps, the heat pipes' bent ends at both sides, and vent slots in the backplate.
+    for (const rotor of solids.filter((solid) => solid.shape === "rotor")) {
+      extra.push({ id: `detail-${rotor.id}-cap`, shape: "cylinder", at: [rotor.at[0], rotor.at[1], d - 0.2], radius: 13, height: 0.6, axis: "z", finish: "black_plastic", role: "detail", basis: "schematic" });
+      extra.push(ring(`${rotor.id}-cap-rim`, [rotor.at[0], rotor.at[1], d - 0.05], 13.2, "z", "grey_plastic"));
+    }
+    for (const pipe of solids.filter((solid) => solid.id.startsWith("heat-pipe-"))) {
+      for (const x of [5, w - 5]) extra.push({ id: `detail-${pipe.id}-end-${x}`, shape: "cylinder", at: [x, pipe.at[1], pipe.at[2] + 6], radius: 3, height: 12, axis: "z", finish: "nickel", role: "detail", basis: "schematic" });
+    }
+    for (let i = 0; i < 10; i++) extra.push(box(`gpu-backplate-vent-${i}`, [150 + i * 6.5, 72, -0.12], [3, 52, 0.2], "black_plastic"));
+  }
+
+  if (id === "corsair-cx550") {
+    // Rubber feet on the base, and a thin chamfer trim along the fan side's edges.
+    for (const [x, z] of [[12, 12], [w - 12, 12], [12, d - 12], [w - 12, d - 12]] as [number, number][]) extra.push({ id: `detail-psu-foot-${x}-${z}`, shape: "cylinder", at: [x, 0.6, z], radius: 5, height: 1.2, axis: "y", finish: "rubber", role: "detail", basis: "schematic" });
+    for (const z of [1, d - 1]) extra.push(box(`psu-top-trim-${z}`, [w / 2, h - 1, z], [w - 2, 2, 2], "grey_plastic"));
+    for (const x of [1, w - 1]) extra.push(box(`psu-top-trim-x-${x}`, [x, h - 1, d / 2], [2, 2, d - 4], "grey_plastic"));
+  }
+
+  if (id === "arctic-freezer-36") {
+    // The wire clips that hold each fan to the fin stack, and a logo plate on the top cover.
+    for (const frame of solids.filter((solid) => solid.id.startsWith("fan-frame-") && solid.size)) {
+      const inner = frame.at[0] < w / 2 ? frame.at[0] + 13 : frame.at[0] - 13;
+      for (const y of [44, h - 12]) extra.push(box(`${frame.id}-clip-${y}`, [inner, y, d / 2], [1.2, 1.2, d - 30], "nickel"));
+    }
+    extra.push(box("cooler-logo-plate", [w / 2, h - 0.05, d / 2], [30, 0.1, 10], "brushed_mark"));
+  }
+
+  if (id === "samsung-990-pro-1tb") {
+    // Passive parts beside the controller and the printed lines of the label.
+    for (let i = 0; i < 8; i++) extra.push(box(`ssd-passive-${i}`, [6 + (i % 4) * 2.2, 1.0, 4 + Math.floor(i / 4) * 14], [1.2, 0.4, 0.7], "nickel"));
+    for (let i = 0; i < 4; i++) extra.push(box(`ssd-label-line-${i}`, [42 + i * 0.5, 2.26, 8 + i * 2.2], [28 - i * 4, 0.02, 0.5], "silicon"));
+  }
+
+  if (id === "corsair-vengeance-rgb-ddr5-6000-32gb-kit") {
+    // The heat spreader's two halves meet at a seam along the top; the PCB shows between the clips.
+    extra.push(box("ram-spreader-seam", [w / 2, 35.2, 3.5], [w - 8, 0.4, 0.5], "silicon"));
+  }
+
+  if (id === "intel-core-i5-14600k" || id === "intel-core-i9-14900k") {
+    // The substrate's fine passive row along one long edge, outside the lid.
+    for (let i = 0; i < 10; i++) extra.push(box(`cpu-passive-${i}`, [6 + i * 3.6, 1.85, d - 2.8], [1.4, 0.3, 0.7], "nickel"));
+  }
 }

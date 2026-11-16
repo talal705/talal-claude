@@ -215,6 +215,9 @@ const drawable = (solid: Solid) => (solid.shape === "box" || solid.shape === "cy
 /** Empty places for other parts (a tray, a bay, a fan or radiator position): drawn as outlines, never as solid shapes. */
 const PLACE_ROLES = new Set(["tray", "bay", "fan_mount", "radiator_mount"]);
 const PLACE_EDGE = new THREE.LineDashedMaterial({ color: "#9a9aa6", dashSize: 0.08, gapSize: 0.06 });
+/** An empty fan place: two thin concentric rings (frame opening and hub), like the dashed outlines of other places. */
+const PLACE_RING = mergeGeometries([new THREE.TorusGeometry(1, 0.012, 6, 72), new THREE.TorusGeometry(0.3, 0.02, 6, 36)])!.rotateX(Math.PI / 2);
+const PLACE_RING_MATERIAL = new THREE.MeshBasicMaterial({ color: "#9a9aa6", transparent: true, opacity: 0.55 });
 
 // ---------- Parts ----------
 
@@ -313,7 +316,10 @@ function SolidView({ solid, category, lit, partId, override }: { solid: Solid; c
         castShadow={!material.transparent}
         receiveShadow
       />
-      <lineSegments geometry={box ? EDGES : CYLINDER_EDGES} material={EDGE} quaternion={box ? undefined : AXIS_TURN[solid.axis ?? "y"]} scale={dims} raycast={noRaycast} />
+      {/* Tiny details (screws, surface-mount parts, vent slots) get no outline: their lines would read as white noise. */}
+      {!(solid.role === "detail" && Math.min(...dims) < 1.2) && (
+        <lineSegments geometry={box ? EDGES : CYLINDER_EDGES} material={EDGE} quaternion={box ? undefined : AXIS_TURN[solid.axis ?? "y"]} scale={dims} raycast={noRaycast} />
+      )}
     </group>
   );
 }
@@ -472,7 +478,10 @@ function Part({
     <FrameGroup frame={placed.frame} animate={animate} reducedMotion={reducedMotion} moveKey={part.instanceId} onClick={onClick}>
       {geometry ? (
         geometry.solids.filter((solid) => drawable(solid) && !(solid.group && placed.groupFrames[solid.group]) && !hiddenSolids?.has(solid.id) && (solid.role !== "rgb" || rgb !== "off")).map((solid) =>
-          PLACE_ROLES.has(solid.role) && solid.shape === "box" ? (
+          PLACE_ROLES.has(solid.role) && solid.shape === "cylinder" ? (
+            // An empty fan place: a thin dashed-looking ring where the fan would sit, not a solid disc.
+            <mesh key={solid.id} geometry={PLACE_RING} material={PLACE_RING_MATERIAL} position={solid.at as [number, number, number]} quaternion={AXIS_TURN[solid.axis ?? "y"]} scale={solid.radius ?? 60} raycast={noRaycast} />
+          ) : PLACE_ROLES.has(solid.role) && solid.shape === "box" ? (
             <lineSegments
               key={solid.id}
               geometry={EDGES}
@@ -664,30 +673,33 @@ const BOOT = new THREE.MeshStandardMaterial({ color: "#2a2f37", roughness: 0.7, 
 const drawnRoutes = new Map<string, { line: Vec3[]; obstacles: readonly Obstacle[] }[]>();
 
 function bundleGeometry(route: Vec3[], kind: string, obstacles: readonly Obstacle[], record?: { line: Vec3[]; obstacles: readonly Obstacle[] }[]): THREE.BufferGeometry | null {
-  const { count, radius, pitch } = cableStrands(kind);
+  const { count, radius, pitch, rows } = cableStrands(kind);
   const start = new THREE.Vector3(...route[0]);
   const end = new THREE.Vector3(...route[route.length - 1]);
   const along = end.clone().sub(start);
   if (along.length() < 2) return null;
   // The centre line, sampled and bent out of the parts it would pass through; the plug ends stay put.
   const centre = new THREE.CatmullRomCurve3(route.map((at) => new THREE.Vector3(...at)), false, "centripetal").getPoints(40).map((p) => p.toArray() as Vec3);
-  const clear = avoidObstacles(centre, obstacles, (count * pitch) / 2 + radius + 2, 3);
+  const clear = avoidObstacles(centre, obstacles, Math.max(5, (count * pitch) / 2 + radius + 2), 3);
   record?.push({ line: clear, obstacles });
   // The strands lie side by side across the run, flat against the board like a real ribbon.
   let across = along.clone().cross(new THREE.Vector3(0, 0, 1));
   if (across.lengthSq() < 1e-6) across = new THREE.Vector3(1, 0, 0);
   across.normalize();
+  // A two-row plug (24-pin, 8-pin) keeps its second row stacked behind the first.
+  const behind = across.clone().cross(along).normalize();
   const tubes: THREE.BufferGeometry[] = [];
-  for (let strand = 0; strand < count; strand++) {
+  for (let row = 0; row < rows; row++) for (let strand = 0; strand < count; strand++) {
     const offset = (strand - (count - 1) / 2) * pitch;
+    const depth = (row - (rows - 1) / 2) * pitch * 0.92;
     // Strands converge into the plug at both ends and spread to their ribbon width between.
     const path = clear.map((at, i, all) => {
       const fromEnd = Math.min(i, all.length - 1 - i);
       const share = 0.35 + 0.65 * Math.min(1, fromEnd / 4);
-      return new THREE.Vector3(...at).addScaledVector(across, offset * share);
+      return new THREE.Vector3(...at).addScaledVector(across, offset * share).addScaledVector(behind, depth * share);
     });
     const curve = new THREE.CatmullRomCurve3(path, false, "centripetal");
-    tubes.push(stretchTubeUv(new THREE.TubeGeometry(curve, 64, radius, 10, false), curve.getLength(), radius));
+    tubes.push(stretchTubeUv(new THREE.TubeGeometry(curve, 64, radius, 8, false), curve.getLength(), radius));
   }
   const merged = mergeGeometries(tubes);
   tubes.forEach((tube) => tube.dispose());
@@ -868,6 +880,8 @@ function Cable({ cableId, kind, ends, fixedSource, orientations, anchors, obstac
           <mesh geometry={BOX} material={CONTACT} position={[0, -size[1] / 2 - 0.3, 0]} scale={[size[0] * 0.76, 0.8, size[2] * 0.76]} userData={{ looseEnd: !end.plugged }} />
           <mesh geometry={BOX} material={CONNECTOR} position={[size[0] / 2 + 0.7, 0, 0]} scale={[1.4, size[1] * 0.5, size[2] * 0.4]} userData={{ looseEnd: !end.plugged }} />
           <mesh geometry={BOX} material={CONNECTOR} position={[size[0] / 2 + 1.2, size[1] * 0.2, 0]} scale={[1, size[1] * 0.35, Math.min(6, size[2] * 0.5)]} raycast={noRaycast} />
+          {/* One wire cavity per pin on the back of the housing, in the plug's real rows. */}
+          <mesh geometry={pinGrid(kind)} material={PIN_FACE} position={[0, size[1] / 2 + 0.06, 0]} raycast={noRaycast} />
           <mesh geometry={BOOT_GEOMETRY} material={BOOT} position={[0, size[1] / 2 + 2.6, 0]} scale={[Math.min(bootRadius, size[0] / 2), 5.2, Math.min(bootRadius * 0.6 + 1, size[2] / 2)]} raycast={noRaycast} castShadow />
           {!end.plugged && <mesh geometry={BOX} material={PICK} scale={size.map((s) => Math.max(22, s + 8)) as [number, number, number]} userData={{ cableEnd: `${cableId}/${endId}`, looseEnd: true }} />}
         </group>
@@ -882,6 +896,29 @@ const EMPTY_GEOMETRY = new THREE.BufferGeometry();
 /** A strain-relief boot: wider where it meets the housing, tapering toward the wires. */
 const BOOT_GEOMETRY = new THREE.CylinderGeometry(0.78, 1, 1, 24);
 const PIN_FACE = new THREE.MeshStandardMaterial({ color: "#0d0f13", roughness: 0.8, metalness: 0 });
+/** The grid of square wire cavities on a plug's back face, one per wire, built once per kind of lead. */
+const pinGrids = new Map<string, THREE.BufferGeometry>();
+function pinGrid(kind: string): THREE.BufferGeometry {
+  let grid = pinGrids.get(kind);
+  if (!grid) {
+    const { count, pitch, rows } = cableStrands(kind);
+    const [sx, , sz] = connectorSize(kind);
+    // The pins run along the housing's longer side; a cavity is a little smaller than its pitch.
+    const alongX = sx >= sz;
+    const step = Math.min(pitch, ((alongX ? sx : sz) - 2) / Math.max(count, 1));
+    const cell = step * 0.62;
+    const cells: THREE.BufferGeometry[] = [];
+    for (let row = 0; row < rows; row++) for (let i = 0; i < count; i++) {
+      const u = (i - (count - 1) / 2) * step;
+      const v = (row - (rows - 1) / 2) * Math.min(step, ((alongX ? sz : sx) - 2) / Math.max(rows, 1));
+      cells.push(new THREE.BoxGeometry(cell, 0.12, cell).translate(alongX ? u : v, 0, alongX ? v : u));
+    }
+    grid = cells.length ? mergeGeometries(cells) : new THREE.BufferGeometry();
+    cells.forEach((cell) => cell.dispose());
+    pinGrids.set(kind, grid);
+  }
+  return grid;
+}
 
 
 // ---------- Destinations of the picked-up part or cable end ----------
@@ -1698,10 +1735,12 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
       const own = geometry.get(part.catalogId);
       if (!own) { boxes.push(bounds(boxCorners(item.frame, [0, 0, 0], item.size))); continue; }
       for (const solid of own.solids) {
-        if (!drawable(solid) || PLACE_ROLES.has(solid.role)) continue;
+        if (!drawable(solid) || PLACE_ROLES.has(solid.role) || solid.role === "rgb") continue;
         const frame = (solid.group && item.groupFrames[solid.group]) || item.frame;
         const box = solid.shape === "box" || solid.shape === "fins" ? (solid.size as Vec3)
           : (["x", "y", "z"] as const).map((axis) => (axis === (solid.axis ?? "y") ? solid.height ?? 1 : 2 * (solid.radius ?? 1))) as unknown as Vec3;
+        // Surface details thinner than a wire (screws, surface-mount parts, slots) are not in a lead's way.
+        if (solid.role === "detail" && Math.min(...box) < 2) continue;
         const solidFrame = compose(frame, { at: solid.at, quat: (solid.rotation ?? [0, 0, 0, 1]) as Quat });
         boxes.push(bounds(boxCorners(solidFrame, scale(box, -0.5), box)));
       }

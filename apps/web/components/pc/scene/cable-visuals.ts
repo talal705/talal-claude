@@ -40,12 +40,14 @@ export function smoothCableRoute(from: Vec3, to: Vec3, endFacing?: Vec3): Vec3[]
  * real flat or round bundles are: the 24-pin is a wide ribbon, CPU and GPU power narrower, fan and
  * front-panel leads thin.
  */
-export function cableStrands(kind: string): { count: number; radius: number; pitch: number } {
-  if (kind === "atx_main") return { count: 6, radius: 1.9, pitch: 3.9 };
-  if (kind === "cpu_power" || kind === "gpu_power" || kind === "gpu_power_adapter") return { count: 4, radius: 1.9, pitch: 3.9 };
-  if (kind === "fan_lead" || kind === "pump_lead") return { count: 2, radius: 1.1, pitch: 2.3 };
-  if (kind === "front_panel_lead") return { count: 2, radius: 0.9, pitch: 1.9 };
-  return { count: 1, radius: 1.8, pitch: 0 };
+export function cableStrands(kind: string): { count: number; radius: number; pitch: number; rows: number } {
+  // As many sleeved wires as the plug has pins: 24-pin in two rows of 12, 8-pin EPS and PCIe in two rows of 4.
+  if (kind === "atx_main") return { count: 12, radius: 1.65, pitch: 3.55, rows: 2 };
+  if (kind === "cpu_power" || kind === "gpu_power" || kind === "gpu_power_adapter") return { count: 4, radius: 1.75, pitch: 3.8, rows: 2 };
+  // A 4-pin fan or pump lead: four thin wires side by side.
+  if (kind === "fan_lead" || kind === "pump_lead") return { count: 4, radius: 0.62, pitch: 1.3, rows: 1 };
+  if (kind === "front_panel_lead") return { count: 2, radius: 0.75, pitch: 1.6, rows: 1 };
+  return { count: 1, radius: 1.8, pitch: 0, rows: 1 };
 }
 
 export interface Obstacle { min: Vec3; max: Vec3 }

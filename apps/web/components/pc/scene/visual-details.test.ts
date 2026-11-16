@@ -61,3 +61,30 @@ describe("optional RGB diffusers", () => {
     expect(fan.solids.filter((s) => s.role !== "rgb")).toEqual(read("corsair-airguide-120-4000d").solids);
   });
 });
+
+describe("finer detail", () => {
+  it("adds board details only where nothing is installed or plugged in", () => {
+    const board = withVisualDetails(load("asus-tuf-gaming-z790-plus-wifi"));
+    const places = board.solids.filter((s) => /^(cpu_socket|dimm_slot|m2_slot|pcie_slot|cooler_keepout|port|io_shield|edge_connector)$/.test(s.role));
+    const footprint = (s: (typeof board.solids)[number]) => {
+      const size = s.size ?? [2 * (s.radius ?? 1), s.height ?? 1, 2 * (s.radius ?? 1)];
+      return { x: [s.at[0] - size[0] / 2, s.at[0] + size[0] / 2], z: [s.at[2] - size[2] / 2, s.at[2] + size[2] / 2] };
+    };
+    const added = board.solids.filter((s) => /^detail-(board-screw|board-smd|audio-|chipset-groove)/.test(s.id));
+    expect(added.length).toBeGreaterThan(60);
+    for (const detail of added) {
+      const a = footprint(detail);
+      for (const place of places) {
+        const b = footprint(place);
+        const overlaps = a.x[0] < b.x[1] && b.x[0] < a.x[1] && a.z[0] < b.z[1] && b.z[0] < a.z[1];
+        expect(overlaps, `${detail.id} over ${place.id}`).toBe(false);
+      }
+    }
+  });
+
+  it("draws every pin's wire: 24 for the motherboard plug, 8 for CPU and GPU power, 4 for a fan", async () => {
+    const { cableStrands } = await import("./cable-visuals");
+    const wires = (kind: string) => { const s = cableStrands(kind); return s.count * s.rows; };
+    expect([wires("atx_main"), wires("cpu_power"), wires("gpu_power"), wires("fan_lead"), wires("pump_lead")]).toEqual([24, 8, 8, 4, 4]);
+  });
+});
