@@ -229,7 +229,7 @@ export function companionSay(event: CompanionEvent, state: PCBuildState, powered
       if (isRamKey(event.key)) line = { key: RAM_IN(state) === 2 ? "installed.ramBoth" : "installed.ramFirst" };
       else line = { key: `installed.${event.key}` };
       const partsDone = simpleAllPartsIn(state);
-      return nextSay(partsDone ? [line, { key: "installed.allParts" }] : [line], "happy");
+      return nextSay([partsDone ? { key: "installed.allParts" } : line], "happy");
     }
     case "connected": {
       const leads = simpleCablesFor(state);
