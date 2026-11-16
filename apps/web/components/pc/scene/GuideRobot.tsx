@@ -233,8 +233,9 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
     node.rotation.y = animate ? dampAngle(node.rotation.y, yaw + (celebrate ? Math.sin(time * 2.4) * 0.25 : 0), 6, dt) : yaw;
     if (body.current) body.current.position.y = animate ? Math.sin(time * 1.8) * 1.8 + (celebrate ? Math.abs(Math.sin(time * 4)) * 6 : 0) : 0;
     if (head.current && target) {
-      const local = node.worldToLocal(target.clone());
-      const tilt = THREE.MathUtils.clamp(-Math.atan2(local.y - 40, Math.hypot(local.x, local.z)) * 0.6, -0.5, 0.5);
+      // Keep its face readable from above; the arm already indicates the installation target.
+      const viewer = node.worldToLocal(camera.position.clone());
+      const tilt = THREE.MathUtils.clamp(-Math.atan2(viewer.y - 40, Math.hypot(viewer.x, viewer.z)) * 0.7, -0.65, 0.35);
       head.current.rotation.x = animate ? THREE.MathUtils.damp(head.current.rotation.x, tilt, 8, dt) : tilt;
     }
     // The arm on the target's side points (so it never reaches across the body); the other rests, or both cheer.
