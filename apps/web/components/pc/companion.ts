@@ -5,7 +5,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import {
   isRamKey, RAM_SLOTS, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
-  simpleCablesFor, simplePartInstalled, simplePrerequisites, simpleRuleBlock, REMOVABLE, simpleSlotFilled, simpleSlotPart, simpleTarget, slotOf,
+  simpleCablesFor, simpleCableOrder, simplePartInstalled, simplePartOrder, simplePrerequisites, simpleRuleBlock, REMOVABLE, simpleSlotFilled, simpleSlotPart, simpleTarget, slotOf,
   type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,
 } from "./simple-model";
 
@@ -62,11 +62,8 @@ export type CompanionEvent =
  * goes into the case first and the liquid cooler follows, its radiator in the top of the case.
  */
 function partOrder(state: PCBuildState): SimplePartKey[] {
-  const cpu = simpleSlotPart(state, "cpu") ?? "cpu";
-  const cooler = simpleSlotPart(state, "cooler") ?? (cpu === "cpu2" ? "aio" : "cooler");
-  return [cpu, "ram", "ram2", "storage", ...(cooler === "aio" ? ["motherboard", "aio"] as const : ["cooler", "motherboard"] as const), "gpu", "psu"];
+  return simplePartOrder(state);
 }
-const CABLE_ORDER: readonly SimpleCableKey[] = ["atx", "cpuPower", "gpuPower", "cpuFan", "aioPump", "aioFan", "powerSwitch", "caseFan1", "caseFan2"];
 
 export const partName = (key: SimplePartKey): { part: SimplePartKey } => ({ part: key });
 
@@ -80,12 +77,12 @@ export function nextAction(state: PCBuildState, powered: boolean): NextAction {
   const blockedPart = order.find(open);
   if (blockedPart) return { kind: "part", key: blockedPart };
   const leads = new Set(simpleCablesFor(state).map((c) => c.key));
-  const cable = CABLE_ORDER.find((key) => leads.has(key) && !simpleCableConnected(state, key) && !simpleCableBlock(state, key));
+  const cable = simpleCableOrder().find((key) => leads.has(key) && !simpleCableConnected(state, key) && !simpleCableBlock(state, key));
   if (cable) return { kind: "cable", key: cable };
   return simpleRuleBlock(state) ? { kind: "swapCooler" } : { kind: "power" };
 }
 
-const RAM_IN = (state: PCBuildState) => (["ram", "ram2"] as const).filter((key) => simplePartInstalled(state, key)).length;
+const RAM_IN = (state: PCBuildState) => SIMPLE_PARTS.filter((p) => isRamKey(p.key) && simplePartInstalled(state, p.key)).length;
 
 /** The sentence that says what to do next. */
 export function nextLine(state: PCBuildState, powered: boolean): CompanionLine {

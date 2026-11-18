@@ -64,7 +64,7 @@ function forPart(state: PCBuildState, key: SimplePartKey): GuideFocus {
   if (rival && rival !== key) {
     const blocked = simpleSwapBlock(state, key);
     if (blocked === "unplugCoolerFirst") {
-      const lead = (["cpuFan", "aioPump", "aioFan"] as const).find((cable) => simpleCableConnected(state, cable));
+      const lead = ALL_SIMPLE_CABLES.find((cable) => cable.requires.some((k) => slotOf(k) === "cooler") && simpleCableConnected(state, cable.key))?.key;
       if (lead) return { targets: [portTarget(lead)], reason: "prerequisite", subject: { cable: lead } };
     }
     if (blocked === "removeCoolerFirst") {
