@@ -637,7 +637,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
 
             <div className={styles.power}>
               <div className={styles.result} data-result={verdict ?? "idle"} role="status" aria-live="polite">
-                {verdict === "success" ? <><CheckIcon /><strong>{t("success")}</strong></> : verdict === "failure" ? <><CrossIcon /><div><strong>{t("failure")}</strong><p>{missingMessage}</p>
+                {verdict === "success" ? <><CheckIcon /><strong>{t("success")}</strong></> : verdict === "failure" ? <><CrossIcon /><div><strong>{t("failure")}</strong><p>{mode === "fault" ? t("fault.readStages") : missingMessage}</p>
                   {/* The fix for the liquid-cooling rule is also given in Arabic on the English page. */}
                   {rule && locale !== "ar" && <p lang="ar" dir="rtl" className={styles.ruleArabic}>{planned ? arLabs.simplePc.planner.findingText.exercise_needs_liquid : NEEDS_LIQUID_AR}</p>}
                   {rule && <p className={styles.ruleNote}>{t("ruleNote")}</p>}

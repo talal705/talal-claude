@@ -1355,7 +1355,8 @@
         "frontPanelWrong": "the power-button lead on the reset pins",
         "biosTooOld": "a BIOS too old for this CPU"
       },
-      "none": "This build has no fault to practise."
+      "none": "This build has no fault to practise.",
+      "readStages": "Read what the PC did below, then find the cause."
     },
     "diag": {
       "title": "What the PC did",
