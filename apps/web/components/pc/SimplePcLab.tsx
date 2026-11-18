@@ -21,6 +21,9 @@ import {
 } from "./simple-model";
 import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-scene";
 import { guideFocus } from "./guide";
+import { availableFaults, flashBios, withFault, type FaultKind } from "./faults";
+import { PowerDiagnostics } from "./PowerDiagnostics";
+import type { PCBuildState, StartupResult } from "@ytl/contracts";
 import styles from "./simple-pc.module.css";
 import arLabs from "../../messages/ar/labs.json";
 
@@ -74,7 +77,7 @@ function supportsWebgl(): boolean {
 declare global {
   interface Window {
     /** Read-only view of the guided build for browser automation: what is fitted, selected and said. */
-    __ytlSimplePc?: () => { placed: string[]; connected: string[]; history: string[]; powered: boolean; selection: Selection; complete: boolean; mood: string; lines: string[]; guide: ReturnType<typeof guideFocus>; view: SimpleView };
+    __ytlSimplePc?: () => { placed: string[]; connected: string[]; history: string[]; powered: boolean; selection: Selection; complete: boolean; mood: string; lines: string[]; guide: ReturnType<typeof guideFocus>; view: SimpleView; mode?: string; fault?: string | null; faultSolved?: boolean };
   }
 }
 
@@ -132,10 +135,17 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const partsTarget = useTutorTarget<HTMLDivElement>("pc:ui:simple-parts", "ui");
   const asking = useRef<AbortController | null>(null);
 
-  const state = useMemo(() => simpleBuildFromSnapshot(saved), [saved]);
+  /** Guided shows every step; independent gives no step hints unasked; fault is a finished build with one mistake. */
+  const [mode, setMode] = useState<"guided" | "independent" | "fault">("guided");
+  const [fault, setFault] = useState<{ kind: FaultKind; state: PCBuildState; solved: boolean } | null>(null);
+  /** The last power-on attempt, for the stage-by-stage panel. */
+  const [attempt, setAttempt] = useState<{ state: PCBuildState; startup: StartupResult } | null>(null);
+  const built = useMemo(() => simpleBuildFromSnapshot(saved), [saved]);
+  const state = mode === "fault" && fault ? fault.state : built;
   const startup = useMemo(() => pc.evaluateStartup(state, pcCatalog), [state]);
   const targets = useMemo(() => simpleSceneTargets(state, selection), [state, selection]);
-  const guide = useMemo(() => (view.guide ? guideFocus(state, selection, saved.powered, guided) : null), [view.guide, state, selection, saved.powered, guided]);
+  const powered = mode === "fault" ? Boolean(fault?.solved) : saved.powered;
+  const guide = useMemo(() => (view.guide && mode === "guided" ? guideFocus(state, selection, powered, guided) : null), [view.guide, mode, state, selection, powered, guided]);
   const progress = simplePartsProgress(state);
   /** The leads of this build: the liquid cooler's two replace the air cooler's one when it is fitted. */
   const leads = useMemo(() => simpleCablesFor(state), [state]);
@@ -143,8 +153,13 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const complete = saved.powered && simpleAssemblyComplete(state);
 
   /** The robot speaks: a new bubble, from the build as it is after the action. */
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
   const speak = useCallback((say: CompanionSay, extra: Partial<CompanionMessage> = {}) => {
-    setMessage((previous) => ({ id: previous.id + 1, say, ...extra }));
+    // Independent and fault modes: the helper reacts, but does not hand out the next step unasked.
+    const quiet = modeRef.current !== "guided" && !extra.question && !say.lines.some((l) => l.key.startsWith("explain."));
+    const lines = quiet ? say.lines.filter((l) => !l.key.startsWith("next.")) : say.lines;
+    setMessage((previous) => ({ id: previous.id + 1, say: { ...say, lines: lines.length ? lines : say.lines.slice(0, 1) }, ...extra }));
   }, []);
   const react = useCallback((event: CompanionEvent, after = state, powered = saved.powered, inHand: Selection = selection) => {
     speak(companionSay(event, after, powered, inHand));
@@ -193,10 +208,10 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   useEffect(() => {
     window.__ytlSimplePc = () => ({
       placed: [...saved.placed], connected: [...saved.connected], history: [...saved.history], powered: saved.powered, selection, complete,
-      mood: message.say.mood, lines: message.say.lines.map((line) => line.key), guide, view,
+      mood: message.say.mood, lines: message.say.lines.map((line) => line.key), guide, view, mode, fault: fault?.kind ?? null, faultSolved: fault?.solved ?? false,
     });
     return () => { delete window.__ytlSimplePc; };
-  }, [saved, selection, complete, message, guide, view]);
+  }, [saved, selection, complete, message, guide, view, mode, fault]);
 
   // ---------- Learner actions ----------
 
@@ -228,6 +243,12 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   }
 
   function install(key: SimplePartKey) {
+    if (mode === "fault") {
+      if (!fault || fault.solved) return;
+      const step = installSimplePart(state, key);
+      if (step.ok) { setFault({ ...fault, state: step.state }); setSelection(null); react({ type: "installed", key }, step.state, false, null); }
+      return;
+    }
     if (saved.powered) return;
     const rival = simpleSlotPart(state, slotOf(key));
     if (rival && rival !== key) { swap(rival, key); return; }
@@ -270,6 +291,12 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   }
 
   function connect(key: SimpleCableKey) {
+    if (mode === "fault") {
+      if (!fault || fault.solved) return;
+      const step = connectSimpleCable(state, key);
+      if (step.ok) { setFault({ ...fault, state: step.state }); setSelection(null); react({ type: "connected", key }, step.state, false, null); }
+      return;
+    }
     if (saved.powered) { react({ type: "select", selection: { kind: "cable", key } }); return; }
     const step = connectSimpleCable(state, key);
     if (!step.ok) { react({ type: "select", selection: { kind: "cable", key } }); return; }
@@ -281,6 +308,12 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   }
 
   function unplug(key: SimpleCableKey) {
+    if (mode === "fault") {
+      if (!fault || fault.solved) return;
+      const off = disconnectSimpleCable(state, key);
+      if (off.ok) setFault({ ...fault, state: off.state });
+      return;
+    }
     const step = disconnectSimpleCable(state, key);
     if (!step.ok) { speak({ lines: [{ key: "blocked.turnOff" }], mood: "concerned", point: "power" }); return; }
     setSaved((previous) => withoutCable(previous, key));
@@ -339,8 +372,35 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     react({ type: "restart" }, createSimpleBuild(), false, null);
   }
 
+  function newFault() {
+    const kinds = availableFaults();
+    if (kinds.length === 0) { setFault(null); return; }
+    const kind = kinds[Math.floor(Math.random() * kinds.length)]!;
+    setFault({ kind, state: withFault(kind)!, solved: false });
+    setAttempt(null);
+    setVerdict(null);
+    setSelection(null);
+  }
+
+  function chooseMode(next: "guided" | "independent" | "fault") {
+    setMode(next);
+    setAttempt(null);
+    setVerdict(null);
+    setSelection(null);
+    if (next === "fault") newFault();
+  }
+
   function power() {
     setConfirmRestart(false);
+    if (mode === "fault") {
+      if (!fault) return;
+      const result = startSimplePC(fault.state);
+      setAttempt({ state: fault.state, startup: result.startup });
+      setVerdict(result.ok ? "success" : "failure");
+      setFailedRule(result.ok ? null : result.rule);
+      if (result.ok) setFault({ ...fault, solved: true });
+      return;
+    }
     if (saved.powered) {
       setSaved((previous) => ({ ...previous, powered: false }));
       setVerdict(null);
@@ -349,6 +409,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
       return;
     }
     const result = startSimplePC(state);
+    setAttempt({ state: result.ok ? result.state : state, startup: result.startup });
     setVerdict(result.ok ? "success" : "failure");
     setFailedRule(result.ok ? null : result.rule);
     setSelection(null);
@@ -497,6 +558,11 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
           </div>
 
           <div className={styles.controls}>
+            <div className={styles.modes} role="radiogroup" aria-label={t("modes.label")}>
+              {(["guided", "independent", "fault"] as const).map((m) => <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => chooseMode(m)} disabled={!ready}>{t(`modes.${m}`)}</button>)}
+            </div>
+            <p className={styles.hint}>{t(`modes.${mode}Hint`)}</p>
+            {mode === "fault" && !fault && <p className={styles.hint}>{t("fault.none")}</p>}
             <div className={styles.tabs} role="group" aria-label={t("assemblySteps")}>
               <button type="button" aria-pressed={tab === "parts"} onClick={() => setTab("parts")}>{t("partsTab")} <span dir="ltr">{t("progressShort", { count: progress, total: SIMPLE_PARTS.length })}</span></button>
               <button type="button" aria-pressed={tab === "cables"} onClick={() => setTab("cables")}>{t("cablesTab")} <span dir="ltr">{t("progressShort", { count: cableProgress, total: leads.length })}</span></button>
@@ -568,8 +634,15 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
                   {rule && <p className={styles.ruleNote}>{t("ruleNote")}</p>}
                 </div></> : <span>{t("readyToTry")}</span>}
               </div>
-              <button className={styles.powerButton} type="button" onClick={power} disabled={!ready}><span aria-hidden="true">⏻</span>{t(saved.powered ? "powerOff" : "power")}</button>
-              <div className={styles.steps}>
+              {mode === "fault" && fault?.solved && <p className={styles.hint} role="status">{t("fault.solved", { fault: t(`fault.kinds.${fault.kind}`) })}</p>}
+              {attempt && verdict && <PowerDiagnostics key={`${verdict}-${attempt.startup.outcome}`} state={attempt.state} startup={attempt.startup} />}
+              {mode === "fault" && fault && !fault.solved && attempt?.startup.stages.some((st) => st.diagnostics.some((d) => d.code === "cpu_needs_bios_update")) && (
+                <button className={styles.cancel} type="button" onClick={() => { const next = flashBios(fault.state); if (next) { setFault({ ...fault, state: next }); setAttempt(null); setVerdict(null); } }}>{t("fault.flashBios")}</button>
+              )}
+              {mode === "fault"
+                ? <button className={styles.powerButton} type="button" onClick={fault?.solved ? newFault : power} disabled={!ready || !fault}><span aria-hidden="true">⏻</span>{fault?.solved ? t("fault.newFault") : t("power")}</button>
+                : <button className={styles.powerButton} type="button" onClick={power} disabled={!ready}><span aria-hidden="true">⏻</span>{t(saved.powered ? "powerOff" : "power")}</button>}
+              <div className={styles.steps} hidden={mode === "fault"}>
                 <button type="button" onClick={undo} disabled={!ready || !canUndo}>{t("undo")}</button>
                 {!confirmRestart ? <button type="button" onClick={() => setConfirmRestart(true)} disabled={!ready}>{t("reset")}</button> : null}
               </div>

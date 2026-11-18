@@ -304,9 +304,20 @@ export function installSimplePart(state: PCBuildState, key: SimplePartKey): { ok
   const spec = partSpec(key);
   // A liquid cooler has two bodies: the pump block on the CPU, then the radiator in the case.
   const role = (name: string) => (spec.radiator ? { role: name } : {});
+  const target = simpleTarget(state, key);
+  // Already in its place but not pushed home (a fault to find): pushing it in is the whole step.
+  const resting = state.parts.find((p) => p.instanceId === spec.id)?.attachments.some((a) => a.target.hostInstanceId === target.hostInstanceId && a.target.mountPointId === target.mountPointId);
+  if (resting && !spec.radiator) {
+    try {
+      return { ok: true, state: run(state, [
+        { type: "set_seating", instanceId: spec.id, seating: "seated" },
+        ...(spec.screws ? [{ type: "set_fasteners", instanceId: spec.id, secured: spec.screws } as PCAction] : []),
+      ]) };
+    } catch { return { ok: false, reason: "cannotFit" }; }
+  }
   try {
     return { ok: true, state: run(state, [
-      { type: "mount_part", instanceId: spec.id, target: simpleTarget(state, key), ...role("block") },
+      { type: "mount_part", instanceId: spec.id, target, ...role("block") },
       { type: "set_seating", instanceId: spec.id, seating: "seated", ...role("block") },
       ...(spec.screws ? [{ type: "set_fasteners", instanceId: spec.id, secured: spec.screws, ...role("block") } as PCAction] : []),
       ...(spec.radiator ? [
@@ -393,6 +404,12 @@ export function connectSimpleCable(state: PCBuildState, key: SimpleCableKey): { 
   const ends = [...(spec.extra ?? []), { cableId: spec.id, endId: spec.endId, instanceId: spec.instanceId, portId: spec.portId }];
   for (const e of ends) {
     if (endAt(state, e.cableId, e.endId, e.instanceId, e.portId)) continue;
+    // A plug in the wrong header comes out before it goes into the right one.
+    if (state.cables.find((c) => c.id === e.cableId)?.ends[e.endId]) {
+      const off = pc.applyAction(state, { type: "disconnect_cable_end", cableId: e.cableId, endId: e.endId }, pcCatalog);
+      if (!off.ok) return { ok: false, reason: "cannotConnect" };
+      state = off.state;
+    }
     const step = pc.applyAction(state, { type: "connect_cable_end", cableId: e.cableId, endId: e.endId, to: { kind: "part", instanceId: e.instanceId, portId: e.portId } }, pcCatalog);
     if (!step.ok) return { ok: false, reason: "cannotConnect" };
     state = step.state;

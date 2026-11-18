@@ -1333,6 +1333,57 @@
         "cooler": "A cooler lists the sockets it mounts on, and its height must fit the case.",
         "general": "Check the part's specifications against the other part's limits."
       }
+    },
+    "modes": {
+      "label": "Mode",
+      "guided": "Guided",
+      "independent": "Independent",
+      "fault": "Find the fault",
+      "guidedHint": "The helper shows each step.",
+      "independentHint": "No step-by-step hints. Ask the helper if you need one.",
+      "faultHint": "This PC is built but has one mistake. Press power, read what happens, then fix it."
+    },
+    "fault": {
+      "newFault": "New fault",
+      "solved": "Fixed! It was: {fault}.",
+      "flashBios": "Flash the newest BIOS",
+      "kinds": {
+        "ramUnseated": "a memory stick not pushed fully into its slot",
+        "cpuPowerMissing": "the CPU power cable not plugged in",
+        "coolerLeadMissing": "the cooler's lead not plugged in",
+        "frontPanelWrong": "the power-button lead on the reset pins",
+        "biosTooOld": "a BIOS too old for this CPU"
+      },
+      "none": "This build has no fault to practise."
+    },
+    "diag": {
+      "title": "What the PC did",
+      "stages": {
+        "power": "Power",
+        "post": "Self-test (POST)",
+        "firmware_display": "Firmware screen",
+        "boot_device": "Boot drive",
+        "operating_load": "Under load"
+      },
+      "status": {
+        "passed": "OK",
+        "failed": "Stopped here",
+        "not_reached": "Not reached"
+      },
+      "spinning": "Fans and pumps turning: {count}",
+      "lit": "Lights on: {count}",
+      "noLights": "No lights (lighting is optional)",
+      "summary": "Firmware summary (detected hardware)",
+      "cpu": "CPU",
+      "memory": "Memory",
+      "storage": "Drives",
+      "gpu": "Graphics",
+      "gpuNone": "Integrated graphics",
+      "bios": "BIOS",
+      "monitor": "No monitor needed: this is what the firmware detects.",
+      "showCause": "Show the cause",
+      "hideCause": "Hide the cause",
+      "note": "Fans spinning or lights on do not prove the self-test passed."
     }
   },
   "learning": {
