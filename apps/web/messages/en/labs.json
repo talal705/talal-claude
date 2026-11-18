@@ -964,6 +964,36 @@
         "name": "ARGB lighting 4",
         "route": "Lighting lead → 5 V ARGB header (3-pin)",
         "connector": "ARGB · 5 V 3-pin"
+      },
+      "sataData4": {
+        "name": "SATA data 4",
+        "route": "Drive → SATA port on the motherboard",
+        "connector": "SATA data · 7-pin"
+      },
+      "sataPower4": {
+        "name": "SATA power 4",
+        "route": "Power supply → drive power socket",
+        "connector": "SATA power · 15-pin"
+      },
+      "sataData5": {
+        "name": "SATA data 5",
+        "route": "Drive → SATA port on the motherboard",
+        "connector": "SATA data · 7-pin"
+      },
+      "sataPower5": {
+        "name": "SATA power 5",
+        "route": "Power supply → drive power socket",
+        "connector": "SATA power · 15-pin"
+      },
+      "sataData6": {
+        "name": "SATA data 6",
+        "route": "Drive → SATA port on the motherboard",
+        "connector": "SATA data · 7-pin"
+      },
+      "sataPower6": {
+        "name": "SATA power 6",
+        "route": "Power supply → drive power socket",
+        "connector": "SATA power · 15-pin"
       }
     },
     "selectFirst": "Tap a part on the bench or in this list to select it.",
@@ -1254,7 +1284,7 @@
       "startBlocked": "Fix the incompatible parts and add the missing ones first.",
       "continueAssembly": "Continue assembly",
       "editBuild": "Edit my build",
-      "legacyBuild": "Continue the earlier practice build",
+      "legacyBuild": "Open the practice build (i5/i9, air or liquid cooler)",
       "replaceKeeps": "Changing a part keeps your other assembly steps.",
       "progressKept": "Assembly steps kept: {kept}. Undone because of the change: {undone}.",
       "included": "Small parts in the box",
@@ -1319,7 +1349,9 @@
         "psu_sata_plugs_short": "{need} SATA drives, {have} SATA power plugs. Choose another PSU or fewer drives.",
         "psu_insufficient_for_load": "Estimated load {load} W is above {psuW} W. Choose a stronger power supply.",
         "psu_below_gpu_recommendation": "The card's maker recommends {recommended} W; this PSU is {psuW} W. A stronger PSU is safer.",
-        "generic": "These parts do not fit together. Review the parts."
+        "generic": "These parts do not fit together. Review the parts.",
+        "sata_cables_short": "{drives} SATA drives, {cables} SATA data cables in the board's box. One more cable is needed.",
+        "lab_needs_native_16pin": "This card takes a 16-pin plug. In this lab, choose a PSU with its own 12V-2x6 cable."
       },
       "explainText": {
         "socket": "A CPU fits only the socket it was made for: the pins and the notches differ.",
@@ -1333,7 +1365,8 @@
         "bios": "A new CPU on an older board may need a BIOS update first.",
         "cooler": "A cooler lists the sockets it mounts on, and its height must fit the case.",
         "general": "Check the part's specifications against the other part's limits."
-      }
+      },
+      "cannotAssemble": "This combination passes the check but this lab cannot lay it out yet. Change a case fan or drive and try again."
     },
     "modes": {
       "label": "Mode",

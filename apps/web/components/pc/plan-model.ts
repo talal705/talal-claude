@@ -133,22 +133,35 @@ export function planModel(build: PlannedBuild): SimpleModel {
   let radiator: PartSpec["radiator"];
   if (liquid) {
     const size = cooler.spec.radiatorSizeMm ?? 0;
-    const place = caseE.mountPoints.find((m) => m.kind === "radiator_mount" && m.radiatorSizesMm.includes(size));
-    if (!place || place.kind !== "radiator_mount") throw new Error("Planned PC: no radiator position");
-    const blocked = new Set(place.blocks ?? []);
     const fanSize = (instanceId: string) => entry(initial.parts.find((p) => p.instanceId === instanceId)!.catalogId, "fan")!.spec.sizeMm;
-    const moveFans: [string, string][] = [];
-    for (const f of suppliedFans.filter((x) => blocked.has(x.mount))) {
-      const to = caseE.mountPoints.find((m) => m.kind === "fan_mount" && !blocked.has(m.id) && !takenFan.has(m.id) && m.sizesMm.includes(fanSize(f.instanceId)));
-      if (!to) throw new Error("Planned PC: no place for a fitted fan");
-      takenFan.delete(f.mount);
-      takenFan.add(to.id);
-      moveFans.push([f.instanceId, to.id]);
+    // The first position of the radiator's size whose covered fan places can be cleared (as checkPlan does).
+    let place: (typeof caseE.mountPoints)[number] | undefined;
+    let moveFans: [string, string][] = [];
+    for (const m of caseE.mountPoints) {
+      if (m.kind !== "radiator_mount" || !m.radiatorSizesMm.includes(size)) continue;
+      const blocked = new Set(m.blocks ?? []);
+      const taken = new Set(takenFan);
+      const moves: [string, string][] = [];
+      let ok = true;
+      for (const f of suppliedFans.filter((x) => blocked.has(x.mount))) {
+        const to = caseE.mountPoints.find((x) => x.kind === "fan_mount" && !blocked.has(x.id) && !taken.has(x.id) && x.sizesMm.includes(fanSize(f.instanceId)));
+        if (!to) { ok = false; break; }
+        taken.delete(f.mount);
+        taken.add(to.id);
+        moves.push([f.instanceId, to.id]);
+      }
+      if (!ok) continue;
+      place = m;
+      moveFans = moves;
+      takenFan.clear();
+      for (const t of taken) takenFan.add(t);
+      for (const b of blocked) takenFan.add(b);
+      break;
     }
-    for (const b of blocked) takenFan.add(b);
+    if (!place || place.kind !== "radiator_mount") throw new Error("Planned PC: no radiator position");
     radiator = { host: "case-1", mount: place.id, screws: place.fastener?.count ?? 0, moveFans };
   }
-  add({ key: liquid ? "aio" : "cooler", id: idOf.get(liquid ? "aio" : "cooler")!, catalogId: cooler.id, host: boardId, mount: "cooler-mount", screws: screws(board, "cooler-mount"), ...(radiator ? { radiator } : {}) });
+  add({ key: liquid ? "aio" : "cooler", id: idOf.get(liquid ? "aio" : "cooler")!, catalogId: cooler.id, host: boardId, mount: "cooler-mount", screws: screws(board, "cooler-mount"), ...(liquid ? { slot: "cooler" } : {}), ...(radiator ? { radiator } : {}) });
   add({ key: "motherboard", id: boardId, catalogId: board.id, host: "case-1", mount: "motherboard-tray", screws: screws(caseE, "motherboard-tray") });
   if (gpu) add({ key: "gpu", id: idOf.get("gpu")!, catalogId: gpu.id, host: boardId, mount: "pcie-x16-1", screws: screws(board, "pcie-x16-1") });
   add({ key: "psu", id: psuId, catalogId: psu.id, host: "case-1", mount: "psu-bay", screws: screws(caseE, "psu-bay") });
@@ -316,10 +329,15 @@ export function planModel(build: PlannedBuild): SimpleModel {
 export function rebaseProgress(snapshot: { placed: string[]; connected: string[]; history: string[]; powered: boolean }, from: SimpleModel, to: SimpleModel) {
   const fromPart = new Map(from.parts.map((p) => [p.key, p]));
   const toPart = new Map(to.parts.map((p) => [p.key, p]));
+  // Instance IDs shift when a part is added or removed earlier in the list; compare by part key instead.
+  const keyOfId = (m: SimpleModel) => new Map(m.parts.map((p) => [p.id, p.key]));
+  const fromKeys = keyOfId(from);
+  const toKeys = keyOfId(to);
+  const hostKey = (keys: Map<string, string>, id: string) => keys.get(id) ?? id;
   const changed = new Set<string>();
   for (const [key, p] of fromPart) {
     const q = toPart.get(key);
-    if (!q || q.catalogId !== p.catalogId || q.mount !== p.mount || q.host !== p.host) changed.add(key);
+    if (!q || q.catalogId !== p.catalogId || q.mount !== p.mount || hostKey(toKeys, q.host) !== hostKey(fromKeys, p.host)) changed.add(key);
   }
   const fromCase = from.createActions().find((a) => a.type === "add_part");
   const toCase = to.createActions().find((a) => a.type === "add_part");
@@ -330,16 +348,23 @@ export function rebaseProgress(snapshot: { placed: string[]; connected: string[]
     grew = false;
     for (const [key, p] of fromPart) {
       if (changed.has(key)) continue;
-      const hostKey = [...fromPart.values()].find((h) => h.id === p.host)?.key;
-      if ((hostKey && changed.has(hostKey)) || (caseChanged && p.host === "case-1")) { changed.add(key); grew = true; }
+      const onKey = fromKeys.get(p.host);
+      if ((onKey && changed.has(onKey)) || (caseChanged && p.host === "case-1")) { changed.add(key); grew = true; }
     }
   }
   const fromCable = new Map(from.cables.map((c) => [c.key, c]));
   const toCable = new Map(to.cables.map((c) => [c.key, c]));
+  /** A lead with its part IDs written as part keys (`motherboard.atx24`), so renumbering does not count as a change. */
+  const norm = (c: CableSpec, keys: Map<string, string>) => JSON.stringify(c, (_, v) => {
+    if (typeof v !== "string") return v;
+    const dot = v.indexOf(".");
+    const head = dot > 0 ? v.slice(0, dot) : v;
+    return keys.has(head) ? `${keys.get(head)}${dot > 0 ? v.slice(dot) : ""}` : v;
+  });
   const keepCable = (key: string) => {
     const a = fromCable.get(key);
     const b = toCable.get(key);
-    return !!a && !!b && JSON.stringify(a) === JSON.stringify(b) && !b.requires.some((k) => changed.has(k));
+    return !!a && !!b && norm(a, fromKeys) === norm(b, toKeys) && !b.requires.some((k) => changed.has(k));
   };
   const history = snapshot.history.filter((step) => {
     const [kind, key] = step.split(":") as ["part" | "cable", string];

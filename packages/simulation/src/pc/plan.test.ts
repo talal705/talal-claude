@@ -69,10 +69,25 @@ describe("checkPlan", () => {
     expect(codes({ ...base, psu: "corsair-rm1200x-shift" })).toEqual([]);
   });
 
-  it("states the i9 liquid requirement as an exercise rule (conditional), not an incompatibility", () => {
+  it("applies the i9 exercise rule (it blocks the start in this lab) only with an air cooler", () => {
     const f = checkPlan({ ...base, cpu: "intel-core-i9-14900k" }, pcCatalog).findings.find((x) => x.code === "exercise_needs_liquid");
-    expect(f?.severity).toBe("conditional");
-    expect(codes({ ...base, cpu: "intel-core-i9-14900k", cooler: "arctic-liquid-freezer-iii-280" })).not.toContain("conditional:exercise_needs_liquid");
+    expect(f?.severity).toBe("incompatible");
+    expect(codes({ ...base, cpu: "intel-core-i9-14900k", cooler: "arctic-liquid-freezer-iii-280" }).some((c) => c.endsWith("exercise_needs_liquid"))).toBe(false);
+  });
+
+  it("counts the case's own fans for positions and headers, and moves them for a front radiator", () => {
+    const supplied = { "corsair-4000d-airflow-black": [{ catalogId: "corsair-airguide-120-4000d", mountPointId: "fan-front-1" }, { catalogId: "corsair-airguide-120-4000d", mountPointId: "fan-front-2" }] };
+    const withAio = { ...base, cooler: "arctic-liquid-freezer-iii-280" };
+    expect(checkPlan(withAio, pcCatalog, { supplied }).findings.filter((f) => f.severity === "incompatible")).toEqual([]);
+    const tooMany = checkPlan({ ...withAio, fans: ["arctic-p14-pwm-pst", "arctic-p14-pwm-pst"] }, pcCatalog, { supplied }).findings.map((f) => f.code);
+    expect(tooMany).toContain("fan_positions_exceeded");
+    const headers = checkPlan({ ...base, motherboard: "asus-prime-b760m-a-wifi", fans: ["arctic-p12-pwm-pst"] }, pcCatalog, { supplied }).findings.map((f) => f.code);
+    expect(headers).toContain("fan_headers_short");
+  });
+
+  it("asks for a native 16-pin cable for a 16-pin card in this lab", () => {
+    expect(codes({ ...base, gpu: "asus-tuf-rtx4070tis-o16g-gaming", psu: "corsair-cx550" })).toContain("incompatible:lab_needs_native_16pin");
+    expect(codes({ ...base, gpu: "asus-tuf-rtx4070tis-o16g-gaming" }).filter((c) => c.startsWith("incompatible"))).toEqual([]);
   });
 
   it("checks SATA power plugs, drive bays and M.2 slots", () => {

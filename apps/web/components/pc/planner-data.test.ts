@@ -3,7 +3,7 @@ import { pc } from "@ytl/simulation";
 import { pcCatalog } from "./catalog";
 import { planModel } from "./plan-model";
 import { compatibleOptions, PLANNER_IDS, suggestBuild, WORKLOADS, withChoice } from "./planner-data";
-import { activateSimpleModel, connectSimpleCable, createSimpleBuild, installSimplePart, LEGACY_MODEL, SIMPLE_PARTS, simpleCablesFor, startSimplePC } from "./simple-model";
+import { activateSimpleModel, connectSimpleCable, createSimpleBuild, installSimplePart, LEGACY_MODEL, SIMPLE_PARTS, simplePartOrder, simpleCablesFor, startSimplePC } from "./simple-model";
 
 afterEach(() => activateSimpleModel(LEGACY_MODEL));
 
@@ -21,7 +21,7 @@ describe("planner data", () => {
         expect(report.ready).toBe(true);
         activateSimpleModel(planModel({ version: 1, purpose, workload, parts: plan }));
         let state = createSimpleBuild();
-        for (const p of SIMPLE_PARTS) { const r = installSimplePart(state, p.key); if (!r.ok) throw new Error(p.key + r.reason); state = r.state; }
+        for (const key of simplePartOrder(state)) { const p = { key }; const r = installSimplePart(state, p.key); if (!r.ok) throw new Error(p.key + r.reason); state = r.state; }
         for (const c of simpleCablesFor(state)) { const r = connectSimpleCable(state, c.key); if (!r.ok) throw new Error(c.key); state = r.state; }
         expect(startSimplePC(state).startup.outcome).toBe("operational");
       });

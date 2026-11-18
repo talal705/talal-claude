@@ -3,7 +3,7 @@
 // part was suggested.
 import type { CatalogEntry } from "@ytl/contracts";
 import { pc } from "@ytl/simulation";
-import { pcCatalog } from "./catalog";
+import { pcCatalog, SUPPLIED_PARTS } from "./catalog";
 import type { BuildPurpose } from "./plan-model";
 
 export type PlannerCategory = "cpu" | "motherboard" | "ram" | "storage" | "cooler" | "gpu" | "psu" | "case" | "fans";
@@ -32,6 +32,9 @@ export const BOARD_TIER: Record<string, "legacy" | "entry" | "mid" | "advanced">
 
 const byId = new Map(pcCatalog.entries.map((e) => [e.id, e]));
 export const plannerEntry = (id: string): CatalogEntry | undefined => byId.get(id);
+
+/** The shared compatibility check, with the fans each case arrives with. */
+export const checkBuildPlan = (plan: pc.BuildPlan) => pc.checkPlan(plan, pcCatalog, { supplied: SUPPLIED_PARTS });
 
 /** The workloads offered for each purpose; the first is the default. */
 export const WORKLOADS: Record<BuildPurpose, readonly string[]> = {
@@ -114,7 +117,7 @@ export function withoutChoice(plan: pc.BuildPlan, category: PlannerCategory, ind
 /** Options for `category` that clear every incompatible finding the current choice has in that slot. */
 export function compatibleOptions(plan: pc.BuildPlan, category: PlannerCategory): string[] {
   const slot = slotOfCategory[category];
-  const badNow = (p: pc.BuildPlan) => pc.checkPlan(p, pcCatalog).findings.filter((f) => f.severity === "incompatible" && f.slots.includes(slot)).length;
+  const badNow = (p: pc.BuildPlan) => checkBuildPlan(p).findings.filter((f) => f.severity === "incompatible" && f.slots.includes(slot)).length;
   return PLANNER_IDS[category].filter((id) => {
     const replaced = category === "storage" || category === "fans" ? withChoice(withoutChoice(plan, category, (plan[category === "storage" ? "storage" : "fans"] ?? []).length - 1), category, id) : withChoice(plan, category, id);
     return badNow(replaced) === 0;

@@ -298,9 +298,9 @@ export function companionSay(event: CompanionEvent, state: PCBuildState, powered
  * what is in hand and what comes next. Only facts from the engine; no names the page did not show.
  */
 export function buildContext(state: PCBuildState, powered: boolean, selection: Selection): string {
-  const filled = SIMPLE_PARTS.flatMap((p) => simpleSlotPart(state, p.key) ?? []);
+  const filled = SIMPLE_PARTS.flatMap((p) => simpleSlotPart(state, slotOf(p.key)) ?? []);
   const fitted = filled.map((key) => (isRamKey(key) ? `${key} (${simpleTarget(state, key).mountPointId})` : key));
-  const missing = SIMPLE_PARTS.filter((p) => !simpleSlotFilled(state, p.key)).map((p) => p.key);
+  const missing = SIMPLE_PARTS.filter((p) => !simpleSlotFilled(state, slotOf(p.key))).map((p) => p.key);
   const leads = simpleCablesFor(state);
   const connected = leads.filter((c) => simpleCableConnected(state, c.key)).map((c) => c.key);
   const loose = leads.filter((c) => !simpleCableConnected(state, c.key)).map((c) => c.key);

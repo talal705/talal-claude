@@ -6,6 +6,7 @@ import { pc } from "@ytl/simulation";
 import { BuildPlanner } from "./BuildPlanner";
 import { pcCatalog } from "./catalog";
 import { parsePlannedBuild, planModel, rebaseProgress, snapshotFromHistory, type PlannedBuild } from "./plan-model";
+import { checkBuildPlan } from "./planner-data";
 import { SimplePcLab } from "./SimplePcLab";
 import { activateSimpleModel, LEGACY_MODEL, SIMPLE_SAVE_KEY } from "./simple-model";
 
@@ -27,10 +28,9 @@ export function PcBuilder({ aiConfigured = false }: { aiConfigured?: boolean }) 
   const [build, setBuild] = useState<PlannedBuild>(EMPTY);
   /** The plan the saved assembly progress belongs to (null: none yet). */
   const [assembled, setAssembled] = useState<PlannedBuild | null>(null);
-  const [legacy, setLegacy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [mount, setMount] = useState(0);
-  const model = useMemo(() => (phase === "legacy" || !assembled ? LEGACY_MODEL : planModel(assembled)), [phase, assembled]);
+  const model = useMemo(() => { if (phase === "legacy" || !assembled) return LEGACY_MODEL; try { return planModel(assembled); } catch { return LEGACY_MODEL; } }, [phase, assembled]);
 
   useEffect(() => {
     const stored = read(PLAN_KEY) as { build?: unknown; phase?: unknown } | null;
@@ -39,11 +39,9 @@ export function PcBuilder({ aiConfigured = false }: { aiConfigured?: boolean }) 
     const progress = read(PLAN_PROGRESS_KEY) as { version?: unknown; plan?: unknown; history?: unknown[] } | null;
     const progressPlan = progress?.version === 4 ? parsePlannedBuild(progress.plan) : null;
     let ok = false;
-    if (progressPlan && pc.checkPlan(progressPlan.parts, pcCatalog).ready) {
+    if (progressPlan && checkBuildPlan(progressPlan.parts).ready) {
       try { planModel(progressPlan); setAssembled(progressPlan); ok = true; } catch { /* A plan the catalog no longer assembles: planner only. */ }
     }
-    const old = read(SIMPLE_SAVE_KEY) as { history?: unknown[]; placed?: unknown[] } | null;
-    setLegacy(Boolean(old && ((Array.isArray(old.history) && old.history.length > 0) || (Array.isArray(old.placed) && old.placed.length > 0))));
     if (stored?.phase === "assemble" && ok && progressPlan) { activateSimpleModel(planModel(progressPlan)); setPhase("assemble"); }
     else if (stored?.phase === "legacy") { activateSimpleModel(LEGACY_MODEL); setPhase("legacy"); }
     else setPhase("plan");
@@ -52,8 +50,9 @@ export function PcBuilder({ aiConfigured = false }: { aiConfigured?: boolean }) 
   useEffect(() => { if (phase !== "loading") write(PLAN_KEY, { build, phase }); }, [build, phase]);
 
   function start() {
-    if (!pc.checkPlan(build.parts, pcCatalog).ready) return;
-    const next = planModel(build);
+    if (!checkBuildPlan(build.parts).ready) return;
+    let next: ReturnType<typeof planModel>;
+    try { next = planModel(build); } catch { setNotice(t("cannotAssemble")); return; }
     const progress = read(PLAN_PROGRESS_KEY) as { version?: number; placed: string[]; connected: string[]; history: string[]; powered: boolean } | null;
     if (assembled && progress?.version === 4 && Array.isArray(progress.history) && progress.history.length > 0) {
       // Same page, other parts: keep every step the change does not affect.
@@ -92,7 +91,7 @@ export function PcBuilder({ aiConfigured = false }: { aiConfigured?: boolean }) 
 
   if (phase === "loading") return <div style={{ minHeight: "60vh" }} aria-busy="true" />;
   if (phase === "plan") {
-    return <BuildPlanner build={build} onChange={setBuild} onStart={start} hasProgress={assembled !== null} onContinue={continueAssembly} legacyAvailable={legacy} onLegacy={openLegacy} notice={null} />;
+    return <BuildPlanner build={build} onChange={setBuild} onStart={start} hasProgress={assembled !== null} onContinue={continueAssembly} legacyAvailable onLegacy={openLegacy} notice={phase === "plan" ? notice : null} />;
   }
   return (
     <>

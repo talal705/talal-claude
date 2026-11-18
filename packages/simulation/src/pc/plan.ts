@@ -59,7 +59,10 @@ export const EXERCISE_LIQUID_CPU_IDS: ReadonlySet<string> = new Set(["intel-core
 
 type Entry<C extends PCPartCategory> = Extract<CatalogEntry, { category: C }>;
 
-export function checkPlan(plan: BuildPlan, catalog: PCCatalog): PlanReport {
+/** Parts a case arrives with, by case: fan entries and the positions they come fitted in. */
+export type SuppliedParts = Readonly<Record<string, readonly { catalogId: string; mountPointId: string }[]>>;
+
+export function checkPlan(plan: BuildPlan, catalog: PCCatalog, opts: { supplied?: SuppliedParts } = {}): PlanReport {
   const byId = new Map(catalog.entries.map((e) => [e.id, e]));
   const get = <C extends PCPartCategory>(id: string | null | undefined, category: C): Entry<C> | undefined => {
     const e = id ? byId.get(id) : undefined;
@@ -129,6 +132,28 @@ export function checkPlan(plan: BuildPlan, catalog: PCCatalog): PlanReport {
   };
 
   const caseId = caseE ? addPart(caseE.id) : null;
+  // The case's own fans, fitted where the factory puts them: they take positions and headers too.
+  const suppliedFanIds: string[] = [];
+  if (caseId) {
+    for (const item of opts.supplied?.[caseE!.id] ?? []) {
+      const id = addPart(item.catalogId);
+      if (fit(id, { hostInstanceId: caseId, mountPointId: item.mountPointId }).ok) suppliedFanIds.push(id);
+    }
+  }
+  /** Moves the case's fans off the positions `blocks` covers, to free positions of their size; false when there is none. */
+  const clearFans = (blocks: readonly string[]): boolean => {
+    for (const fanId of suppliedFanIds) {
+      const at = host(fanId).attachments[0];
+      if (!at || !blocks.includes(at.target.mountPointId)) continue;
+      const size = byId.get(host(fanId).catalogId);
+      const sizeMm = size?.category === "fan" ? size.spec.sizeMm : 0;
+      const to = freeMounts(caseId!, "fan_mount", (m) => m.kind === "fan_mount" && !blocks.includes(m.id) && m.sizesMm.includes(sizeMm))[0];
+      if (!to) return false;
+      if (!step({ type: "unmount_part", instanceId: fanId }).ok) return false;
+      if (!fit(fanId, { hostInstanceId: caseId!, mountPointId: to.id }).ok) return false;
+    }
+    return true;
+  };
   const boardId = board ? addPart(board.id) : null;
   let boardInCase = false;
   if (caseId && boardId) {
@@ -170,7 +195,8 @@ export function checkPlan(plan: BuildPlan, catalog: PCCatalog): PlanReport {
       let first: { ok: boolean; code?: string; message?: Localized } | null = null;
       for (const m of places) {
         const before = state;
-        // A radiator position covers fan places; nothing is fitted there yet.
+        // A radiator position covers fan places: the case's own fans move elsewhere first.
+        if (m.kind === "radiator_mount" && !clearFans(m.blocks ?? [])) { state = before; continue; }
         const t = fit(id, { hostInstanceId: caseId, mountPointId: m.id }, "radiator");
         if (t.ok) { fitted = true; break; }
         state = before;
@@ -182,7 +208,8 @@ export function checkPlan(plan: BuildPlan, catalog: PCCatalog): PlanReport {
       }
     }
     // Exercise rule of this lab: stated as such, never as a manufacturer requirement.
-    if (cpu && EXERCISE_LIQUID_CPU_IDS.has(cpu.id) && !liquid) add({ code: "exercise_needs_liquid", severity: "conditional", slots: ["cooler", "cpu"], params: { cpu: name(cpu) } });
+    // It blocks the start in this lab, so it blocks assembly too; the UI labels it as the exercise rule.
+    if (cpu && EXERCISE_LIQUID_CPU_IDS.has(cpu.id) && !liquid) add({ code: "exercise_needs_liquid", severity: "incompatible", slots: ["cooler", "cpu"], params: { cpu: name(cpu) } });
     const capacity = cooler.spec.coolingCapacityW?.value ?? null;
     const cpuMax = cpu ? (cpu.spec.maxPowerW ?? cpu.spec.basePowerW) : null;
     if (capacity !== null && cpuMax !== null && capacity < cpuMax) add({ code: "cooler_below_cpu_power", severity: "less_suitable", slots: ["cooler", "cpu"], params: { cooler: name(cooler), cpu: name(cpu), coolerW: capacity, cpuW: cpuMax } });
@@ -243,6 +270,8 @@ export function checkPlan(plan: BuildPlan, catalog: PCCatalog): PlanReport {
       refusal(fit(id, { hostInstanceId: caseId, mountPointId: bays[0]!.id }), ["storage", "case"], { drive: name(drive) });
     }
   }
+  const dataCables = board ? board.cables.filter((c) => c.kind === "sata_data").reduce((n, c) => n + c.quantity, 0) : 0;
+  if (board && sataDrives > dataCables && sataDrives <= board.spec.sataPorts) add({ code: "sata_cables_short", severity: "conditional", slots: ["storage", "motherboard"], params: { drives: sataDrives, cables: dataCables } });
   if (board && sataDrives > board.spec.sataPorts) add({ code: "sata_ports_exceeded", severity: "incompatible", slots: ["storage", "motherboard"], params: { drives: sataDrives, ports: board.spec.sataPorts } });
 
   // Graphics card: the length check needs the board in the case.
@@ -279,11 +308,14 @@ export function checkPlan(plan: BuildPlan, catalog: PCCatalog): PlanReport {
   }
 
   // ---------- Questions the fitting does not ask ----------
-  if (board && fans.length > 0) {
+  const pumpOnFanHeader = !!board && cooler?.spec.type === "aio_liquid" && !board.ports.some((p) => p.function === "pump_header" || p.id === "cpu-opt");
+  const allFans = fans.length + suppliedFanIds.length + (pumpOnFanHeader ? 1 : 0);
+  if (board && allFans > 0) {
     const headers = board.ports.filter((p) => p.function === "system_fan_header").length;
-    if (fans.length > headers) add({ code: "fan_headers_short", severity: "conditional", slots: ["fans", "motherboard"], params: { fans: fans.length, headers } });
+    if (allFans > headers) add({ code: "fan_headers_short", severity: "conditional", slots: ["fans", "motherboard"], params: { fans: allFans, headers } });
   }
-  if (board && cooler?.spec.type === "aio_liquid" && !board.ports.some((p) => p.function === "pump_header")) {
+  const coolerRefused = findings.some((f) => f.slots[0] === "cooler" && f.severity === "incompatible");
+  if (board && !coolerRefused && cooler?.spec.type === "aio_liquid" && !board.ports.some((p) => p.function === "pump_header")) {
     add({ code: "no_pump_header", severity: "conditional", slots: ["cooler", "motherboard"], params: { board: name(board) } });
   }
 
@@ -306,6 +338,8 @@ export function checkPlan(plan: BuildPlan, catalog: PCCatalog): PlanReport {
       const native16 = plugs("pcie_12v_2x6") + plugs("pcie_12vhpwr");
       if (eight > pcie) add({ code: "psu_gpu_plugs_short", severity: "incompatible", slots: ["psu", "gpu"], params: { have: pcie, need: eight } });
       if (sixteen > 0 && native16 < sixteen && pcie < adapterInputs) add({ code: "psu_gpu_plugs_short", severity: "incompatible", slots: ["psu", "gpu"], params: { have: pcie, need: adapterInputs } });
+      // The card's adapter would work in reality; this lab wires 16-pin cards only from a native cable.
+      else if (sixteen > 0 && native16 < sixteen) add({ code: "lab_needs_native_16pin", severity: "incompatible", slots: ["psu", "gpu"], params: {} });
     }
     if (sataDrives > 0) {
       const have = plugs("sata_power");

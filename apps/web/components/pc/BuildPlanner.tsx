@@ -8,7 +8,7 @@ import { CheckIcon } from "../icons";
 import { pcCatalog } from "./catalog";
 import { PURPOSES, type BuildPurpose, type PlannedBuild } from "./plan-model";
 import {
-  BOARD_TIER, categoryOfSlot, compatibleOptions, explainTopic, PLANNER_CATEGORIES, PLANNER_IDS, plannerEntry, slotOfCategory, suggestBuild, WORKLOADS, withChoice, withoutChoice,
+  BOARD_TIER, categoryOfSlot, checkBuildPlan, compatibleOptions, explainTopic, PLANNER_CATEGORIES, PLANNER_IDS, plannerEntry, slotOfCategory, suggestBuild, WORKLOADS, withChoice, withoutChoice,
   type PlannerCategory,
 } from "./planner-data";
 import styles from "./planner.module.css";
@@ -60,7 +60,7 @@ export function BuildPlanner({ build, onChange, onStart, hasProgress, onContinue
   const [explain, setExplain] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<pc.PlanSlot[]>([]);
   const [said, setSaid] = useState<string | null>(null);
-  const report = useMemo(() => pc.checkPlan(build.parts, pcCatalog), [build.parts]);
+  const report = useMemo(() => checkBuildPlan(build.parts), [build.parts]);
   const plan = build.parts;
   const set = (parts: pc.BuildPlan) => { onChange({ ...build, parts }); setFilter(null); setExplain(null); setHighlight([]); };
   const nameOf = (id: string) => { const e = byId.get(id); return e ? `${e.brand} ${e.model}` : id; };

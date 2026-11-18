@@ -3,7 +3,7 @@ import { pc } from "@ytl/simulation";
 import { pcCatalog } from "./catalog";
 import { planModel, parsePlannedBuild, rebaseProgress, snapshotFromHistory, type PlannedBuild } from "./plan-model";
 import {
-  activateSimpleModel, connectSimpleCable, createSimpleBuild, emptySimpleSnapshot, installSimplePart, LEGACY_MODEL, parseSimpleSnapshot, SIMPLE_PARTS,
+  activateSimpleModel, connectSimpleCable, createSimpleBuild, emptySimpleSnapshot, installSimplePart, LEGACY_MODEL, parseSimpleSnapshot, SIMPLE_PARTS, simplePartOrder,
   simpleAssemblyComplete, simpleBuildFromSnapshot, simpleCablesFor, simpleRuleBlock, startSimplePC, withCable, withPart, type SimpleSnapshot,
 } from "./simple-model";
 
@@ -35,7 +35,7 @@ const legacyDdr3: pc.BuildPlan = {
 function assembleAll() {
   let state = createSimpleBuild();
   let snapshot: SimpleSnapshot = emptySimpleSnapshot();
-  for (const p of SIMPLE_PARTS) {
+  for (const key of simplePartOrder(state)) { const p = { key };
     const r = installSimplePart(state, p.key);
     if (!r.ok) throw new Error(`${p.key}: ${r.reason}`);
     state = r.state;
@@ -122,6 +122,17 @@ describe("assembly of a planned build", () => {
     const afterCpu = snapshotFromHistory(c.history);
     expect(snapshot.history.filter((s) => !afterCpu.history.includes(s)).sort()).toEqual(["cable:cpuFan", "part:cooler", "part:cpu"]);
     expect(afterCpu.placed).toContain("motherboard");
+  });
+
+  it("adding a drive or a RAM kit keeps every lead whose ends did not move", () => {
+    const before = planModel(build(gaming));
+    activateSimpleModel(before);
+    const { snapshot } = assembleAll();
+    const more = planModel(build({ ...gaming, storage: [...gaming.storage!, "samsung-870-evo-1tb"], ram: { id: gaming.ram!.id, modules: 4 } }));
+    const r = rebaseProgress(snapshot, before, more);
+    activateSimpleModel(more);
+    const next = snapshotFromHistory(r.history);
+    expect(snapshot.history.filter((s) => !next.history.includes(s))).toEqual([]);
   });
 
   it("parses a saved plan and drops unknown part IDs", () => {

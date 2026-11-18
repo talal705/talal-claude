@@ -201,6 +201,40 @@
       "finish": "black_metal"
     },
     {
+      "id": "hdmi-out",
+      "shape": "box",
+      "at": [
+        7,
+        10.6,
+        34.2
+      ],
+      "size": [
+        14,
+        6,
+        16
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "HDMI-OUT"
+    },
+    {
+      "id": "dp-out",
+      "shape": "box",
+      "at": [
+        7,
+        10.1,
+        58.2
+      ],
+      "size": [
+        14,
+        5,
+        16
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "DP-OUT"
+    },
+    {
       "id": "vrm-left",
       "shape": "fins",
       "at": [
@@ -1284,6 +1318,42 @@
     }
   },
   "ports": {
+    "hdmi-out": {
+      "at": [
+        0,
+        10.6,
+        34.2
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        14,
+        6,
+        16
+      ],
+      "solid": "hdmi-out"
+    },
+    "dp-out": {
+      "at": [
+        0,
+        10.1,
+        58.2
+      ],
+      "facing": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        14,
+        5,
+        16
+      ],
+      "solid": "dp-out"
+    },
     "eps-1": {
       "at": [
         55.3,

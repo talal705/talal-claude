@@ -153,7 +153,9 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** The leads of this build: the liquid cooler's two replace the air cooler's one when it is fitted. */
   const leads = useMemo(() => simpleCablesFor(state), [state]);
   const cableProgress = leads.filter((c) => simpleCableConnected(state, c.key)).length;
-  const complete = saved.powered && simpleAssemblyComplete(state);
+  /** Whether the PC on the page is switched on: the fault build is off until it starts. */
+  const lockedOn = mode === "fault" ? false : saved.powered;
+  const complete = mode !== "fault" && saved.powered && simpleAssemblyComplete(state);
 
   /** The robot speaks: a new bubble, from the build as it is after the action. */
   const modeRef = useRef(mode);
@@ -226,8 +228,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     setTicked(0);
     setGuided(true);
     setTab("parts");
-    if (saved.powered) { speak({ lines: [{ key: "blocked.turnOff" }], mood: "concerned", point: "power" }); return; }
-    react({ type: "select", selection: next }, state, saved.powered, next);
+    if (lockedOn) { speak({ lines: [{ key: "blocked.turnOff" }], mood: "concerned", point: "power" }); return; }
+    react({ type: "select", selection: next }, state, lockedOn, next);
   }
 
   function chooseCable(key: SimpleCableKey) {
@@ -490,7 +492,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     return place;
   };
   const summary = complete ? {
-    parts: SIMPLE_PARTS.flatMap((p) => simpleSlotPart(state, p.key) ?? []).map((key) => (isRamKey(key) ? `${label(key)} · ${placeName(key)}` : label(key))),
+    parts: SIMPLE_PARTS.flatMap((p) => simpleSlotPart(state, slotOf(p.key)) ?? []).map((key) => (isRamKey(key) ? `${label(key)} · ${placeName(key)}` : label(key))),
     cables: leads.map((c) => cableName(c.key)),
   } : null;
   const removable = selectedPart ? REMOVABLE.includes(selectedPart) : false;
@@ -597,7 +599,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
                     ? <button className={styles.installButton} type="button" onClick={() => remove(selectedPart)} disabled={!ready || Boolean(removeBlocked)}>{t("remove")}</button>
                     : rival
                       ? <button className={styles.installButton} type="button" onClick={() => swap(rival, selectedPart)} disabled={!ready || Boolean(swapBlocked)}>{t("swap", { other: label(rival) })}</button>
-                      : <button className={styles.installButton} type="button" onClick={() => install(selectedPart)} disabled={!ready || partInstalled || Boolean(partBlocked) || saved.powered || (mode !== "fault" && ticked < substepsFor(selectedPart).length)}>{partInstalled ? t("installed") : t("install")}</button>}
+                      : <button className={styles.installButton} type="button" onClick={() => install(selectedPart)} disabled={!ready || partInstalled || Boolean(partBlocked) || lockedOn || (mode !== "fault" && ticked < substepsFor(selectedPart).length)}>{partInstalled ? t("installed") : t("install")}</button>}
                   {mode !== "fault" && !partInstalled && !rival && !partBlocked && substepsFor(selectedPart).length > 0 && <ol className={styles.substeps} aria-label={t("substeps.title")}>
                     {substepsFor(selectedPart).map((step, i) => <li key={step}><button type="button" aria-pressed={i < ticked} disabled={i > ticked} onClick={() => setTicked(i < ticked ? i : i + 1)}><span aria-hidden="true">{i < ticked ? "✓" : i + 1}</span>{t(`substeps.${step}`)}</button></li>)}
                   </ol>}
@@ -627,9 +629,9 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
                 <strong>{cableName(selectedCable)}</strong>
                 <p>{cableRoute(selectedCable)}</p>
                 <code dir="ltr">{t(`cables.${selectedCable}.connector`)}</code>
-                <button className={styles.installButton} type="button" onClick={() => cableDone ? unplug(selectedCable) : connect(selectedCable)} disabled={!ready || saved.powered || (!cableDone && Boolean(cableBlocked))}>{cableDone ? t("disconnect") : t("connect")}</button>
+                <button className={styles.installButton} type="button" onClick={() => cableDone ? unplug(selectedCable) : connect(selectedCable)} disabled={!ready || lockedOn || (!cableDone && Boolean(cableBlocked))}>{cableDone ? t("disconnect") : t("connect")}</button>
                 {cableBlocked && !cableDone && <p className={styles.hint}>{cableBlocked === "turnOffFirst" ? t("turnOffFirst") : t("fitCableParts", { parts: simpleCableMissingParts(state, selectedCable).map((key) => label(key)).join(locale === "ar" ? "، " : ", ") })}</p>}
-                {saved.powered && cableDone && <p className={styles.hint}>{t("turnOffFirst")}</p>}
+                {lockedOn && cableDone && <p className={styles.hint}>{t("turnOffFirst")}</p>}
                 <button className={styles.cancel} type="button" onClick={cancel}>{t("cancel")}</button>
               </div>}
               {!leads.some((c) => c.key.startsWith("sata")) && <p className={styles.cablesNote}>{t("noStorageCable")}</p>}

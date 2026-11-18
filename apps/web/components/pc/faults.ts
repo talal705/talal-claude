@@ -4,7 +4,7 @@
 import type { PCAction, PCBuildState } from "@ytl/contracts";
 import { pc } from "@ytl/simulation";
 import { pcCatalog } from "./catalog";
-import { connectSimpleCable, createSimpleBuild, installSimplePart, SIMPLE_PARTS, simpleCablesFor } from "./simple-model";
+import { connectSimpleCable, createSimpleBuild, installSimplePart, SIMPLE_PARTS, simplePartOrder, simpleCablesFor } from "./simple-model";
 
 export type FaultKind = "ramUnseated" | "cpuPowerMissing" | "coolerLeadMissing" | "frontPanelWrong" | "biosTooOld";
 export const FAULT_KINDS: readonly FaultKind[] = ["ramUnseated", "cpuPowerMissing", "coolerLeadMissing", "frontPanelWrong", "biosTooOld"];
@@ -21,7 +21,7 @@ function apply(state: PCBuildState, actions: readonly PCAction[]): PCBuildState 
 /** The build on the page, every part fitted and every lead connected. */
 export function finishedBuild(): PCBuildState {
   let state = createSimpleBuild();
-  for (const p of SIMPLE_PARTS) {
+  for (const key of simplePartOrder(state)) { const p = { key };
     const r = installSimplePart(state, p.key);
     if (!r.ok) throw new Error(`fault build: ${p.key}`);
     state = r.state;
