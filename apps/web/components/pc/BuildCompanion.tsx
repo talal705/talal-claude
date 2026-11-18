@@ -17,7 +17,7 @@ export interface CompanionMessage {
   aiText?: string;
 }
 
-export function BuildCompanion({ message, ai, thinking, reducedMotion, onQuick, onAsk, summary }: {
+export function BuildCompanion({ message, ai, thinking, reducedMotion, onQuick, onAsk, summary, partLabel, placeLabel }: {
   message: CompanionMessage;
   ai: "available" | "not_configured" | "unknown";
   thinking: boolean;
@@ -26,6 +26,9 @@ export function BuildCompanion({ message, ai, thinking, reducedMotion, onQuick, 
   onAsk: (text: string) => void;
   /** The parts and leads of the finished build, shown once it is complete. */
   summary: { parts: string[]; cables: string[] } | null;
+  /** Names for a planned build's parts and places; the fixed build uses its own messages. */
+  partLabel?: (key: string) => string;
+  placeLabel?: (place: string) => string;
 }) {
   const t = useTranslations("simplePc");
   const locale = useLocale();
@@ -38,10 +41,10 @@ export function BuildCompanion({ message, ai, thinking, reducedMotion, onQuick, 
 
   const name = (value: CompanionValue): string => {
     if (typeof value !== "object") return String(value);
-    if ("part" in value) return t(`parts.${value.part}`);
+    if ("part" in value) return partLabel ? partLabel(value.part) : t(`parts.${value.part}`);
     if ("cable" in value) return t(`cables.${value.cable}.name`);
-    if ("place" in value) return t(`companion.places.${value.place}`);
-    return value.parts.map((key) => t(`parts.${key}`)).join(locale === "ar" ? "، " : ", ");
+    if ("place" in value) return placeLabel ? placeLabel(value.place) : t(`companion.places.${value.place}`);
+    return value.parts.map((key) => (partLabel ? partLabel(key) : t(`parts.${key}`))).join(locale === "ar" ? "، " : ", ");
   };
   const speak = (line: CompanionLine) =>
     t(`companion.${line.key}`, Object.fromEntries(Object.entries(line.values ?? {}).map(([key, value]) => [key, name(value)])));

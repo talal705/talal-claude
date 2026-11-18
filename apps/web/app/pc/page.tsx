@@ -1,4 +1,4 @@
-import { SimplePcLab } from "@/components/pc/SimplePcLab";
+import { PcBuilder } from "@/components/pc/PcBuilder";
 import { LabPage, labMetadata, type LabSearchParams } from "@/components/LabPage";
 import { isTutorAiConfigured } from "@/lib/server/tutor/providers";
 
@@ -8,5 +8,5 @@ export default async function Page({ searchParams }: { searchParams: LabSearchPa
   // Retain access to old saved builds without putting the detailed workspace in the new flow.
   const query = await searchParams;
   if (query.advanced === "1") return <LabPage lab="pc" searchParams={Promise.resolve(query)} />;
-  return <SimplePcLab aiConfigured={isTutorAiConfigured()} />;
+  return <PcBuilder aiConfigured={isTutorAiConfigured()} />;
 }

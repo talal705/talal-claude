@@ -104,3 +104,4 @@
 @keyframes cheerRight { from { transform:rotate(-130deg); } to { transform:rotate(-165deg); } }
 @keyframes confetti { from { transform:translateY(8px); opacity:1; } to { transform:translateY(-10px); opacity:.2; } }
 @keyframes fade { from { opacity:1; } to { opacity:.45; } }
+.companion > *, .row > *, .talk > * { min-width:0; }

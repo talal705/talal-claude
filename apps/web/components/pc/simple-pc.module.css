@@ -101,3 +101,8 @@
 .toggles button:focus-visible { outline:2px solid var(--accent-strong); outline-offset:2px; }
 @media(max-width:800px) { .viewBar { padding:8px 10px 0; } .viewBar .cameraHint { text-align:center; } }
 @media(prefers-reduced-motion:reduce) { .toggles button::before { transition:none; } }
+
+.editBuild { margin-block-start:10px; min-height:36px; padding:6px 14px; border:1px solid var(--accent); border-radius:10px; color:#dff6fb; font-size:13px; cursor:pointer; }
+.editBuild:focus-visible { outline:2px solid var(--accent-strong); outline-offset:2px; }
+.side, .side > * { min-width:0; }
+.part span { overflow-wrap:anywhere; line-height:1.35; }

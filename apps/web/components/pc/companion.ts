@@ -89,7 +89,7 @@ export function nextLine(state: PCBuildState, powered: boolean): CompanionLine {
   const next = nextAction(state, powered);
   if (next.kind === "part") {
     if (isRamKey(next.key)) return { key: RAM_IN(state) === 1 ? "next.ramSecond" : "next.ram" };
-    return { key: `next.${next.key}` };
+    return { key: `next.${partTopic(next.key)}` };
   }
   if (next.kind === "cable") {
     const first = simpleCablesFor(state).every((c) => !simpleCableConnected(state, c.key));
@@ -125,12 +125,15 @@ function cableBlockLine(key: SimpleCableKey, reason: SimpleCableBlock, state: PC
 }
 
 /** Lines that explain why the current (or selected) step matters. */
-const cableTopic = (key: SimpleCableKey) => (key.startsWith("caseFan") ? "caseFan" : key);
+const cableTopic = (key: SimpleCableKey) =>
+  key.startsWith("caseFan") ? "caseFan" : key.startsWith("sata") ? "sata" : key.startsWith("argb") ? "argb" : key.replace(/\d+$/, "");
+/** The message topic of a part key: a second drive or an added fan speaks like the first. */
+const partTopic = (key: SimplePartKey) => (isRamKey(key) ? "ram" : /^storage\d+$/.test(key) ? "storage" : /^fan\d+$/.test(key) ? "fan" : key);
 function explainLines(state: PCBuildState, powered: boolean, selection: Selection): CompanionLine[] {
-  if (selection?.kind === "part") return [{ key: `explain.${isRamKey(selection.key) ? "ram" : selection.key}` }];
+  if (selection?.kind === "part") return [{ key: `explain.${partTopic(selection.key)}` }];
   if (selection?.kind === "cable") return [{ key: `explain.${cableTopic(selection.key)}` }];
   const next = nextAction(state, powered);
-  if (next.kind === "part") return [{ key: `explain.${isRamKey(next.key) ? "ram" : next.key}` }];
+  if (next.kind === "part") return [{ key: `explain.${partTopic(next.key)}` }];
   if (next.kind === "cable") return [{ key: `explain.${cableTopic(next.key)}` }];
   if (next.kind === "swapCooler") return [{ key: "explain.liquidRule" }];
   return [{ key: next.kind === "done" ? "explain.done" : "explain.power" }];
@@ -224,7 +227,7 @@ export function companionSay(event: CompanionEvent, state: PCBuildState, powered
     case "installed": {
       let line: CompanionLine;
       if (isRamKey(event.key)) line = { key: RAM_IN(state) === 2 ? "installed.ramBoth" : "installed.ramFirst" };
-      else line = { key: `installed.${event.key}` };
+      else line = { key: `installed.${partTopic(event.key)}` };
       const partsDone = simpleAllPartsIn(state);
       return nextSay([partsDone ? { key: "installed.allParts" } : line], "happy");
     }

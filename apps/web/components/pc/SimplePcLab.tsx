@@ -17,7 +17,7 @@ import {
   parseSimpleSnapshot, SIMPLE_PART_LIST, SIMPLE_PARTS, SIMPLE_SAVE_KEY, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot,
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
   simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap,
-  type SimpleCableKey, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
+  activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
 } from "./simple-model";
 import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-scene";
 import { guideFocus } from "./guide";
@@ -27,11 +27,16 @@ import arLabs from "../../messages/ar/labs.json";
 /** The fix for the liquid-cooling rule, in Arabic, shown on the English page as well. */
 const NEEDS_LIQUID_AR = arLabs.simplePc.needsLiquid;
 
-const CABLE_IDS = ALL_SIMPLE_CABLES.map((c) => c.id);
 const partSpec = (key: SimplePartKey) => ALL_SIMPLE_PARTS.find((p) => p.key === key)!;
 const cableSpec = (key: SimpleCableKey) => ALL_SIMPLE_CABLES.find((c) => c.key === key)!;
-// Computed once: where every part lies on the bench at the start, and the second stick beside the first.
-const BENCH = simpleBenchLayout(createSimpleBuild());
+const entryOf = (catalogId: string | undefined) => pcCatalog.entries.find((e) => e.id === catalogId);
+/** A model name short enough for a tile: before any dash or bracket, at most about 24 characters. */
+const shortModel = (model: string) => {
+  const base = model.split(/ — | \(/)[0]!.trim();
+  if (base.length <= 24) return base;
+  const cut = base.slice(0, 24);
+  return `${cut.slice(0, cut.lastIndexOf(" ") > 10 ? cut.lastIndexOf(" ") : 24)}…`;
+};
 
 /**
  * How the learner likes the 3D view, kept apart from the build's own saved progress: the guide robot
@@ -74,9 +79,38 @@ declare global {
 }
 
 /** `aiConfigured` comes from the server (as for the page tutor): without a provider the page never asks the AI routes. */
-export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedded?: boolean; aiConfigured?: boolean }) {
+/**
+ * The page's model (`activateSimpleModel`) must be set before this mounts; remount it (a new `key`)
+ * when the model changes. `onEditBuild` returns to the planner.
+ */
+export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuild, saveKey = SIMPLE_SAVE_KEY, model = LEGACY_MODEL }: { embedded?: boolean; aiConfigured?: boolean; onEditBuild?: () => void; saveKey?: string; model?: SimpleModel }) {
+  // The build this page runs, put in place before anything below reads it.
+  useState(() => activateSimpleModel(model));
   const t = useTranslations("simplePc");
   const locale = useLocale();
+  const planned = activeSimpleModel().kind === "plan";
+  // Computed once per model: the leads drawn in the scene, and where every part lies on the bench at the start.
+  const cableIds = useMemo(() => ALL_SIMPLE_CABLES.map((c) => c.id), []);
+  const bench = useMemo(() => simpleBenchLayout(createSimpleBuild()), []);
+  const lang = locale === "ar" ? "ar" : "en";
+  /** A part's name: the fixed build's own label, or the role and model of a planned part. */
+  const label = (key: SimplePartKey, short = false) => {
+    if (!planned) return t(`parts.${key}`);
+    const n = key.match(/\d+$/)?.[0];
+    const e = entryOf(partSpec(key)?.catalogId);
+    return `${t(`roles.${roleOf(key)}`)}${n && roleOf(key) !== "fan" ? ` ${n}` : ""}${e ? ` · ${short ? shortModel(e.model) : e.model}` : ""}`;
+  };
+  const cableName = (key: SimpleCableKey) => t(`cables.${key}.name`);
+  /** The robot's short name for a planned part: its role only (the model is on the tile). */
+  const roleLabel = (key: SimplePartKey) => t(`roles.${roleOf(key)}`);
+  /** Where a lead goes: on a planned build, the real header or socket of the chosen board or part. */
+  const cableRoute = (key: SimpleCableKey) => {
+    if (!planned) return t(`cables.${key}.route`);
+    const c = cableSpec(key);
+    const host = entryOf(state.parts.find((p) => p.instanceId === c.instanceId)?.catalogId);
+    const portLabel = host?.ports.find((p) => p.id === c.portId)?.label[lang];
+    return portLabel ? `${t(`cables.${key}.name`)} → ${portLabel}` : t(`cables.${key}.route`);
+  };
   const reducedMotion = useReducedMotion();
   const [saved, setSaved] = useState<SimpleSnapshot>(emptySimpleSnapshot);
   const [ready, setReady] = useState(false);
@@ -119,7 +153,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
   useEffect(() => {
     let restored: SimpleSnapshot | null = null;
     try {
-      const raw = localStorage.getItem(SIMPLE_SAVE_KEY);
+      const raw = localStorage.getItem(saveKey);
       restored = raw ? parseSimpleSnapshot(JSON.parse(raw)) : null;
     } catch { /* Storage is optional; assembly still works in memory. */ }
     const snapshot = restored ?? emptySimpleSnapshot();
@@ -136,12 +170,12 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
     if (aiConfigured) void fetchTutorStatus(fetch, controller.signal).then(setAi);
     else setAi("not_configured");
     return () => { controller.abort(); asking.current?.abort(); };
-  }, [speak, aiConfigured]);
+  }, [speak, aiConfigured, saveKey]);
 
   useEffect(() => {
     if (!ready) return;
-    try { localStorage.setItem(SIMPLE_SAVE_KEY, JSON.stringify(saved)); } catch { /* Keep working. */ }
-  }, [ready, saved]);
+    try { localStorage.setItem(saveKey, JSON.stringify(saved)); } catch { /* Keep working. */ }
+  }, [ready, saved, saveKey]);
 
   function changeView(patch: Partial<SimpleView>) {
     setView((previous) => {
@@ -372,11 +406,25 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
   const firstMissingCable = leads.find((c) => c.essential && !simpleCableConnected(state, c.key));
   // The lab rule wins when it is still broken; otherwise the first missing part or lead.
   const rule = failedRule && simpleRuleBlock(state) ? failedRule : null;
-  const missingMessage = rule ? t("needsLiquid") : progress < SIMPLE_PARTS.length ? t("missing") : firstMissingCable ? t("missingCable", { cable: t(`cables.${firstMissingCable.key}.name`) }) : t("checkCables");
-  const placeName = (key: SimplePartKey) => t(`companion.places.${simpleTarget(state, key).mountPointId}`);
+  const ruleText = planned ? t("planner.findingText.exercise_needs_liquid") : t("needsLiquid");
+  const missingMessage = rule ? ruleText : progress < SIMPLE_PARTS.length ? t("missing") : firstMissingCable ? t("missingCable", { cable: cableName(firstMissingCable.key) }) : t("checkCables");
+  const placeName = (key: SimplePartKey) => {
+    const target = simpleTarget(state, key);
+    if (!planned) return t(`companion.places.${target.mountPointId}`);
+    const host = entryOf(state.parts.find((p) => p.instanceId === target.hostInstanceId)?.catalogId);
+    return host?.mountPoints.find((m) => m.id === target.mountPointId)?.label[lang] ?? target.mountPointId;
+  };
+  /** A mount point's own label on the board or case of the planned build. */
+  const placeLabelOf = (place: string) => {
+    for (const p of state.parts) {
+      const m = entryOf(p.catalogId)?.mountPoints.find((x) => x.id === place);
+      if (m && (p.catalogId === entryOf(partSpec("motherboard")?.catalogId)?.id || p.instanceId === "case-1")) return m.label[lang];
+    }
+    return place;
+  };
   const summary = complete ? {
-    parts: SIMPLE_PARTS.flatMap((p) => simpleSlotPart(state, p.key) ?? []).map((key) => (isRamKey(key) ? `${t(`parts.${key}`)} · ${placeName(key)}` : t(`parts.${key}`))),
-    cables: leads.map((c) => t(`cables.${c.key}.name`)),
+    parts: SIMPLE_PARTS.flatMap((p) => simpleSlotPart(state, p.key) ?? []).map((key) => (isRamKey(key) ? `${label(key)} · ${placeName(key)}` : label(key))),
+    cables: leads.map((c) => cableName(c.key)),
   } : null;
   const removable = selectedPart ? REMOVABLE.includes(selectedPart) : false;
   const removeBlocked = selectedPart && partInstalled && removable ? simpleRemoveBlock(state, selectedPart) : null;
@@ -389,7 +437,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
   return (
     <section className={styles.lab} aria-labelledby="simple-pc-title" onKeyDown={onKeyDown}>
       <header className={styles.heading}>
-        <div>{embedded ? <h2 id="simple-pc-title">{t("title")}</h2> : <h1 id="simple-pc-title">{t("title")}</h1>}<p>{t("intro")}</p></div>
+        <div>{embedded ? <h2 id="simple-pc-title">{t("title")}</h2> : <h1 id="simple-pc-title">{t("title")}</h1>}<p>{t("intro")}</p>
+          {onEditBuild && <button type="button" className={styles.editBuild} onClick={onEditBuild}>{t("planner.editBuild")}</button>}</div>
         <span className={styles.progress} aria-label={t("progress", { count: progress, total: SIMPLE_PARTS.length })}>{progress}<span> / {SIMPLE_PARTS.length}</span></span>
       </header>
 
@@ -416,7 +465,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
                   noModel={t("part")}
                   rtl={locale === "ar"}
                   onSelectPart={onScenePart}
-                  simpleCableIds={CABLE_IDS}
+                  simpleCableIds={cableIds}
                   selectedSimpleCableId={selectedCable ? cableSpec(selectedCable).id : null}
                   onSelectSimpleCable={onSceneCable}
                   simpleTargets={targets}
@@ -425,8 +474,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
                   guide={guide}
                   guideAnimate={view.guideMotion}
                   rgb={view.rgb}
-                  benchOrder={BENCH.benchOrder}
-                  beside={BENCH.beside}
+                  benchOrder={bench.benchOrder}
+                  beside={bench.beside}
                   onContextLost={() => setWebgl(false)}
                 />
               </SceneBoundary>
@@ -444,7 +493,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
 
         <div className={styles.side}>
           <div className={styles.companionSlot}>
-            <BuildCompanion message={message} ai={ai} thinking={thinking} reducedMotion={reducedMotion} onQuick={quick} onAsk={(text) => void ask(text)} summary={summary} />
+            <BuildCompanion message={message} ai={ai} thinking={thinking} reducedMotion={reducedMotion} onQuick={quick} onAsk={(text) => void ask(text)} summary={summary} {...(planned ? { partLabel: roleLabel, placeLabel: placeLabelOf } : {})} />
           </div>
 
           <div className={styles.controls}>
@@ -463,7 +512,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
                   const other = !done && SWAPPABLE.includes(key) && simpleSlotPart(state, slotOf(key)) !== null;
                   return <button key={part.key} type="button" className={styles.part} data-selected={active} data-installed={done} data-alternative={other || undefined} aria-pressed={active} onClick={() => choosePart(part.key)}>
                     <img src={`/assets/pc/thumbnails/${part.catalogId}.svg`} alt="" width={58} height={44} />
-                    <span>{t(`parts.${part.key}`)}{SWAPPABLE.includes(key) && <small>{t(`partNotes.${key}`)}</small>}</span>
+                    <span>{label(part.key, true)}{SWAPPABLE.includes(key) && <small>{t(`partNotes.${key}`)}</small>}</span>
                     {done && <CheckIcon />}
                   </button>;
                 })}
@@ -471,14 +520,14 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
 
               <div className={styles.install}>
                 {selectedPart ? <>
-                  <div className={styles.selection}><strong>{t(`parts.${selectedPart}`)}</strong><span>{partInstalled ? t("installed") : placeName(selectedPart)}</span></div>
+                  <div className={styles.selection}><strong>{label(selectedPart)}</strong><span>{partInstalled ? t("installed") : placeName(selectedPart)}</span></div>
                   {partInstalled && removable
                     ? <button className={styles.installButton} type="button" onClick={() => remove(selectedPart)} disabled={!ready || Boolean(removeBlocked)}>{t("remove")}</button>
                     : rival
-                      ? <button className={styles.installButton} type="button" onClick={() => swap(rival, selectedPart)} disabled={!ready || Boolean(swapBlocked)}>{t("swap", { other: t(`parts.${rival}`) })}</button>
+                      ? <button className={styles.installButton} type="button" onClick={() => swap(rival, selectedPart)} disabled={!ready || Boolean(swapBlocked)}>{t("swap", { other: label(rival) })}</button>
                       : <button className={styles.installButton} type="button" onClick={() => install(selectedPart)} disabled={!ready || partInstalled || Boolean(partBlocked) || saved.powered}>{partInstalled ? t("installed") : t("install")}</button>}
                   {partBlocked && !partInstalled && !rival && <p className={styles.hint}>{t(partBlocked)}</p>}
-                  {rival && <p className={styles.hint}>{swapBlocked ? blockHint(swapBlocked) : t("swapHint", { other: t(`parts.${rival}`) })}</p>}
+                  {rival && <p className={styles.hint}>{swapBlocked ? blockHint(swapBlocked) : t("swapHint", { other: label(rival) })}</p>}
                   {partInstalled && SWAPPABLE.includes(selectedPart) && !removable && <p className={styles.hint}>{t("swapCpuHint")}</p>}
                   {removeBlocked && removeBlocked !== "notSwappable" && <p className={styles.hint}>{blockHint(removeBlocked)}</p>}
                   <button className={styles.cancel} type="button" onClick={cancel}>{t("cancel")}</button>
@@ -487,35 +536,35 @@ export function SimplePcLab({ embedded = false, aiConfigured = false }: { embedd
             </div>
 
             <div ref={cablesTarget} hidden={tab !== "cables"}>
-              <p className={styles.cablesIntro}>{t(simplePartInstalled(state, "aio") ? "cablesIntroLiquid" : "cablesIntro")}</p>
+              <p className={styles.cablesIntro}>{t(!planned && simplePartInstalled(state, "aio") ? "cablesIntroLiquid" : "cablesIntro")}</p>
               <div className={styles.cables} role="group" aria-label={t("cablesLabel")}>
                 {leads.map((item) => {
                   const done = simpleCableConnected(state, item.key);
                   const active = selectedCable === item.key;
                   return <button type="button" key={item.key} className={styles.cable} data-selected={active} data-connected={done} aria-pressed={active} onClick={() => chooseCable(item.key)}>
                     <span className={styles.wireIcon} aria-hidden="true">↳</span>
-                    <span>{t(`cables.${item.key}.name`)}{!item.essential && <small>{t("fanOptional")}</small>}</span>
+                    <span>{cableName(item.key)}{!item.essential && <small>{t("fanOptional")}</small>}</span>
                     {done ? <CheckIcon /> : <span className={styles.unplugged}>{t("loose")}</span>}
                   </button>;
                 })}
               </div>
               {selectedCable && <div className={styles.cableDetail}>
-                <strong>{t(`cables.${selectedCable}.name`)}</strong>
-                <p>{t(`cables.${selectedCable}.route`)}</p>
+                <strong>{cableName(selectedCable)}</strong>
+                <p>{cableRoute(selectedCable)}</p>
                 <code dir="ltr">{t(`cables.${selectedCable}.connector`)}</code>
                 <button className={styles.installButton} type="button" onClick={() => cableDone ? unplug(selectedCable) : connect(selectedCable)} disabled={!ready || saved.powered || (!cableDone && Boolean(cableBlocked))}>{cableDone ? t("disconnect") : t("connect")}</button>
-                {cableBlocked && !cableDone && <p className={styles.hint}>{cableBlocked === "turnOffFirst" ? t("turnOffFirst") : t("fitCableParts", { parts: simpleCableMissingParts(state, selectedCable).map((key) => t(`parts.${key}`)).join(locale === "ar" ? "، " : ", ") })}</p>}
+                {cableBlocked && !cableDone && <p className={styles.hint}>{cableBlocked === "turnOffFirst" ? t("turnOffFirst") : t("fitCableParts", { parts: simpleCableMissingParts(state, selectedCable).map((key) => label(key)).join(locale === "ar" ? "، " : ", ") })}</p>}
                 {saved.powered && cableDone && <p className={styles.hint}>{t("turnOffFirst")}</p>}
                 <button className={styles.cancel} type="button" onClick={cancel}>{t("cancel")}</button>
               </div>}
-              <p className={styles.cablesNote}>{t("noStorageCable")}</p>
+              {!leads.some((c) => c.key.startsWith("sata")) && <p className={styles.cablesNote}>{t("noStorageCable")}</p>}
             </div>
 
             <div className={styles.power}>
               <div className={styles.result} data-result={verdict ?? "idle"} role="status" aria-live="polite">
                 {verdict === "success" ? <><CheckIcon /><strong>{t("success")}</strong></> : verdict === "failure" ? <><CrossIcon /><div><strong>{t("failure")}</strong><p>{missingMessage}</p>
                   {/* The fix for the liquid-cooling rule is also given in Arabic on the English page. */}
-                  {rule && locale !== "ar" && <p lang="ar" dir="rtl" className={styles.ruleArabic}>{NEEDS_LIQUID_AR}</p>}
+                  {rule && locale !== "ar" && <p lang="ar" dir="rtl" className={styles.ruleArabic}>{planned ? arLabs.simplePc.planner.findingText.exercise_needs_liquid : NEEDS_LIQUID_AR}</p>}
                   {rule && <p className={styles.ruleNote}>{t("ruleNote")}</p>}
                 </div></> : <span>{t("readyToTry")}</span>}
               </div>
