@@ -23,6 +23,7 @@ import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-sce
 import { guideFocus } from "./guide";
 import { availableFaults, flashBios, withFault, type FaultKind } from "./faults";
 import { PowerDiagnostics } from "./PowerDiagnostics";
+import { substepsFor } from "./substeps";
 import type { PCBuildState, StartupResult } from "@ytl/contracts";
 import styles from "./simple-pc.module.css";
 import arLabs from "../../messages/ar/labs.json";
@@ -141,6 +142,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** The last power-on attempt, for the stage-by-stage panel. */
   const [attempt, setAttempt] = useState<{ state: PCBuildState; startup: StartupResult } | null>(null);
   const built = useMemo(() => simpleBuildFromSnapshot(saved), [saved]);
+  /** Physical steps ticked for the part in hand (they reset when another part is picked up). */
+  const [ticked, setTicked] = useState(0);
   const state = mode === "fault" && fault ? fault.state : built;
   const startup = useMemo(() => pc.evaluateStartup(state, pcCatalog), [state]);
   const targets = useMemo(() => simpleSceneTargets(state, selection), [state, selection]);
@@ -220,6 +223,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (selection?.kind === "part" && selection.key === key) { cancel(); return; }
     const next: Selection = { kind: "part", key };
     setSelection(next);
+    setTicked(0);
     setGuided(true);
     setTab("parts");
     if (saved.powered) { speak({ lines: [{ key: "blocked.turnOff" }], mood: "concerned", point: "power" }); return; }
@@ -250,6 +254,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
       return;
     }
     if (saved.powered) return;
+    // The physical steps come first (pushing a resting part home has none to repeat).
+    if (!simplePartInstalled(state, key) && ticked < substepsFor(key).length && !simpleSlotPart(state, slotOf(key))) { speak({ lines: [{ key: "blocked.substeps" }], mood: "concerned", point: "parts" }); return; }
     const rival = simpleSlotPart(state, slotOf(key));
     if (rival && rival !== key) { swap(rival, key); return; }
     const step = installSimplePart(state, key);
@@ -394,7 +400,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     setConfirmRestart(false);
     if (mode === "fault") {
       if (!fault) return;
-      const result = startSimplePC(fault.state);
+      const result = startSimplePC(fault.state, { evenIfIncomplete: true });
       setAttempt({ state: fault.state, startup: result.startup });
       setVerdict(result.ok ? "success" : "failure");
       setFailedRule(result.ok ? null : result.rule);
@@ -591,7 +597,10 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
                     ? <button className={styles.installButton} type="button" onClick={() => remove(selectedPart)} disabled={!ready || Boolean(removeBlocked)}>{t("remove")}</button>
                     : rival
                       ? <button className={styles.installButton} type="button" onClick={() => swap(rival, selectedPart)} disabled={!ready || Boolean(swapBlocked)}>{t("swap", { other: label(rival) })}</button>
-                      : <button className={styles.installButton} type="button" onClick={() => install(selectedPart)} disabled={!ready || partInstalled || Boolean(partBlocked) || saved.powered}>{partInstalled ? t("installed") : t("install")}</button>}
+                      : <button className={styles.installButton} type="button" onClick={() => install(selectedPart)} disabled={!ready || partInstalled || Boolean(partBlocked) || saved.powered || (mode !== "fault" && ticked < substepsFor(selectedPart).length)}>{partInstalled ? t("installed") : t("install")}</button>}
+                  {mode !== "fault" && !partInstalled && !rival && !partBlocked && substepsFor(selectedPart).length > 0 && <ol className={styles.substeps} aria-label={t("substeps.title")}>
+                    {substepsFor(selectedPart).map((step, i) => <li key={step}><button type="button" aria-pressed={i < ticked} disabled={i > ticked} onClick={() => setTicked(i < ticked ? i : i + 1)}><span aria-hidden="true">{i < ticked ? "✓" : i + 1}</span>{t(`substeps.${step}`)}</button></li>)}
+                  </ol>}
                   {partBlocked && !partInstalled && !rival && <p className={styles.hint}>{t(partBlocked)}</p>}
                   {rival && <p className={styles.hint}>{swapBlocked ? blockHint(swapBlocked) : t("swapHint", { other: label(rival) })}</p>}
                   {partInstalled && SWAPPABLE.includes(selectedPart) && !removable && <p className={styles.hint}>{t("swapCpuHint")}</p>}

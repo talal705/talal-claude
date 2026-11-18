@@ -126,3 +126,10 @@
 .bios dl { display:grid; gap:2px; }
 .bios dl div { display:grid; grid-template-columns:64px minmax(0,1fr); gap:6px; font-size:11px; }
 .bios dt { color:#7fa6d6; }
+.substeps { display:grid; gap:5px; list-style:none; padding:0; margin-block-end:10px; }
+.substeps button { display:flex; gap:8px; align-items:flex-start; width:100%; text-align:start; padding:7px 9px; border:1px solid var(--border); border-radius:9px; font-size:12px; line-height:1.55; color:var(--text-soft); cursor:pointer; background:#10141b; }
+.substeps button span { flex-shrink:0; width:18px; height:18px; display:grid; place-items:center; border-radius:50%; border:1px solid #3a4a5a; font-size:10.5px; }
+.substeps button[aria-pressed="true"] { border-color:#2c5e46; color:#cfeedd; }
+.substeps button[aria-pressed="true"] span { background:#1d5b40; border-color:#2c8a5e; }
+.substeps button:disabled { opacity:.45; cursor:default; }
+.substeps button:focus-visible { outline:2px solid var(--accent-strong); outline-offset:1px; }

@@ -429,8 +429,9 @@ export function disconnectSimpleCable(state: PCBuildState, key: SimpleCableKey):
 }
 
 /** Only mains/PSU switches remain automatic; internal leads must be connected by the learner. */
-export function startSimplePC(state: PCBuildState): { ok: boolean; state: PCBuildState; startup: StartupResult; rule: SimpleRule | null } {
-  if (!simpleAllPartsIn(state)) return { ok: false, state, startup: pc.evaluateStartup(state, pcCatalog), rule: null };
+export function startSimplePC(state: PCBuildState, opts: { evenIfIncomplete?: boolean } = {}): { ok: boolean; state: PCBuildState; startup: StartupResult; rule: SimpleRule | null } {
+  // "Find the fault" presses power on whatever is there: a half-seated module must show as a failed POST.
+  if (!opts.evenIfIncomplete && !simpleAllPartsIn(state)) return { ok: false, state, startup: pc.evaluateStartup(state, pcCatalog), rule: null };
   if (!state.power.pressed) {
     state = run(state, [
       { type: "set_side_panel", open: false },

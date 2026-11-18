@@ -1032,7 +1032,8 @@
         "removeCoolerFirst": "The cooler sits on top of the CPU. Take the cooler out before you swap the CPU.",
         "unplugCoolerFirst": "Unplug the {part}'s leads first, in the Cables tab.",
         "turnOffFirst": "Turn the PC off before swapping the {part}.",
-        "notSwappable": "Use Undo to take the {part} back out."
+        "notSwappable": "Use Undo to take the {part} back out.",
+        "substeps": "First tick the steps in the panel, then fit it."
       },
       "installed": {
         "cpu": "The processor is seated and its lever is closed.",
@@ -1257,7 +1258,7 @@
       "replaceKeeps": "Changing a part keeps your other assembly steps.",
       "progressKept": "Assembly steps kept: {kept}. Undone because of the change: {undone}.",
       "included": "Small parts in the box",
-      "includedItems": "Standoffs and case screws come with the case. The M.2 latch is on the board. Coolers come with their mounting kit; these two have paste already applied. The board supplies SATA data cables. A modular PSU's cables belong to that PSU only.",
+      "includedItems": "Standoffs and case screws come with the case. The M.2 latch is on the board. Coolers come with their mounting kit; the Freezer 7 X has paste pre-applied, others: check the box. The board supplies SATA data cables. A modular PSU's cables belong to that PSU only.",
       "exerciseRule": "Exercise rule",
       "colorNote": "Colour and cable colour are cosmetic: never a compatibility issue.",
       "specs": {
@@ -1384,6 +1385,42 @@
       "showCause": "Show the cause",
       "hideCause": "Hide the cause",
       "note": "Fans spinning or lights on do not prove the self-test passed."
+    },
+    "substeps": {
+      "cpuLever": "Lift the socket lever and open the load plate.",
+      "cpuAlign": "Match the gold triangle to the socket corner; line up the notches.",
+      "cpuLower": "Lower the CPU straight down. Never press or slide it.",
+      "cpuClose": "Close the plate and lock the lever (the cover pops off).",
+      "ramLatches": "Open the slot latches.",
+      "ramNotch": "Line up the notch with the key in the slot.",
+      "ramPress": "Press both ends down until the latches click.",
+      "m2Latch": "Open the M.2 latch or remove its screw.",
+      "m2Angle": "Slide the drive into the slot at about 30°.",
+      "m2Secure": "Press it flat and close the latch or screw.",
+      "driveTray": "Put the drive in a bay or tray of its size.",
+      "driveScrews": "Fix it with the tray's pins or screws.",
+      "pasteCheck": "Thermal paste: a pea-sized dot on the CPU, unless the cooler's base already has it (the Freezer 7 X does). Never both.",
+      "coolerFilm": "Peel the protective film off the cooler's base.",
+      "coolerBracket": "Fit the backplate and mounting brackets for this socket.",
+      "coolerDiagonal": "Tighten the screws a little at a time, in a diagonal order.",
+      "radiatorMount": "Screw the radiator into its case position, hoses down or to the side.",
+      "fanDirection": "Fans blow through the radiator in the chosen direction (front = air in).",
+      "standoffs": "Check the standoffs match the board's holes (no extra standoffs).",
+      "ioShield": "Fit the I/O shield if the board's is not built in.",
+      "boardAlign": "Lower the board, ports into the shield, holes over standoffs.",
+      "boardScrews": "Screw the board down, not too tight.",
+      "slotCovers": "Remove the case's slot covers for the card's width.",
+      "gpuLatch": "Open the PCIe slot latch.",
+      "gpuPress": "Press the card straight in until the latch clicks.",
+      "gpuBracket": "Screw the bracket to the case.",
+      "psuFan": "Point the PSU fan at the case's dust filter (usually down).",
+      "psuSlide": "Slide the PSU into its bay.",
+      "psuScrews": "Fix it with four screws at the back.",
+      "fanArrows": "Check the arrows on the frame: front fans blow in, rear and top blow out.",
+      "fanScrews": "Screw the fan to its position.",
+      "title": "Steps",
+      "tickAll": "Tick each step, then fit the part.",
+      "done": "Done"
     }
   },
   "learning": {

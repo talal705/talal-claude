@@ -22,11 +22,17 @@ describe("find the fault", () => {
     };
     for (const kind of availableFaults()) {
       const broken = withFault(kind)!;
-      const r = startSimplePC(broken);
+      const r = startSimplePC(broken, { evenIfIncomplete: true });
       expect(r.ok, kind).toBe(false);
       const fixed = fixes[kind]!(broken)!;
       expect(startSimplePC(fixed).ok, kind).toBe(true);
     }
+  });
+
+  it("a half-seated module powers on but fails POST", () => {
+    const r = startSimplePC(withFault("ramUnseated")!, { evenIfIncomplete: true }).startup;
+    expect(r.stages.find((s) => s.stage === "power")?.status).toBe("passed");
+    expect(r.stages.find((s) => s.stage === "post")?.status).toBe("failed");
   });
 
   it("separates what is seen: fans spin without CPU power, but POST fails", () => {
