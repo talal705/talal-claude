@@ -92,7 +92,9 @@ export function motherboardGeometry(entry: MotherboardEntry, catalogVersion: str
 
   // First M.2 slot above the expansion slot, the others below it.
   const slotX = 0.17 * W;
-  const z0 = 0.5 * L;
+  // On a narrow board the memory slots reach over the expansion slot's row: start the slots below them.
+  const narrow = dimms.length > 0 && 0.66 * W < slotX + 95;
+  const z0 = narrow ? Math.max(0.5 * L, 0.05 * L + 152) : 0.5 * L;
   const m2 = entry.mountPoints.filter((m) => m.kind === "m2_slot");
   const m2Slot = (m: (typeof m2)[number], z: number) => {
     const len = m.kind === "m2_slot" && m.lengths.includes("m2_22110") ? 110 : 80;

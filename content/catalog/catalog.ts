@@ -5,6 +5,7 @@ import { assetFor } from "./assets";
 import { cases } from "./cases";
 import { cooling } from "./cooling";
 import { cpus } from "./cpus";
+import { expansionEntries as X } from "./expansion";
 import { fans } from "./fans";
 import { gpus } from "./gpus";
 import { motherboards } from "./motherboards";
@@ -37,12 +38,26 @@ export const ARCHIVED_CATALOG_IDS: ReadonlySet<string> = new Set([
  * Entries offered only on the guided build page (owner decision 2026-11-16: a second CPU and a 280 mm
  * liquid cooler as alternatives there). The detailed lab keeps its two options per category.
  */
-export const GUIDED_ONLY_IDS: ReadonlySet<string> = new Set(["arctic-liquid-freezer-iii-280"]);
+export const GUIDED_ONLY_IDS: ReadonlySet<string> = new Set([
+  "arctic-liquid-freezer-iii-280",
+  // Build-planner additions (2026-11-18): offered on the guided page's planner, not in the detailed lab.
+  "intel-core-i5-4590",
+  "asus-h81m-k",
+  "corsair-vengeance-lp-ddr3-1600-16gb-kit",
+  "asus-prime-b760m-a-wifi",
+  "asus-dual-rtx5060-o8g",
+  "seagate-barracuda-2tb-st2000dm008",
+  "fractal-pop-mini-air-rgb-black-tg",
+  "corsair-7000d-airflow-black",
+  "arctic-p14-pwm-pst",
+  "corsair-rm650e-2025",
+  "corsair-rm1200x-shift",
+]);
 
 export const pcCatalog: PCCatalog = {
   version: "2026.10.31-1",
   // Each data file starts every entry with "no asset"; the generated visuals are attached here.
-  entries: [...cases, ...motherboards, ...cpus, ...ram, ...gpus, ...psus, ...storage, ...fans, ...cooling, ...accessories].map((e) => ({ ...e, asset: assetFor(e.id) })),
+  entries: [...cases, ...X.cases, ...motherboards, ...X.motherboards, ...cpus, ...X.cpus, ...ram, ...X.ram, ...gpus, ...X.gpus, ...psus, ...storage, ...X.storage, ...fans, ...X.fans, ...cooling, ...accessories].map((e) => ({ ...e, asset: assetFor(e.id) })),
 };
 
 /**

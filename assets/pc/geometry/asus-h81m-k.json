@@ -1,0 +1,1200 @@
+{
+  "schema": 2,
+  "catalogId": "asus-h81m-k",
+  "catalogVersion": "2026.10.31-1",
+  "units": "mm",
+  "bounds": {
+    "size": [
+      175,
+      35.6,
+      226
+    ],
+    "basis": {
+      "x": "catalog",
+      "y": "schematic",
+      "z": "catalog"
+    }
+  },
+  "solids": [
+    {
+      "id": "pcb",
+      "shape": "box",
+      "at": [
+        87.5,
+        0.8,
+        113
+      ],
+      "size": [
+        175,
+        1.6,
+        226
+      ],
+      "role": "pcb",
+      "basis": "catalog",
+      "finish": "pcb_black"
+    },
+    {
+      "id": "mount-hole-1",
+      "shape": "cylinder",
+      "at": [
+        6,
+        0.8,
+        10
+      ],
+      "radius": 3.2,
+      "height": 1.6,
+      "axis": "y",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "gold"
+    },
+    {
+      "id": "mount-hole-2",
+      "shape": "cylinder",
+      "at": [
+        6,
+        0.8,
+        160
+      ],
+      "radius": 3.2,
+      "height": 1.6,
+      "axis": "y",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "gold"
+    },
+    {
+      "id": "mount-hole-3",
+      "shape": "cylinder",
+      "at": [
+        6,
+        0.8,
+        222
+      ],
+      "radius": 3.2,
+      "height": 1.6,
+      "axis": "y",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "gold"
+    },
+    {
+      "id": "mount-hole-4",
+      "shape": "cylinder",
+      "at": [
+        128,
+        0.8,
+        10
+      ],
+      "radius": 3.2,
+      "height": 1.6,
+      "axis": "y",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "gold"
+    },
+    {
+      "id": "mount-hole-5",
+      "shape": "cylinder",
+      "at": [
+        128,
+        0.8,
+        160
+      ],
+      "radius": 3.2,
+      "height": 1.6,
+      "axis": "y",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "gold"
+    },
+    {
+      "id": "mount-hole-6",
+      "shape": "cylinder",
+      "at": [
+        128,
+        0.8,
+        222
+      ],
+      "radius": 3.2,
+      "height": 1.6,
+      "axis": "y",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "gold"
+    },
+    {
+      "id": "mount-hole-7",
+      "shape": "cylinder",
+      "at": [
+        171,
+        0.8,
+        10
+      ],
+      "radius": 3.2,
+      "height": 1.6,
+      "axis": "y",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "gold"
+    },
+    {
+      "id": "mount-hole-8",
+      "shape": "cylinder",
+      "at": [
+        171,
+        0.8,
+        160
+      ],
+      "radius": 3.2,
+      "height": 1.6,
+      "axis": "y",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "gold"
+    },
+    {
+      "id": "mount-hole-9",
+      "shape": "cylinder",
+      "at": [
+        171,
+        0.8,
+        222
+      ],
+      "radius": 3.2,
+      "height": 1.6,
+      "axis": "y",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "gold"
+    },
+    {
+      "id": "cmos-battery",
+      "shape": "cylinder",
+      "at": [
+        108.5,
+        3.2,
+        198.9
+      ],
+      "radius": 10,
+      "height": 3.2,
+      "axis": "y",
+      "role": "plate",
+      "basis": "standard",
+      "finish": "nickel"
+    },
+    {
+      "id": "rear-io",
+      "shape": "box",
+      "at": [
+        14,
+        18.6,
+        67.8
+      ],
+      "size": [
+        28,
+        34,
+        113
+      ],
+      "role": "io_shield",
+      "basis": "schematic",
+      "finish": "black_metal"
+    },
+    {
+      "id": "vrm-left",
+      "shape": "fins",
+      "at": [
+        42,
+        15.6,
+        54.2
+      ],
+      "size": [
+        17.5,
+        28,
+        63.3
+      ],
+      "role": "heatsink",
+      "basis": "schematic",
+      "count": 14,
+      "axis": "z",
+      "finish": "black_metal"
+    },
+    {
+      "id": "vrm-top",
+      "shape": "fins",
+      "at": [
+        80.5,
+        13.6,
+        22
+      ],
+      "size": [
+        52.5,
+        24,
+        10.2
+      ],
+      "role": "heatsink",
+      "basis": "schematic",
+      "count": 16,
+      "axis": "x",
+      "finish": "black_metal"
+    },
+    {
+      "id": "chipset",
+      "shape": "box",
+      "at": [
+        147.9,
+        6.1,
+        162.7
+      ],
+      "size": [
+        29.8,
+        9,
+        45.2
+      ],
+      "role": "heatsink",
+      "basis": "schematic",
+      "finish": "black_metal",
+      "label": "H81"
+    },
+    {
+      "id": "vrm-chokes",
+      "shape": "fins",
+      "at": [
+        53.8,
+        4.6,
+        54.2
+      ],
+      "size": [
+        6,
+        6,
+        54.2
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "count": 8,
+      "axis": "z",
+      "finish": "silicon"
+    },
+    {
+      "id": "cpu-socket",
+      "shape": "box",
+      "at": [
+        84.8,
+        4.6,
+        59.8
+      ],
+      "size": [
+        54,
+        6,
+        54
+      ],
+      "role": "cpu_socket",
+      "basis": "schematic",
+      "finish": "black_plastic",
+      "label": "LGA1150"
+    },
+    {
+      "id": "cpu-socket-load-plate",
+      "shape": "box",
+      "at": [
+        84.8,
+        8,
+        36.8
+      ],
+      "size": [
+        50,
+        0.8,
+        4
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "cpu-socket-load-plate-far",
+      "shape": "box",
+      "at": [
+        84.8,
+        8,
+        82.8
+      ],
+      "size": [
+        50,
+        0.8,
+        4
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "cpu-socket-lever",
+      "shape": "cylinder",
+      "at": [
+        114.8,
+        3.6,
+        59.8
+      ],
+      "radius": 1,
+      "height": 54,
+      "axis": "z",
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "cooler-mount",
+      "shape": "box",
+      "at": [
+        84.8,
+        2.1,
+        59.8
+      ],
+      "size": [
+        82,
+        1,
+        82
+      ],
+      "role": "cooler_keepout",
+      "basis": "schematic"
+    },
+    {
+      "id": "dimm-a1",
+      "shape": "box",
+      "at": [
+        119,
+        6.1,
+        82.3
+      ],
+      "size": [
+        7,
+        9,
+        142
+      ],
+      "role": "dimm_slot",
+      "basis": "schematic",
+      "finish": "grey_plastic",
+      "label": "DIMM_A1"
+    },
+    {
+      "id": "dimm-a1-latch",
+      "shape": "box",
+      "at": [
+        119,
+        12.1,
+        150.3
+      ],
+      "size": [
+        8,
+        3,
+        6
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "grey_plastic"
+    },
+    {
+      "id": "dimm-b1",
+      "shape": "box",
+      "at": [
+        128.5,
+        6.1,
+        82.3
+      ],
+      "size": [
+        7,
+        9,
+        142
+      ],
+      "role": "dimm_slot",
+      "basis": "schematic",
+      "finish": "black_plastic",
+      "label": "DIMM_B1"
+    },
+    {
+      "id": "dimm-b1-latch",
+      "shape": "box",
+      "at": [
+        128.5,
+        12.1,
+        150.3
+      ],
+      "size": [
+        8,
+        3,
+        6
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "grey_plastic"
+    },
+    {
+      "id": "pcie-x16-1",
+      "shape": "box",
+      "at": [
+        74.3,
+        7.1,
+        167.1
+      ],
+      "size": [
+        89,
+        11,
+        7.5
+      ],
+      "role": "pcie_slot",
+      "basis": "standard",
+      "finish": "nickel",
+      "label": "PCIE X16"
+    },
+    {
+      "id": "pcie-x16-1-latch",
+      "shape": "box",
+      "at": [
+        121.8,
+        6.1,
+        167.1
+      ],
+      "size": [
+        6,
+        9,
+        9.5
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "eps4-1",
+      "shape": "box",
+      "at": [
+        41.5,
+        7.6,
+        7
+      ],
+      "size": [
+        13,
+        12,
+        10
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "EPS4-1",
+      "pins": 4
+    },
+    {
+      "id": "cpu-fan",
+      "shape": "box",
+      "at": [
+        91.5,
+        6.1,
+        3.5
+      ],
+      "size": [
+        8,
+        9,
+        3
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "CPU_FAN",
+      "pins": 4
+    },
+    {
+      "id": "atx-24",
+      "shape": "box",
+      "at": [
+        168,
+        8.1,
+        71.2
+      ],
+      "size": [
+        10,
+        13,
+        52
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "ATX-24",
+      "pins": 24
+    },
+    {
+      "id": "sata-1",
+      "shape": "box",
+      "at": [
+        169.5,
+        5.6,
+        146.1
+      ],
+      "size": [
+        7,
+        8,
+        12
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "SATA6G_1"
+    },
+    {
+      "id": "sata-2",
+      "shape": "box",
+      "at": [
+        169.5,
+        5.6,
+        160.1
+      ],
+      "size": [
+        7,
+        8,
+        12
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "SATA6G_2"
+    },
+    {
+      "id": "sata-3",
+      "shape": "box",
+      "at": [
+        169.5,
+        5.6,
+        174.1
+      ],
+      "size": [
+        7,
+        8,
+        12
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "SATA6G_3"
+    },
+    {
+      "id": "sata-4",
+      "shape": "box",
+      "at": [
+        169.5,
+        5.6,
+        188.1
+      ],
+      "size": [
+        7,
+        8,
+        12
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "SATA6G_4"
+    },
+    {
+      "id": "hd-audio",
+      "shape": "box",
+      "at": [
+        16,
+        6.1,
+        220.5
+      ],
+      "size": [
+        12,
+        9,
+        5
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "AAFP"
+    },
+    {
+      "id": "usb2-1",
+      "shape": "box",
+      "at": [
+        35.4,
+        6.1,
+        220.5
+      ],
+      "size": [
+        12,
+        9,
+        5
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "USB2-1",
+      "pins": 9
+    },
+    {
+      "id": "usb2-2",
+      "shape": "box",
+      "at": [
+        54.8,
+        6.1,
+        220.5
+      ],
+      "size": [
+        12,
+        9,
+        5
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "USB2-2",
+      "pins": 9
+    },
+    {
+      "id": "cha-fan-1",
+      "shape": "box",
+      "at": [
+        74.1,
+        6.1,
+        220.5
+      ],
+      "size": [
+        12,
+        9,
+        5
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "CHA_FAN1",
+      "pins": 4
+    },
+    {
+      "id": "panel-pwrsw",
+      "shape": "box",
+      "at": [
+        90,
+        6.1,
+        220.5
+      ],
+      "size": [
+        5,
+        9,
+        5
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "PWRSW",
+      "pins": 2
+    },
+    {
+      "id": "panel-reset",
+      "shape": "box",
+      "at": [
+        109.4,
+        6.1,
+        220.5
+      ],
+      "size": [
+        5,
+        9,
+        5
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "RESET",
+      "pins": 2
+    },
+    {
+      "id": "panel-pled",
+      "shape": "box",
+      "at": [
+        128.8,
+        6.1,
+        220.5
+      ],
+      "size": [
+        5,
+        9,
+        5
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "PLED",
+      "pins": 2
+    },
+    {
+      "id": "panel-hddled",
+      "shape": "box",
+      "at": [
+        148.1,
+        6.1,
+        220.5
+      ],
+      "size": [
+        5,
+        9,
+        5
+      ],
+      "role": "port",
+      "basis": "schematic",
+      "label": "HDD_LED",
+      "pins": 2
+    }
+  ],
+  "attach": {
+    "main": {
+      "at": [
+        0,
+        0,
+        0
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "mounts": {
+    "cpu-socket": {
+      "at": [
+        84.8,
+        7.6,
+        59.8
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "insert": [
+        0,
+        -1,
+        0
+      ],
+      "travelMm": 25,
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        54,
+        6,
+        54
+      ],
+      "solid": "cpu-socket"
+    },
+    "cooler-mount": {
+      "at": [
+        84.8,
+        11.6,
+        59.8
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "insert": [
+        0,
+        -1,
+        0
+      ],
+      "travelMm": 60,
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        82,
+        1,
+        82
+      ],
+      "solid": "cooler-mount"
+    },
+    "dimm-a1": {
+      "at": [
+        119,
+        10.6,
+        153.3
+      ],
+      "quat": [
+        0,
+        0.7071067811865476,
+        0,
+        0.7071067811865476
+      ],
+      "insert": [
+        0,
+        -1,
+        0
+      ],
+      "travelMm": 35,
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        7,
+        9,
+        142
+      ],
+      "solid": "dimm-a1"
+    },
+    "dimm-b1": {
+      "at": [
+        128.5,
+        10.6,
+        153.3
+      ],
+      "quat": [
+        0,
+        0.7071067811865476,
+        0,
+        0.7071067811865476
+      ],
+      "insert": [
+        0,
+        -1,
+        0
+      ],
+      "travelMm": 35,
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        7,
+        9,
+        142
+      ],
+      "solid": "dimm-b1"
+    },
+    "pcie-x16-1": {
+      "at": [
+        29.8,
+        12.6,
+        167.1
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "insert": [
+        0,
+        -1,
+        0
+      ],
+      "travelMm": 25,
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        89,
+        11,
+        7.5
+      ],
+      "solid": "pcie-x16-1"
+    }
+  },
+  "ports": {
+    "eps4-1": {
+      "at": [
+        41.5,
+        13.6,
+        7
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        13,
+        12,
+        10
+      ],
+      "solid": "eps4-1"
+    },
+    "cpu-fan": {
+      "at": [
+        91.5,
+        10.6,
+        3.5
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        8,
+        9,
+        3
+      ],
+      "solid": "cpu-fan"
+    },
+    "atx-24": {
+      "at": [
+        168,
+        14.6,
+        71.2
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        10,
+        13,
+        52
+      ],
+      "solid": "atx-24"
+    },
+    "sata-1": {
+      "at": [
+        169.5,
+        9.6,
+        146.1
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        7,
+        8,
+        12
+      ],
+      "solid": "sata-1"
+    },
+    "sata-2": {
+      "at": [
+        169.5,
+        9.6,
+        160.1
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        7,
+        8,
+        12
+      ],
+      "solid": "sata-2"
+    },
+    "sata-3": {
+      "at": [
+        169.5,
+        9.6,
+        174.1
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        7,
+        8,
+        12
+      ],
+      "solid": "sata-3"
+    },
+    "sata-4": {
+      "at": [
+        169.5,
+        9.6,
+        188.1
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        7,
+        8,
+        12
+      ],
+      "solid": "sata-4"
+    },
+    "hd-audio": {
+      "at": [
+        16,
+        10.6,
+        220.5
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        12,
+        9,
+        5
+      ],
+      "solid": "hd-audio"
+    },
+    "usb2-1": {
+      "at": [
+        35.4,
+        10.6,
+        220.5
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        12,
+        9,
+        5
+      ],
+      "solid": "usb2-1"
+    },
+    "usb2-2": {
+      "at": [
+        54.8,
+        10.6,
+        220.5
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        12,
+        9,
+        5
+      ],
+      "solid": "usb2-2"
+    },
+    "cha-fan-1": {
+      "at": [
+        74.1,
+        10.6,
+        220.5
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        12,
+        9,
+        5
+      ],
+      "solid": "cha-fan-1"
+    },
+    "panel-pwrsw": {
+      "at": [
+        90,
+        10.6,
+        220.5
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        5,
+        9,
+        5
+      ],
+      "solid": "panel-pwrsw"
+    },
+    "panel-reset": {
+      "at": [
+        109.4,
+        10.6,
+        220.5
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        5,
+        9,
+        5
+      ],
+      "solid": "panel-reset"
+    },
+    "panel-pled": {
+      "at": [
+        128.8,
+        10.6,
+        220.5
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        5,
+        9,
+        5
+      ],
+      "solid": "panel-pled"
+    },
+    "panel-hddled": {
+      "at": [
+        148.1,
+        10.6,
+        220.5
+      ],
+      "facing": [
+        0,
+        1,
+        0
+      ],
+      "size": [
+        5,
+        9,
+        5
+      ],
+      "solid": "panel-hddled"
+    }
+  },
+  "leads": {},
+  "zones": {
+    "cpu-area": {
+      "solids": [
+        "vrm-left",
+        "vrm-top",
+        "cpu-socket"
+      ]
+    },
+    "memory-slots": {
+      "solids": [
+        "dimm-a1",
+        "dimm-b1"
+      ]
+    },
+    "system-panel": {
+      "solids": [
+        "panel-pwrsw",
+        "panel-reset",
+        "panel-pled",
+        "panel-hddled"
+      ]
+    }
+  },
+  "lights": [],
+  "label": {
+    "en": "Educational model — not manufacturer-accurate",
+    "ar": "نموذج تعليمي، مو مطابق لشكل المنتج الحقيقي"
+  }
+}

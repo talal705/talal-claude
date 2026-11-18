@@ -88,7 +88,7 @@ export function caseGeometry(entry: CaseEntry, v: string): PartGeometry {
   // The basement: power-supply shroud with cable cut-outs, and grommets beside the board.
   b.box("psu-shroud", "panel", [wall, feet + wall + shroudH, trayZ], [L - 40, wall, W - trayZ - 4], "schematic", steel);
   b.box("shroud-front", "panel", [L - 42, feet + wall, trayZ], [wall, shroudH, W - trayZ - 4], "schematic", steel);
-  for (let i = 0; i < 3; i += 1) b.box(`grommet-${i + 1}`, "plate", [L * 0.72, feet + shroudH + 60 + i * 90, trayZ - wall - 0.5], [24, 60, 1], "schematic", { finish: "rubber" });
+  for (let i = 0; i < 3 && feet + shroudH + 60 + i * 90 + 60 < H - wall; i += 1) b.box(`grommet-${i + 1}`, "plate", [L * 0.72, feet + shroudH + 60 + i * 90, trayZ - wall - 0.5], [24, 60, 1], "schematic", { finish: "rubber" });
 
   for (const m of entry.mountPoints) {
     if (m.kind === "motherboard_tray") {
@@ -191,7 +191,7 @@ export function ramGeometry(entry: RamEntry, v: string): PartGeometry {
   const Y = entry.rgb ? 44 : 34;
   const Z = 7;
   // The key notch sits at a different distance along the edge for each generation; that is what blocks a wrong slot.
-  const notchX = entry.spec.generation === "ddr5" ? 0.51 * X : 0.545 * X;
+  const notchX = entry.spec.generation === "ddr5" ? 0.51 * X : entry.spec.generation === "ddr3" ? 0.56 * X : 0.545 * X;
   const b = new Builder();
   b.fins("contacts-left", "edge_connector", [3, 0, 2.7], [notchX - 5, 4, 1.6], 40, "x", "schematic", { finish: "gold" });
   b.fins("contacts-right", "edge_connector", [notchX + 2, 0, 2.7], [X - notchX - 5, 4, 1.6], 40, "x", "schematic", { finish: "gold" });

@@ -98,6 +98,30 @@ const shiftCables: CableSpec[] = [
   cable("peripheral", "peripheral_power", "modular", L("PATA cable (4 connectors), Type 5", "كيبل PATA (4 رؤوس)، النوع 5"), [psuSide(`${T5}:peripheral`), ...molexPlugs(4)]),
 ];
 
+const epsPlugAt = (id: string) => end(id, "eps_4plus4pin", "cpu_power", "plug", "device", L(`EPS12V 4+4-pin CPU plug ${id.slice(-1)}`, `راس المعالج EPS12V 4+4 سنون ${id.slice(-1)}`));
+
+// RM650e (2025): Corsair's cable listing. The PSU-side socket class of each GPU cable is not on the page.
+const rm650eCables: CableSpec[] = [
+  cable("atx24", "atx_main", "modular", L("Modular ATX 24-pin cable, Type 4", "كيبل ATX المعياري 24 سنّ، النوع 4"), [psuSide(`${T4}:atx24`), atxPlug]),
+  cable("eps", "cpu_power", "modular", L("EPS / ATX 12V 8-pin (4+4) pigtail cable (two plugs), Type 4", "كيبل EPS / ATX 12V 8 سنون (4+4) براسين على نفس السلك، النوع 4"), [psuSide(`${T4}:cpu-pcie`), epsPlugAt("device-1"), epsPlugAt("device-2")]),
+  cable("gpu-12v-2x6", "gpu_power", "modular", L("12V-2x6 (12+4-pin) cable, Type 4", "كيبل 12V-2x6 (12+4 سنّ)، النوع 4"), [psuSide(`${T4}:cpu-pcie`), gpu16Plug]),
+  cable("gpu-2x8", "gpu_power", "modular", L("12V-2x6 to dual 8-pin (6+2) cable, Type 4", "كيبل 12V-2x6 إلى راسين 8 سنون (6+2)، النوع 4"), [psuSide(`${T4}:cpu-pcie`), pciePlug("device-1"), pciePlug("device-2")]),
+  cable("pcie", "gpu_power", "modular", L("PCIe 8-pin (6+2) cable, Type 4", "كيبل PCIe 8 سنون (6+2)، النوع 4"), [psuSide(`${T4}:cpu-pcie`), pciePlug()]),
+  cable("sata", "sata_power", "modular", L("SATA power cable (4 connectors), Type 4", "كيبل طاقة SATA (4 رؤوس)، النوع 4"), [psuSide(`${T4}:peripheral`), ...sataPlugs(4)]),
+  cable("sata-pata", "sata_power", "modular", L("SATA / PATA cable (2 SATA + 2 PATA), Type 4", "كيبل SATA / PATA (راسين SATA وراسين PATA)، النوع 4"), [psuSide(`${T4}:peripheral`), ...sataPlugs(2), ...molexPlugs(2)]),
+];
+
+// RM1200x SHIFT: Corsair's cable listing (1 ATX, 2 EPS, 1 12V-2x6, 2 dual PCIe, 4 single PCIe, 4 SATA x4, 8 PATA plugs).
+const rm1200xShiftCables: CableSpec[] = [
+  cable("atx24", "atx_main", "modular", L("Modular ATX cable (24-pin), Type 5", "كيبل ATX المعياري (24 سنّ)، النوع 5"), [psuSide(`${T5}:atx24`), atxPlug]),
+  cable("eps", "cpu_power", "modular", L("EPS / ATX 12V 8-pin (4+4) cable, Type 5", "كيبل EPS / ATX 12V 8 سنون (4+4)، النوع 5"), [psuSide(`${T5}:cpu-pcie`), epsPlug], 2),
+  cable("gpu-12v-2x6", "gpu_power", "modular", L("12V-2x6 (12+4-pin) cable, Type 5", "كيبل 12V-2x6 (12+4 سنّ)، النوع 5"), [psuSide(`${T5}:12v-2x6`), gpu16Plug]),
+  cable("pcie-dual", "gpu_power", "modular", L("PCIe 8-pin (6+2) (6+2) cable, Type 5", "كيبل PCIe 8 سنون (6+2) (6+2)، النوع 5"), [psuSide(`${T5}:cpu-pcie`), pciePlug("device-1"), pciePlug("device-2")], 2),
+  cable("pcie", "gpu_power", "modular", L("PCIe 8-pin (6+2) cable, Type 5", "كيبل PCIe 8 سنون (6+2)، النوع 5"), [psuSide(`${T5}:cpu-pcie`), pciePlug()], 4),
+  cable("sata", "sata_power", "modular", L("SATA power cable (4 connectors), Type 5", "كيبل طاقة SATA (4 رؤوس)، النوع 5"), [psuSide(`${T5}:peripheral`), ...sataPlugs(4)], 4),
+  cable("peripheral", "peripheral_power", "modular", L("PATA cable (4 connectors), Type 5", "كيبل PATA (4 رؤوس)، النوع 5"), [psuSide(`${T5}:peripheral`), ...molexPlugs(4)], 2),
+];
+
 export const psus: PsuEntry[] = [
   {
     id: "corsair-rm850x-atx31",
@@ -208,5 +232,71 @@ export const psus: PsuEntry[] = [
     rgb: null,
     asset: NO_ASSET,
     spec: { wattageW: 550, efficiency: ["80plus_bronze"], formFactor: "atx", modularity: "none", atxSpec: "ATX12V v2.31", cableFamily: null },
+  },
+  {
+    id: "corsair-rm650e-2025",
+    category: "psu",
+    brand: "Corsair",
+    model: "RMe Series RM650e Fully Modular Low-Noise ATX Power Supply",
+    partNumber: "CP-9020302-NA",
+    generic: false,
+    description: L(
+      "A 650 W fully modular unit with Corsair Type 4 cables, a native 12V-2x6 cable and a CPU cable that carries two EPS plugs on one lead. Enough for a mid-range build; more watts than needed is never a fault.",
+      "مزوّد 650 واط مودولار كامل بكيبلات Corsair Type 4، فيه كيبل 12V-2x6 أصلي وكيبل معالج واحد عليه راسين EPS. يكفي لتجميعة متوسطة؛ والواط الزايد عن الحاجة مو مشكلة أبدًا.",
+    ),
+    sources: [
+      source("Corsair", "RMe Series RM650e Fully Modular Low-Noise ATX Power Supply (Tech Specs, cable listing)", "https://www.corsair.com/us/en/p/psu/CP-9020302-NA/rme-series-rm650e-fully-modular-low-noise-atx-power-supply-cp-9020302-na", "2026-11-18"),
+      source("Corsair", "CORSAIR RMe Series 2025 — manual / included cables", "https://www.corsair.com/explorer/diy-builder/power-supply-units/corsair-rme-series-2025/", "2026-11-18"),
+    ],
+    verification: "partially_verified",
+    unverifiedFields: ["ports (modular socket count and grouping)", "PSU-side socket class of the GPU cables", "mounting fastener count"],
+    teachingNotes: [FASTENER_NOTE, SOCKET_NOTE, TYPE_NOTE],
+    dimensions: { lengthMm: 140, widthMm: 150, heightMm: 86 },
+    formFactor: "ATX",
+    mountPoints: [],
+    mounting,
+    zones: psuZones,
+    ports: [
+      ...sockets(`${T4}:atx24`, "out-atx", 1, "24-pin ATX", "ATX بـ24 سنّ"),
+      ...sockets(`${T4}:cpu-pcie`, "out-cpu-pcie", 4, "CPU/PCIe", "المعالج/PCIe"),
+      ...sockets(`${T4}:peripheral`, "out-peripheral", 2, "Peripheral/SATA", "الملحقات/SATA"),
+    ],
+    cables: rm650eCables,
+    rgb: null,
+    asset: NO_ASSET,
+    spec: { wattageW: 650, efficiency: ["cybenetics_gold"], formFactor: "atx", modularity: "full", atxSpec: "ATX 3.1", cableFamily: T4 },
+  },
+  {
+    id: "corsair-rm1200x-shift",
+    category: "psu",
+    brand: "Corsair",
+    model: "RM1200x SHIFT 80 PLUS Gold Fully Modular ATX Power Supply",
+    partNumber: "CP-9020254-NA",
+    generic: false,
+    description: L(
+      "A 1200 W fully modular unit whose sockets face the side panel and take Corsair Type 5 cables. Far more than most builds need: that headroom does no harm, but Type 4 cables from another unit must not go in it.",
+      "مزوّد 1200 واط مودولار كامل، مداخله على الجنب وياخذ كيبلات Corsair Type 5. أكثر بواجد من حاجة أغلب التجميعات: والزيادة ما تضرّ، بس كيبلات Type 4 من مزوّد ثاني ممنوع تنحط فيه.",
+    ),
+    sources: [
+      source("Corsair", "RM1200x SHIFT 80 PLUS Gold Fully Modular ATX Power Supply (Tech Specs, power table, cable listing)", "https://www.corsair.com/us/en/p/psu/cp-9020254-na/rm1200x-shift-80-plus-gold-fully-modular-atx-power-supply-cp-9020254-na", "2026-11-18"),
+    ],
+    verification: "partially_verified",
+    unverifiedFields: ["ports (modular socket count and grouping)", "cables.peripheral split (Corsair lists 8 PATA plugs in total; two cables of four are modelled)", "mounting fastener count"],
+    teachingNotes: [FASTENER_NOTE, SOCKET_NOTE, TYPE_NOTE, "Side-facing sockets need room beside the unit; the case's width is not checked for it in this model."],
+    dimensions: { lengthMm: 180, widthMm: 150, heightMm: 86 },
+    formFactor: "ATX",
+    mountPoints: [],
+    mounting,
+    zones: psuZones,
+    ports: [
+      ...sockets(`${T5}:atx24`, "out-atx", 1, "24-pin ATX", "ATX بـ24 سنّ"),
+      ...sockets(`${T5}:12v-2x6`, "out-12v-2x6", 1, "12V-2x6", "12V-2x6"),
+      ...sockets(`${T5}:cpu-pcie`, "out-cpu-pcie", 8, "CPU/PCIe", "المعالج/PCIe"),
+      ...sockets(`${T5}:peripheral`, "out-peripheral", 6, "Peripheral/SATA", "الملحقات/SATA"),
+    ],
+    cables: rm1200xShiftCables,
+    rgb: null,
+    asset: NO_ASSET,
+    spec: { wattageW: 1200, efficiency: ["80plus_gold", "cybenetics_gold"], formFactor: "atx", modularity: "full", atxSpec: "ATX 3.1", cableFamily: T5 },
   },
 ];

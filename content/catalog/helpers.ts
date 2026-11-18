@@ -136,6 +136,12 @@ export const boardPorts = (o: {
   usbC: boolean;
   hdmi: number;
   displayPort: number;
+  /** CPU_OPT header; absent on some entry boards. Default true. */
+  cpuOpt?: boolean;
+  /** Dedicated AIO_PUMP header; absent on some entry boards (a pump then goes to CPU_OPT or a fan header). Default true. */
+  pumpHeader?: boolean;
+  /** USB 3 front header. Default true. */
+  usb3?: boolean;
 }): PortSpec[] => [
   port("atx-24", "atx_24pin", "atx_main_power", L("24-pin main power connector", "موصّل الطاقة الرئيسي 24 سنّ"), "required"),
   ...numbered(o.eps8, (i) =>
@@ -148,11 +154,12 @@ export const boardPorts = (o: {
     ),
   ),
   ...numbered(o.eps4 ?? 0, (i) =>
-    port(`eps4-${i}`, "eps_4pin", "cpu_power", L(`4-pin +12V CPU power connector ${i}`, `موصّل طاقة المعالج 4 سنون +12V رقم ${i}`)),
+    // On a board with no 8-pin socket the first 4-pin one is the CPU's only power input, so it is required.
+    port(`eps4-${i}`, "eps_4pin", "cpu_power", L(`4-pin +12V CPU power connector ${i}`, `موصّل طاقة المعالج 4 سنون +12V رقم ${i}`), o.eps8 === 0 && i === 1 ? "required" : "optional"),
   ),
   port("cpu-fan", "fan_4pin_pwm", "cpu_fan_header", L("CPU fan header (CPU_FAN)", "مدخل مروحة المعالج (CPU_FAN)")),
-  port("cpu-opt", "fan_4pin_pwm", "cpu_fan_header", L("CPU optional fan header (CPU_OPT)", "مدخل مروحة المعالج الإضافي (CPU_OPT)")),
-  port("aio-pump", "fan_4pin_pwm", "pump_header", L("AIO pump header (AIO_PUMP)", "مدخل مضخة التبريد المائي (AIO_PUMP)")),
+  ...(o.cpuOpt === false ? [] : [port("cpu-opt", "fan_4pin_pwm", "cpu_fan_header", L("CPU optional fan header (CPU_OPT)", "مدخل مروحة المعالج الإضافي (CPU_OPT)"))]),
+  ...(o.pumpHeader === false ? [] : [port("aio-pump", "fan_4pin_pwm", "pump_header", L("AIO pump header (AIO_PUMP)", "مدخل مضخة التبريد المائي (AIO_PUMP)"))]),
   ...numbered(o.chassisFans, (i) =>
     port(`cha-fan-${i}`, "fan_4pin_pwm", "system_fan_header", L(`Chassis fan header ${i} (CHA_FAN${i})`, `مدخل مروحة الهيكل ${i} (CHA_FAN${i})`)),
   ),
@@ -167,7 +174,7 @@ export const boardPorts = (o: {
   port("panel-pled", "front_panel_2pin", "power_led", L("System panel: power LED pins (PLED)", "لوحة النظام: سنون لمبة التشغيل (PLED)")),
   port("panel-hddled", "front_panel_2pin", "drive_led", L("System panel: drive LED pins (HDD_LED)", "لوحة النظام: سنون لمبة القرص (HDD_LED)")),
   port("hd-audio", "hd_audio_header", "front_audio", L("Front panel audio header (AAFP)", "مدخل الصوت الأمامي (AAFP)")),
-  port("usb3-header", "usb3_header_19pin", "front_usb3", L("USB 3.2 Gen 1 header", "مدخل USB 3.2 Gen 1")),
+  ...(o.usb3 === false ? [] : [port("usb3-header", "usb3_header_19pin", "front_usb3", L("USB 3.2 Gen 1 header", "مدخل USB 3.2 Gen 1"))]),
   ...(o.usbC ? [port("usb-c-header", "usb_c_header_type_e", "front_usb_c", L("USB Type-C front panel connector", "موصّل USB Type-C للوحة الأمامية"))] : []),
   ...numbered(o.usb2, (i) => port(`usb2-${i}`, "usb2_header_9pin", "front_usb2", L(`USB 2.0 header ${i}`, `مدخل USB 2.0 رقم ${i}`))),
   ...numbered(o.sata, (i) => port(`sata-${i}`, "sata_data", "sata_data", L(`SATA 6Gb/s port ${i} (SATA6G_${i})`, `منفذ SATA 6Gb/s رقم ${i} (SATA6G_${i})`))),
@@ -189,8 +196,8 @@ export const sataDataCables = (quantity: number): CableSpec =>
     quantity,
   );
 
-export const dimmSlots = (generation: "ddr4" | "ddr5"): MountPointSpec[] =>
-  (["a1", "a2", "b1", "b2"] as const).map((s) => ({
+export const dimmSlots = (generation: "ddr3" | "ddr4" | "ddr5", slots: readonly string[] = ["a1", "a2", "b1", "b2"]): MountPointSpec[] =>
+  slots.map((s) => ({
     id: `dimm-${s}`,
     kind: "dimm_slot" as const,
     generation,

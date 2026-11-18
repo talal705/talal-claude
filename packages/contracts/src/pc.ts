@@ -35,10 +35,11 @@ export type PCAccessoryCategory = "cable" | "monitor";
 export type PCCatalogCategory = PCPartCategory | PCAccessoryCategory;
 
 export type CpuVendor = "intel" | "amd";
-export type CpuSocket = "lga1200" | "lga1700" | "lga1851" | "am4" | "am5";
+export type CpuSocket = "lga1150" | "lga1200" | "lga1700" | "lga1851" | "am4" | "am5";
 export type MotherboardFormFactor = "e_atx" | "atx" | "micro_atx" | "mini_itx";
 export type PsuFormFactor = "atx" | "sfx" | "sfx_l";
-export type MemoryGeneration = "ddr4" | "ddr5";
+/** DDR3 is kept for the legacy LGA1150 route only (an older platform, not a lower tier). */
+export type MemoryGeneration = "ddr3" | "ddr4" | "ddr5";
 export type MemoryModuleType = "udimm" | "sodimm";
 export type CoolingType = "air" | "aio_liquid";
 export type StorageInterface = "sata" | "nvme";
