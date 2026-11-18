@@ -8,5 +8,7 @@ export { canRedo, canUndo, createHistory, dispatch, redo, replay, timelineLog, t
 export type { ReplayResult } from "./history";
 export { LOAD_MODEL, diagnoseBuild, evaluateStartup } from "./startup";
 export { makeView } from "./view";
+export { EXERCISE_LIQUID_CPU_IDS, REQUIRED_SLOTS, checkPlan } from "./plan";
+export type { BuildPlan, PlanFinding, PlanReport, PlanSeverity, PlanSlot } from "./plan";
 // Generated educational geometry and thumbnails (assets/pc/), and their validation.
 export * as visual from "./visual";

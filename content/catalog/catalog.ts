@@ -52,12 +52,13 @@ export const GUIDED_ONLY_IDS: ReadonlySet<string> = new Set([
   "arctic-p14-pwm-pst",
   "corsair-rm650e-2025",
   "corsair-rm1200x-shift",
+  "arctic-freezer-7-x",
 ]);
 
 export const pcCatalog: PCCatalog = {
   version: "2026.10.31-1",
   // Each data file starts every entry with "no asset"; the generated visuals are attached here.
-  entries: [...cases, ...X.cases, ...motherboards, ...X.motherboards, ...cpus, ...X.cpus, ...ram, ...X.ram, ...gpus, ...X.gpus, ...psus, ...storage, ...X.storage, ...fans, ...X.fans, ...cooling, ...accessories].map((e) => ({ ...e, asset: assetFor(e.id) })),
+  entries: [...cases, ...X.cases, ...motherboards, ...X.motherboards, ...cpus, ...X.cpus, ...ram, ...X.ram, ...gpus, ...X.gpus, ...psus, ...storage, ...X.storage, ...fans, ...X.fans, ...cooling, ...X.cooling, ...accessories].map((e) => ({ ...e, asset: assetFor(e.id) })),
 };
 
 /**

@@ -4,7 +4,7 @@
 // `unverifiedFields` and are not invented. Boards whose BIOS history was not read carry the single
 // version "unrecorded": the engine then treats the CPU as supported, and the planner reports the BIOS
 // question as unknown (conditional) instead of guessing a version.
-import type { CaseEntry, CpuEntry, FanEntry, GpuEntry, MotherboardEntry, MountPointSpec, RamEntry, StorageEntry } from "@ytl/contracts";
+import type { CaseEntry, CoolingEntry, CpuEntry, FanEntry, GpuEntry, MotherboardEntry, MountPointSpec, RamEntry, StorageEntry } from "@ytl/contracts";
 import { FASTENER_NOTE, L, NO_ASSET, boardPorts, dimmSlots, fanLead, fanMounts, frontPanelLeads, port, sataDataCables, source, zone } from "./helpers";
 
 const ON = "2026-11-18";
@@ -383,4 +383,33 @@ export const fan140: FanEntry = {
   spec: { sizeMm: 140, thicknessMm: 27, control: "pwm_4pin", maxRpm: 1700 },
 };
 
-export const expansionEntries = { cpus: [legacyCpu], motherboards: [entryBoard, legacyBoard], ram: [legacyRam], gpus: [rtx5060], storage: [hdd], cases: [smallCase, largeCase], fans: [fan140] };
+// ---------- Compact air cooler (fits LGA1150 as well as LGA1700) ----------
+
+export const compactAirCooler: CoolingEntry = {
+  id: "arctic-freezer-7-x",
+  category: "cooling",
+  brand: "ARCTIC",
+  model: "Freezer 7 X",
+  partNumber: "ACFRE00077A",
+  generic: false,
+  description: L(
+    "A small air cooler, 132.5 mm tall, with one 100 mm fan and pre-applied MX-4 thermal paste. Its brackets cover older Intel sockets (115X, which includes LGA1150) as well as LGA1700 and LGA1851.",
+    "مبرّد هوائي صغير، ارتفاعه 132.5 مم، بمروحة 100 مم ومعجون MX-4 محطوط من المصنع. تثبيته يناسب مقابس Intel القديمة (115X ومنها LGA1150) وبعد LGA1700 و LGA1851.",
+  ),
+  sources: [source("ARCTIC", "Freezer 7 X — General Specifications", "https://www.arctic.de/en/Freezer-7-X/ACFRE00077A", ON)],
+  verification: "verified",
+  unverifiedFields: [],
+  teachingNotes: [FASTENER_NOTE, "coolingCapacityW is null: ARCTIC publishes no wattage rating for this cooler, so the lab does not judge whether it is enough for a given CPU.", "The page lists the pre-applied paste: do not add more on top of it."],
+  dimensions: { lengthMm: 74.3, widthMm: 110.5, heightMm: 132.5 },
+  formFactor: "Compact tower air cooler",
+  mountPoints: [],
+  mounting: [{ role: "main", kind: "cpu_cooler_mount", label: L("CPU cooler position on the motherboard", "مكان مبرّد المعالج على اللوحة الأم") }],
+  zones: [zone("cold-plate", L("Contact plate with paste", "قاعدة التلامس مع المعجون"), L("The paste is already on the plate; peel the protective cover off just before mounting.", "المعجون محطوط على القاعدة؛ شيل الغطا الواقي قبل التركيب مباشرة."))],
+  ports: [],
+  cables: [fanLead("fan", "fan_4pin_pwm", L("Cooler fan lead (4-pin PWM)", "سلك مروحة المبرّد (PWM من 4 سنون)"))],
+  rgb: null,
+  asset: NO_ASSET,
+  spec: { type: "air", supportedSockets: ["lga1851", "lga1700", "lga1200", "lga1150", "am5", "am4"], heightMm: 132.5, radiatorSizeMm: null, fanCount: 1, fanSizeMm: 100, coolingCapacityW: null },
+};
+
+export const expansionEntries = { cpus: [legacyCpu], motherboards: [entryBoard, legacyBoard], ram: [legacyRam], gpus: [rtx5060], storage: [hdd], cases: [smallCase, largeCase], fans: [fan140], cooling: [compactAirCooler] };

@@ -1,0 +1,221 @@
+{
+  "schema": 2,
+  "catalogId": "arctic-freezer-7-x",
+  "catalogVersion": "2026.10.31-1",
+  "units": "mm",
+  "bounds": {
+    "size": [
+      74.3,
+      132.5,
+      110.5
+    ],
+    "basis": {
+      "x": "catalog",
+      "y": "catalog",
+      "z": "catalog"
+    }
+  },
+  "solids": [
+    {
+      "id": "cold-plate",
+      "shape": "box",
+      "at": [
+        37.2,
+        2,
+        55.3
+      ],
+      "size": [
+        40,
+        4,
+        40
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "copper"
+    },
+    {
+      "id": "mounting-bar",
+      "shape": "box",
+      "at": [
+        37.2,
+        6,
+        55.3
+      ],
+      "size": [
+        8,
+        4,
+        106.5
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "black_metal"
+    },
+    {
+      "id": "heat-pipe-1",
+      "shape": "cylinder",
+      "at": [
+        24.3,
+        66.3,
+        28.7
+      ],
+      "radius": 3,
+      "height": 124.5,
+      "axis": "y",
+      "role": "tube",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "heat-pipe-2",
+      "shape": "cylinder",
+      "at": [
+        32.3,
+        66.3,
+        46.4
+      ],
+      "radius": 3,
+      "height": 124.5,
+      "axis": "y",
+      "role": "tube",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "heat-pipe-3",
+      "shape": "cylinder",
+      "at": [
+        24.3,
+        66.3,
+        64.1
+      ],
+      "radius": 3,
+      "height": 124.5,
+      "axis": "y",
+      "role": "tube",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "heat-pipe-4",
+      "shape": "cylinder",
+      "at": [
+        32.3,
+        66.3,
+        81.8
+      ],
+      "radius": 3,
+      "height": 124.5,
+      "axis": "y",
+      "role": "tube",
+      "basis": "schematic",
+      "finish": "nickel"
+    },
+    {
+      "id": "fin-stack",
+      "shape": "fins",
+      "at": [
+        28.3,
+        80.3,
+        55.3
+      ],
+      "size": [
+        56.6,
+        92.5,
+        106.5
+      ],
+      "role": "heatsink",
+      "basis": "schematic",
+      "count": 46,
+      "axis": "y",
+      "finish": "aluminium"
+    },
+    {
+      "id": "top-cover",
+      "shape": "box",
+      "at": [
+        28.3,
+        129.5,
+        55.3
+      ],
+      "size": [
+        56.6,
+        6,
+        106.5
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "fan-frame-1",
+      "shape": "box",
+      "at": [
+        65.5,
+        80.3,
+        55.3
+      ],
+      "size": [
+        17.7,
+        92.5,
+        98.5
+      ],
+      "role": "body",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "fan-1",
+      "shape": "rotor",
+      "at": [
+        65.5,
+        80.3,
+        55.3
+      ],
+      "radius": 45.3,
+      "height": 13.7,
+      "axis": "x",
+      "role": "fan",
+      "basis": "schematic",
+      "count": 7,
+      "finish": "black_plastic"
+    }
+  ],
+  "attach": {
+    "main": {
+      "at": [
+        37.2,
+        0,
+        55.3
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "mounts": {},
+  "ports": {},
+  "leads": {
+    "fan": {
+      "at": [
+        37.2,
+        40,
+        109.5
+      ]
+    }
+  },
+  "zones": {
+    "cold-plate": {
+      "solids": [
+        "cold-plate"
+      ]
+    }
+  },
+  "lights": [],
+  "label": {
+    "en": "Educational model — not manufacturer-accurate",
+    "ar": "نموذج تعليمي، مو مطابق لشكل المنتج الحقيقي"
+  }
+}
