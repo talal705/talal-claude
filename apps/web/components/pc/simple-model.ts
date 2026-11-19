@@ -691,6 +691,12 @@ export function plugSimpleEnd(state: PCBuildState, key: SimpleCableKey, endIndex
   }
   if (reversed && simplePlugKeying(portOf(state, end.instanceId, end.portId)?.connector ?? "") !== "none") return { ok: false, reason: "reversed" };
   if (simpleEndPlugged(state, end)) return { ok: true, state };
+  // A plug sitting in the wrong header comes out before it goes into the right one.
+  if (state.cables.find((c) => c.id === end.cableId)?.ends[end.endId]) {
+    const off = pc.applyAction(state, { type: "disconnect_cable_end", cableId: end.cableId, endId: end.endId }, pcCatalog);
+    if (!off.ok) return { ok: false, reason: "wrongPort", message: off.rejection.message };
+    state = off.state;
+  }
   const r = pc.applyAction(state, { type: "connect_cable_end", cableId: end.cableId, endId: end.endId, to: { kind: "part", instanceId: end.instanceId, portId } }, pcCatalog);
   return r.ok ? { ok: true, state: r.state } : { ok: false, reason: "wrongPort", message: r.rejection.message };
 }
