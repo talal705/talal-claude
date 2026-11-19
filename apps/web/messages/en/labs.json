@@ -1180,7 +1180,24 @@
         "ramIn": "Click! It's home and the latch closed.",
         "ramReleased": "Latch open: the stick lifted. Press it in again or lift it out.",
         "lifted": "Out and back on the bench.",
-        "cpuReleased": "Plate open. You can lift the CPU out now."
+        "cpuReleased": "Plate open. You can lift the CPU out now.",
+        "gpuCoversFirst": "First take out the case's slot covers beside the top slot, so the card's bracket has somewhere to go.",
+        "gpuLatchFirst": "Push the slot's latch open before the card goes in.",
+        "gpuOpen": "Slot ready. Turn the card so its bracket faces the case's rear and line it up.",
+        "gpuTurn": "The card is turned the wrong way; its bracket must face the back of the case.",
+        "gpuCentre": "The card is off the slot; line the gold edge up with the slot and the bracket with the opening.",
+        "gpuIn": "Card seated and the latch clicked. Now screw its bracket to the case.",
+        "gpuScrewed": "Bracket screwed. The card is secure.",
+        "gpuUnscrewed": "Screws out. Press the latch to release the card.",
+        "gpuReleased": "Latch released. You can lift the card out now.",
+        "gpuUnplug": "Unplug the card's power cable first.",
+        "gpuUnscrew": "Take the bracket screws out first.",
+        "gpuReleaseFirst": "Press the slot's latch to release the card first.",
+        "gpuSeatFirst": "Push the card fully in before screwing the bracket.",
+        "coversOut": "Covers out. The card's bracket fits there now.",
+        "coversIn": "Covers back in.",
+        "coversBlocked": "A card is in that opening; take it out before refitting the covers.",
+        "closeBlocked": "That latch can't move like that right now."
       }
     },
     "partNotes": {
@@ -1503,7 +1520,24 @@
       "takeOther": "The other CPU is in the socket. Open the plate and lift it out first.",
       "unverified": "The latch arrangement on this board is not shown in its manual; one latch is drawn.",
       "note": "Educational simulation: it does not reproduce insertion force.",
-      "closeup": "Close-up"
+      "closeup": "Close-up",
+      "pcieLatch": "PCIe latch: {state}",
+      "covers": "Slot covers: {state}",
+      "coversIn": "in",
+      "coversOut": "out",
+      "screwsIn": "bracket screwed",
+      "screwsOut": "bracket not screwed",
+      "removeCovers": "Unscrew and remove the two slot covers",
+      "refitCovers": "Put the slot covers back",
+      "openPcie": "Push the PCIe latch open",
+      "releasePcie": "Press the PCIe latch to release the card",
+      "pushCard": "Push the card into the slot",
+      "screwBracket": "Screw the bracket to the case",
+      "unscrewBracket": "Unscrew the bracket",
+      "bracketToCase": "Bracket towards the case's rear",
+      "bracketAway": "Bracket facing the wrong way",
+      "markGpu": "Line up two things before pushing: the gold edge connector with the slot, and the metal bracket with the opening where the covers were.",
+      "gpuSource": "Slot latch: ASUS TUF GAMING B760-PLUS WIFI manual (E21279), p. 2-19 — push the latch fully, release it to remove the card. The two-cover count and screw positions vary by case and are shown schematically."
     }
   },
   "learning": {

@@ -5,7 +5,7 @@
 // version "unrecorded": the engine then treats the CPU as supported, and the planner reports the BIOS
 // question as unknown (conditional) instead of guessing a version.
 import type { CaseEntry, CoolingEntry, CpuEntry, FanEntry, GpuEntry, MotherboardEntry, MountPointSpec, RamEntry, StorageEntry } from "@ytl/contracts";
-import { FASTENER_NOTE, L, NO_ASSET, boardPorts, dimmSlots, lgaSocketDetail, fanLead, fanMounts, frontPanelLeads, port, sataDataCables, source, zone } from "./helpers";
+import { FASTENER_NOTE, L, NO_ASSET, SLOT_COVERS, boardPorts, dimmSlots, lgaSocketDetail, pcieSlotDetail, fanLead, fanMounts, frontPanelLeads, port, sataDataCables, source, zone } from "./helpers";
 
 const ON = "2026-11-18";
 /** BIOS history not read for this board; see the file comment. */
@@ -21,6 +21,7 @@ const socket = (s: "lga1150" | "lga1700", name: string): MountPointSpec[] => [
 const x16 = (gen: number, label: string): MountPointSpec => ({
   id: "pcie-x16-1", kind: "pcie_slot", mechanical: "x16", lanes: 16, pcieGeneration: gen,
   label: L(`${label} x16 slot (graphics card)`, `فتحة ${label} x16 (كرت الشاشة)`), fastener: { kind: "case_screw", count: 2 },
+  ...pcieSlotDetail("PCIe slot latch: this board's manual was not read for it, so the latch type is not verified."),
 });
 const boardZones = (memoryEn: string, memoryAr: string) => [
   zone("cpu-area", L("CPU socket", "مقبس المعالج"), L("The CPU sits here, under the cooler.", "هنا ينحط المعالج، تحت المبرّد.")),
@@ -252,7 +253,7 @@ export const hdd: StorageEntry = {
 // ---------- Cases ----------
 
 const tray = (formFactors: ("atx" | "micro_atx" | "mini_itx" | "e_atx")[]): MountPointSpec => ({
-  id: "motherboard-tray", kind: "motherboard_tray", formFactors, label: L("Motherboard tray", "صينية اللوحة الأم"), fastener: { kind: "standoff_screw", count: 9 },
+  id: "motherboard-tray", kind: "motherboard_tray", formFactors, label: L("Motherboard tray", "صينية اللوحة الأم"), fastener: { kind: "standoff_screw", count: 9 }, retention: SLOT_COVERS,
 });
 const psuBay = (maxLengthMm: number): MountPointSpec => ({
   id: "psu-bay", kind: "psu_bay", formFactors: ["atx"], maxLengthMm, label: L("Power supply bay", "حجرة مزوّد الطاقة"), fastener: { kind: "case_screw", count: 4 },

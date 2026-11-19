@@ -272,7 +272,8 @@ export interface FastenerSpec {
  */
 export interface RetentionSpec {
   id: string;
-  kind: "lga_load_plate" | "zif_lever" | "dimm_latch";
+  /** `slot_covers`: a case's expansion-slot covers, which a graphics card's bracket needs out of the way. */
+  kind: "lga_load_plate" | "zif_lever" | "dimm_latch" | "pcie_latch" | "slot_covers";
   /** DIMM latches: which ends move. "unverified" when the board's manual does not show it. */
   latches?: "one_side" | "both" | "unverified";
   /** Where the procedure is documented, and what is not. */
@@ -287,7 +288,7 @@ export interface KeyingSpec {
   alsoValid?: number[];
   toleranceMm: number;
   /** What the learner matches: "triangle" (CPU corner mark), "notch" (DIMM key). */
-  mark: "triangle" | "notch";
+  mark: "triangle" | "notch" | "bracket";
 }
 
 interface MountPointBase {

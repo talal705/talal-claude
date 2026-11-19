@@ -209,6 +209,14 @@ export const dimmSlots = (generation: "ddr3" | "ddr4" | "ddr5", slots: readonly 
     keying: { rotationDeg: 0, toleranceMm: 4, mark: "notch" as const },
   }));
 
+/** A PCIe x16 slot's latch and the card's alignment (connector over the slot, bracket in the case opening). */
+export const pcieSlotDetail = (note: string) => ({
+  retention: { id: "pcie-x16-1-latch", kind: "pcie_latch" as const, note },
+  keying: { rotationDeg: 0, toleranceMm: 3, mark: "bracket" as const },
+});
+/** A case's expansion-slot covers (they come out for a card's bracket). */
+export const SLOT_COVERS = { id: "slot-covers", kind: "slot_covers" as const, note: "Expansion-slot covers; how they are fixed (screws, tool-free) is not modelled per case." };
+
 /** The CPU socket's retention and keying: an LGA load plate with its lever, and the corner triangle. */
 export const lgaSocketDetail = (note: string) => ({
   retention: { id: "cpu-socket-plate", kind: "lga_load_plate" as const, note },

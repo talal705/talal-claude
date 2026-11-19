@@ -216,7 +216,7 @@ const isCoolerKey = (key: SimplePartKey) => slotOf(key) === "cooler";
  *   a CPU or a module; replaying it opens and closes their mechanisms (the explicit migration of those saves).
  * - `cable:<key>`: a lead connected.
  */
-export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}` | `lower:${string}` | `seat:${string}` | `lift:${string}`;
+export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}` | `lower:${string}` | `seat:${string}` | `lift:${string}` | `fasten:${string}` | `unfasten:${string}`;
 /**
  * Saved progress. `placed` and `connected` say what is fitted; `history` is the same steps in the
  * order they were taken, so the latest one can be undone without breaking what depends on it.
@@ -225,7 +225,7 @@ export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}`
 export type SimpleSnapshot =
   | { version: 3; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean }
   | { version: 4; plan: unknown; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean };
-export type SimpleBlock = "cpuFirst" | "boardFirst" | "prepareBoard" | "cannotFit" | "socketTaken" | "coolerTaken" | "openFirst" | "turnPart" | "centrePart" | "closeBlocked" | "alreadyIn";
+export type SimpleBlock = "cpuFirst" | "boardFirst" | "prepareBoard" | "cannotFit" | "socketTaken" | "coolerTaken" | "openFirst" | "turnPart" | "centrePart" | "closeBlocked" | "alreadyIn" | "unplugFirst" | "unscrewFirst";
 export type SimpleCableBlock = "fitCableParts" | "turnOffFirst" | "cannotConnect";
 export type SimpleRemoveBlock = "turnOffFirst" | "removeCoolerFirst" | "unplugCoolerFirst" | "notSwappable" | "boardFirst";
 /**
@@ -261,7 +261,8 @@ export function simpleRetention(state: PCBuildState, key: SimplePartKey): { host
   const target = simpleTarget(state, key);
   const host = state.parts.find((p) => p.instanceId === target.hostInstanceId);
   const mount = pcCatalog.entries.find((e) => e.id === host?.catalogId)?.mountPoints.find((m) => m.id === target.mountPointId);
-  if (!host || !mount?.retention) return null;
+  // The case's slot covers are not what holds the board: they matter for a card (see caseCoversClosed).
+  if (!host || !mount?.retention || mount.retention.kind === "slot_covers") return null;
   return { hostInstanceId: host.instanceId, id: mount.retention.id, kind: mount.retention.kind, open: host.mechanisms?.[mount.retention.id] === "open", mountPointId: mount.id };
 }
 /** The keying the learner must match at a part's place (CPU triangle, DIMM notch), if any. */
@@ -314,11 +315,41 @@ export function reseatSimplePart(state: PCBuildState, key: SimplePartKey): { ok:
   return r.ok ? { ok: true, state: r.state } : { ok: false, reason: "openFirst" };
 }
 
+export const SLOT_COVERS_ID = "slot-covers";
+/** True when the board is in a case whose expansion-slot covers are still in. */
+export function caseCoversClosed(state: PCBuildState): boolean {
+  const board = state.parts.find((p) => p.instanceId === active.parts.find((x) => x.key === "motherboard")?.id);
+  const casePart = board?.attachments[0] && state.parts.find((p) => p.instanceId === board.attachments[0]!.target.hostInstanceId);
+  const covers = casePart && pcCatalog.entries.find((e) => e.id === casePart.catalogId)?.mountPoints.find((m) => m.retention?.kind === "slot_covers");
+  return Boolean(covers && casePart.mechanisms?.[covers.retention!.id] !== "open");
+}
+
+/** Screws a seated part's bracket to the case (a graphics card); its screws are the place's fasteners. */
+export function fastenSimplePart(state: PCBuildState, key: SimplePartKey): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleBlock } {
+  const spec = partSpec(key);
+  const r = pc.applyAction(state, { type: "set_fasteners", instanceId: spec.id, secured: spec.screws }, pcCatalog);
+  return r.ok ? { ok: true, state: r.state } : { ok: false, reason: "cannotFit" };
+}
+/** Takes a card's bracket screws out again. */
+export function unfastenSimplePart(state: PCBuildState, key: SimplePartKey): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleBlock } {
+  const r = pc.applyAction(state, { type: "set_fasteners", instanceId: partSpec(key).id, secured: 0 }, pcCatalog);
+  return r.ok ? { ok: true, state: r.state } : { ok: false, reason: "cannotFit" };
+}
+/** True when a part's bracket or screws are all in. */
+export function simpleFastened(state: PCBuildState, key: SimplePartKey): boolean {
+  const spec = partSpec(key);
+  const at = state.parts.find((p) => p.instanceId === spec.id)?.attachments[0];
+  return Boolean(at && spec.screws && at.fastenersSecured >= spec.screws);
+}
+
 /** Takes a part out of its open place back to the bench. */
 export function liftSimplePart(state: PCBuildState, key: SimplePartKey): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleBlock; message?: { en: string; ar: string } } {
   const spec = partSpec(key);
   const r = pc.applyAction(state, { type: "unmount_part", instanceId: spec.id }, pcCatalog);
-  return r.ok ? { ok: true, state: r.state } : { ok: false, reason: "openFirst", message: r.rejection.message };
+  if (r.ok) return { ok: true, state: r.state };
+  const text = r.rejection.message.en;
+  const reason: SimpleBlock = /power cable/.test(text) ? "unplugFirst" : /screws/.test(text) ? "unscrewFirst" : "openFirst";
+  return { ok: false, reason, message: r.rejection.message };
 }
 
 /** The slot or place a part is fitted to. A RAM stick takes A2 when it is first in, B2 when the other stick holds A2. */
@@ -402,11 +433,14 @@ export function installSimplePart(state: PCBuildState, key: SimplePartKey): { ok
   const retention = simpleRetention(state, key);
   if (retention && !spec.radiator) {
     let next = state;
+    // A card in a case needs the case's slot covers out first.
+    if (retention.kind === "pcie_latch" && caseCoversClosed(next)) { const c = setSimpleMechanism(next, SLOT_COVERS_ID, "open"); if (!c.ok) return { ok: false, reason: "cannotFit" }; next = c.state; }
     if (!retention.open) { const o = setSimpleMechanism(next, retention.id, "open"); if (!o.ok) return { ok: false, reason: "cannotFit" }; next = o.state; }
     const l = lowerSimplePart(next, key, ALIGNED);
     if (!l.ok) return { ok: false, reason: l.reason };
     next = l.state;
-    if (retention.kind !== "dimm_latch") { const c = setSimpleMechanism(next, retention.id, "closed"); if (!c.ok) return { ok: false, reason: "cannotFit" }; next = c.state; }
+    if (retention.kind === "pcie_latch") { const f = fastenSimplePart(next, key); if (!f.ok) return { ok: false, reason: "cannotFit" }; next = f.state; }
+    else if (retention.kind !== "dimm_latch") { const c = setSimpleMechanism(next, retention.id, "closed"); if (!c.ok) return { ok: false, reason: "cannotFit" }; next = c.state; }
     return { ok: true, state: next };
   }
   try {
@@ -557,6 +591,8 @@ export function applySimpleStep(state: PCBuildState, step: SimpleStep): PCBuildS
     : kind === "lower" ? lowerSimplePart(state, rest, ALIGNED)
     : kind === "seat" ? reseatSimplePart(state, rest)
     : kind === "lift" ? liftSimplePart(state, rest)
+    : kind === "fasten" ? fastenSimplePart(state, rest)
+    : kind === "unfasten" ? unfastenSimplePart(state, rest)
     : kind === "mech" ? setSimpleMechanism(state, rest.slice(0, rest.lastIndexOf(":")), rest.slice(rest.lastIndexOf(":") + 1) as "open" | "closed")
     : null;
   if (!result?.ok) throw new Error(`Invalid simple step ${step}`);
@@ -589,6 +625,8 @@ export const withMechanism = (snapshot: SimpleSnapshot, retentionId: string, sta
 export const withLower = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `lower:${key}`);
 export const withSeat = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `seat:${key}`);
 export const withLift = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `lift:${key}`);
+export const withFasten = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `fasten:${key}`);
+export const withUnfasten = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `unfasten:${key}`);
 
 // ---------- Learner steps on a snapshot ----------
 
@@ -646,7 +684,7 @@ const isStep = (step: unknown): step is SimpleStep => {
   const kind = step.slice(0, colon);
   const rest = step.slice(colon + 1);
   if (kind === "cable") return isCableKey(rest);
-  if (kind === "part" || kind === "lower" || kind === "seat" || kind === "lift") return isPartKey(rest);
+  if (kind === "part" || kind === "lower" || kind === "seat" || kind === "lift" || kind === "fasten" || kind === "unfasten") return isPartKey(rest);
   return kind === "mech" && /^[a-z0-9-]+:(open|closed)$/.test(rest);
 };
 

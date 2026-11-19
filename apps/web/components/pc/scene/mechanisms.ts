@@ -1,5 +1,5 @@
 // The scene's view of the retention mechanisms the engine tracks: the CPU load plate and lever, the
-// socket cover, and memory latches. The drawing follows `InstalledPart.mechanisms`, so what the
+// socket cover, memory and PCIe latches, and the case's expansion-slot covers. The drawing follows `InstalledPart.mechanisms`, so what the
 // learner sees is always the state the engine checks (no separate animation state).
 import type { InstalledPart } from "@ytl/contracts";
 import { catalogIndex } from "../catalog";
@@ -12,9 +12,24 @@ const aboutY = (angle: number): Quat => [0, Math.sin(angle / 2), 0, Math.cos(ang
 const box = (id: string, at: Vec3, size: Vec3, finish: Solid["finish"], rotation?: Quat): Solid =>
   ({ id, shape: "box", at, size, finish, role: "detail", basis: "schematic", ...(rotation ? { rotation } : {}) }) as Solid;
 
+// The same geometry and mechanism states give the same object, so a part's meshes are rebuilt only when
+// one of its own mechanisms moves (not on every change elsewhere in the build).
+const drawn = new WeakMap<PartGeometry, Map<string, PartGeometry>>();
+
 /** The host's geometry with its mechanisms drawn in their current state (and the socket's orientation mark). */
 export function withMechanisms(geometry: PartGeometry | undefined, part: InstalledPart): PartGeometry | undefined {
   if (!geometry) return geometry;
+  const key = `${part.catalogId}|${JSON.stringify(part.mechanisms ?? {})}`;
+  let cache = drawn.get(geometry);
+  if (!cache) { cache = new Map(); drawn.set(geometry, cache); }
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const result = drawMechanisms(geometry, part);
+  if (result) cache.set(key, result);
+  return result;
+}
+
+function drawMechanisms(geometry: PartGeometry, part: InstalledPart): PartGeometry {
   const entry = catalogIndex.byId.get(part.catalogId);
   const retained = entry?.mountPoints.filter((m) => m.retention) ?? [];
   if (retained.length === 0) return geometry;
@@ -23,6 +38,17 @@ export function withMechanisms(geometry: PartGeometry | undefined, part: Install
   for (const mount of retained) {
     const ret = mount.retention!;
     const open = part.mechanisms?.[ret.id] === "open";
+    if (ret.kind === "slot_covers") {
+      // With the covers out, the top two (beside the first x16 slot) are gone from the rear wall.
+      const covers = solids.find((s) => s.id === "slot-covers");
+      if (covers?.size && open) {
+        const per = covers.size[1] / (covers.count ?? 7);
+        covers.count = Math.max(1, (covers.count ?? 7) - 2);
+        covers.size = [covers.size[0], per * covers.count, covers.size[2]];
+        covers.at = [covers.at[0], covers.at[1] - per, covers.at[2]];
+      }
+      continue;
+    }
     const place = solids.find((s) => s.id === mount.id);
     if (!place?.size) continue;
     const [cx, cy, cz] = place.at;
@@ -54,6 +80,14 @@ export function withMechanisms(geometry: PartGeometry | undefined, part: Install
         extra.push(open
           ? box(`${mount.id}-cover`, [cx + sx / 2 + 1.5, cy + sy / 2 + lift / 2, cz], [2.5, sz - 10, sz - 10], "black_plastic")
           : box(`${mount.id}-cover`, [cx, cy + sy / 2 + 1.8, cz], [sx - 10, 2.5, sz - 10], "black_plastic"));
+      }
+    }
+    if (ret.kind === "pcie_latch" && open) {
+      // The slot's push latch at its far end, pressed down and tipped away from the slot.
+      const latch = solids.find((s) => s.id === `${mount.id}-latch`);
+      if (latch?.size) {
+        latch.at = [latch.at[0] + 2, latch.at[1] - latch.size[1] / 4, latch.at[2]];
+        latch.rotation = aboutZ((-35 * Math.PI) / 180);
       }
     }
     if (ret.kind === "dimm_latch" && open) {

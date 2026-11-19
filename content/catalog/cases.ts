@@ -1,5 +1,5 @@
 import type { CaseEntry, MountPointSpec } from "@ytl/contracts";
-import { FASTENER_NOTE, L, NO_ASSET, fanMounts, frontPanelLeads, source, zone } from "./helpers";
+import { FASTENER_NOTE, L, NO_ASSET, SLOT_COVERS, fanMounts, frontPanelLeads, source, zone } from "./helpers";
 
 const tray = (formFactors: ("atx" | "micro_atx" | "mini_itx" | "e_atx")[]): MountPointSpec => ({
   id: "motherboard-tray",
@@ -7,6 +7,7 @@ const tray = (formFactors: ("atx" | "micro_atx" | "mini_itx" | "e_atx")[]): Moun
   formFactors,
   label: L("Motherboard tray", "صينية اللوحة الأم"),
   fastener: { kind: "standoff_screw", count: 9 },
+  retention: SLOT_COVERS,
 });
 
 const psuBay = (maxLengthMm: number): MountPointSpec => ({
