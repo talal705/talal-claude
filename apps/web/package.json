@@ -14,18 +14,18 @@
     "@ytl/curriculum": "*",
     "@ytl/simulation": "*",
     "@ytl/ui": "*",
+    "es-module-lexer": "2.3.2",
     "idb-keyval": "6.3.0",
     "kysely": "0.29.6",
-    "next": "16.4.3",
+    "next": "16.4.6",
     "next-intl": "4.14.9",
     "pg": "8.23.1",
+    "pyodide": "314.0.7",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "three": "0.186.1",
-    "zustand": "5.0.15",
-    "es-module-lexer": "2.3.2",
-    "pyodide": "314.0.7",
-    "typescript-js": "npm:typescript@6.0.3"
+    "typescript-js": "npm:typescript@6.0.3",
+    "zustand": "5.0.15"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",
