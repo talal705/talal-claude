@@ -1,5 +1,5 @@
 // The scene's view of the retention mechanisms the engine tracks: the CPU load plate and lever, the
-// socket cover, memory and PCIe latches, and the case's expansion-slot covers. The drawing follows `InstalledPart.mechanisms`, so what the
+// socket cover, memory, PCIe and M.2 latches, and the case's expansion-slot covers. The drawing follows `InstalledPart.mechanisms`, so what the
 // learner sees is always the state the engine checks (no separate animation state).
 import type { InstalledPart } from "@ytl/contracts";
 import { catalogIndex } from "../catalog";
@@ -81,6 +81,10 @@ function drawMechanisms(geometry: PartGeometry, part: InstalledPart): PartGeomet
           ? box(`${mount.id}-cover`, [cx + sx / 2 + 1.5, cy + sy / 2 + lift / 2, cz], [2.5, sz - 10, sz - 10], "black_plastic")
           : box(`${mount.id}-cover`, [cx, cy + sy / 2 + 1.8, cz], [sx - 10, 2.5, sz - 10], "black_plastic"));
       }
+    }
+    if (ret.kind === "m2_qlatch") {
+      // The Q-Latch at the slot's far end: across the drive's end when locked, turned aside when unlocked.
+      extra.push(box(`${mount.id}-qlatch`, [cx + sx / 2 - 3, cy + sy / 2 + 2, cz], open ? [3, 3, 9] : [9, 3, 3], "black_plastic", open ? aboutY(Math.PI / 4) : undefined));
     }
     if (ret.kind === "pcie_latch" && open) {
       // The slot's push latch at its far end, pressed down and tipped away from the slot.

@@ -1197,7 +1197,15 @@
         "coversOut": "Covers out. The card's bracket fits there now.",
         "coversIn": "Covers back in.",
         "coversBlocked": "A card is in that opening; take it out before refitting the covers.",
-        "closeBlocked": "That latch can't move like that right now."
+        "closeBlocked": "That latch can't move like that right now.",
+        "m2Open": "Latch open. Turn the drive so its notch matches the slot's ridge, and line it up.",
+        "m2OpenFirst": "Turn the M.2 Q-Latch to unlock before the drive goes in.",
+        "m2Turn": "The drive is the wrong way round; its notch must line up with the ridge in the slot.",
+        "m2Centre": "The drive is off the slot; slide it along until the connector sits right in front of the slot.",
+        "m2Lowered": "In at an angle. Now press it flat and turn the Q-Latch to lock it.",
+        "m2Closed": "Q-Latch locked. The drive is held flat.",
+        "m2Released": "Latch unlocked; the drive springs up. You can slide it out now.",
+        "m2LowerFirst": "Push the drive fully into the slot first."
       }
     },
     "partNotes": {
@@ -1537,7 +1545,13 @@
       "bracketToCase": "Bracket towards the case's rear",
       "bracketAway": "Bracket facing the wrong way",
       "markGpu": "Line up two things before pushing: the gold edge connector with the slot, and the metal bracket with the opening where the covers were.",
-      "gpuSource": "Slot latch: ASUS TUF GAMING B760-PLUS WIFI manual (E21279), p. 2-19 — push the latch fully, release it to remove the card. The two-cover count and screw positions vary by case and are shown schematically."
+      "gpuSource": "Slot latch: ASUS TUF GAMING B760-PLUS WIFI manual (E21279), p. 2-19 — push the latch fully, release it to remove the card. The two-cover count and screw positions vary by case and are shown schematically.",
+      "qlatch": "M.2 Q-Latch: {state}",
+      "openQLatch": "Turn the Q-Latch to unlock",
+      "closeQLatch": "Press the drive flat and turn the Q-Latch to lock",
+      "slideIn": "Slide it into the slot at an angle",
+      "markM2": "The drive's connector has a notch (M key) that matches a ridge in the slot: the label side up, gold contacts towards the slot. It goes in at about 20–30°, then is pressed flat.",
+      "m2Source": "Q-Latch steps: ASUS TUF GAMING Z790-PLUS WIFI manual (E21279), p. 2-8. The insertion angle is typical, not a figure from the manual."
     }
   },
   "learning": {

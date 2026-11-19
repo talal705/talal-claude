@@ -273,7 +273,7 @@ export interface FastenerSpec {
 export interface RetentionSpec {
   id: string;
   /** `slot_covers`: a case's expansion-slot covers, which a graphics card's bracket needs out of the way. */
-  kind: "lga_load_plate" | "zif_lever" | "dimm_latch" | "pcie_latch" | "slot_covers";
+  kind: "lga_load_plate" | "zif_lever" | "dimm_latch" | "pcie_latch" | "slot_covers" | "m2_qlatch";
   /** DIMM latches: which ends move. "unverified" when the board's manual does not show it. */
   latches?: "one_side" | "both" | "unverified";
   /** Where the procedure is documented, and what is not. */

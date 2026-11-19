@@ -1,5 +1,5 @@
 import type { MotherboardEntry, MountPointSpec } from "@ytl/contracts";
-import { FASTENER_NOTE, L, NO_ASSET, boardPorts, dimmSlots, lgaSocketDetail, pcieSlotDetail, sataDataCables, source, zone } from "./helpers";
+import { FASTENER_NOTE, L, NO_ASSET, boardPorts, dimmSlots, lgaSocketDetail, m2QLatch, pcieSlotDetail, sataDataCables, source, zone } from "./helpers";
 
 const socketMounts = (socket: "lga1700" | "am4", name: string): MountPointSpec[] => [
   {
@@ -144,7 +144,7 @@ export const motherboards: MotherboardEntry[] = [
         interfaces: ["nvme"],
         pcieGeneration: 4,
         label: L("M.2_1 slot (PCIe 4.0 x4)", "فتحة M.2_1 (PCIe 4.0 x4)"),
-        fastener: { kind: "m2_latch", count: 1 },
+        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-1", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way."),
       },
       {
         id: "m2-2",
@@ -153,7 +153,7 @@ export const motherboards: MotherboardEntry[] = [
         interfaces: ["nvme"],
         pcieGeneration: 4,
         label: L("M.2_2 slot (PCIe 4.0 x4)", "فتحة M.2_2 (PCIe 4.0 x4)"),
-        fastener: { kind: "m2_latch", count: 1 },
+        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-2", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way."),
       },
       {
         id: "m2-3",
@@ -162,7 +162,7 @@ export const motherboards: MotherboardEntry[] = [
         interfaces: ["nvme"],
         pcieGeneration: 4,
         label: L("M.2_3 slot (PCIe 4.0 x4)", "فتحة M.2_3 (PCIe 4.0 x4)"),
-        fastener: { kind: "m2_latch", count: 1 },
+        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-3", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way."),
       },
       {
         id: "m2-4",
@@ -171,7 +171,7 @@ export const motherboards: MotherboardEntry[] = [
         interfaces: ["nvme", "sata"],
         pcieGeneration: 4,
         label: L("M.2_4 slot (PCIe 4.0 x4 and SATA)", "فتحة M.2_4 (PCIe 4.0 x4 و SATA)"),
-        fastener: { kind: "m2_latch", count: 1 },
+        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-4", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way."),
       },
     ],
     mounting: [{ role: "main", kind: "motherboard_tray", label: L("Motherboard tray of the case", "صينية اللوحة الأم في الهيكل") }],
@@ -312,7 +312,7 @@ export const motherboards: MotherboardEntry[] = [
         interfaces: ["nvme"],
         pcieGeneration: 4,
         label: L("M.2_1 slot (PCIe 4.0 x4)", "فتحة M.2_1 (PCIe 4.0 x4)"),
-        fastener: { kind: "m2_latch", count: 1 },
+        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-1", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way."),
       },
       {
         id: "m2-2",
@@ -321,7 +321,7 @@ export const motherboards: MotherboardEntry[] = [
         interfaces: ["nvme"],
         pcieGeneration: 4,
         label: L("M.2_2 slot (PCIe 4.0 x4)", "فتحة M.2_2 (PCIe 4.0 x4)"),
-        fastener: { kind: "m2_latch", count: 1 },
+        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-2", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way."),
       },
       {
         id: "m2-3",
@@ -330,7 +330,7 @@ export const motherboards: MotherboardEntry[] = [
         interfaces: ["nvme"],
         pcieGeneration: 4,
         label: L("M.2_3 slot (PCIe 4.0 x4)", "فتحة M.2_3 (PCIe 4.0 x4)"),
-        fastener: { kind: "m2_latch", count: 1 },
+        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-3", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way."),
       },
       {
         id: "m2-4",
@@ -339,7 +339,7 @@ export const motherboards: MotherboardEntry[] = [
         interfaces: ["nvme", "sata"],
         pcieGeneration: 4,
         label: L("M.2_4 slot (PCIe 4.0 x4 and SATA)", "فتحة M.2_4 (PCIe 4.0 x4 و SATA)"),
-        fastener: { kind: "m2_latch", count: 1 },
+        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-4", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way."),
       },
     ],
     mounting: [{ role: "main", kind: "motherboard_tray", label: L("Motherboard tray of the case", "صينية اللوحة الأم في الهيكل") }],

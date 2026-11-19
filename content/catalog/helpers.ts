@@ -209,6 +209,12 @@ export const dimmSlots = (generation: "ddr3" | "ddr4" | "ddr5", slots: readonly 
     keying: { rotationDeg: 0, toleranceMm: 4, mark: "notch" as const },
   }));
 
+/** An M.2 slot held by ASUS's tool-free Q-Latch: turned open, the drive goes in at an angle, is pressed flat and the latch turned shut. */
+export const m2QLatch = (slotId: string, note: string) => ({
+  retention: { id: `${slotId}-qlatch`, kind: "m2_qlatch" as const, note },
+  keying: { rotationDeg: 0, toleranceMm: 2, mark: "notch" as const },
+});
+
 /** A PCIe x16 slot's latch and the card's alignment (connector over the slot, bracket in the case opening). */
 export const pcieSlotDetail = (note: string) => ({
   retention: { id: "pcie-x16-1-latch", kind: "pcie_latch" as const, note },

@@ -54,6 +54,7 @@ const retentionName = (kind: RetentionSpec["kind"]) =>
   kind === "dimm_latch" ? L("The slot's latch", "مشبك الفتحة")
   : kind === "pcie_latch" ? L("The PCIe slot latch", "مشبك فتحة PCIe")
   : kind === "slot_covers" ? L("The case's expansion slot covers", "أغطية فتحات التوسعة في الكيس")
+  : kind === "m2_qlatch" ? L("The M.2 Q-Latch", "مشبك M.2 ‏(Q-Latch)")
   : kind === "zif_lever" ? L("The socket lever", "ذراع المقبس")
   : L("The socket's load plate and lever", "غطا المقبس وذراعه");
 
@@ -181,6 +182,12 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
         // Closing over a seated CPU pops the socket cover off; it is kept for a later return or repair.
         const cover = occupant ? { [`${ret.id}:cover`]: "open" as MechanismState } : {};
         return ok({ parts: state.parts.map(setHost({ [ret.id]: "closed", ...cover })).map(setOccupant({ fastenersSecured: lever })) });
+      }
+      if (ret.kind === "m2_qlatch") {
+        // Turned open, the drive's free end springs up off the standoff; turned shut over a drive pressed flat, it holds it.
+        if (action.state === "open") return ok({ parts: state.parts.map(setHost({ [ret.id]: "open" })).map(setOccupant({ fastenersSecured: 0 })) });
+        if (occupant && occAttachment?.seating !== "seated") return blocked("Push the drive fully into the slot before pressing it down and turning the latch.", "ادفع الدسك لين آخر الفتحة قبل ما تنزّله وتلف المشبك.");
+        return ok({ parts: state.parts.map(setHost({ [ret.id]: "closed" })).map(setOccupant({ fastenersSecured: lever })) });
       }
       if (ret.kind === "slot_covers") {
         const cardIn = state.parts.some((p) => p.attachments.some((a) => entryOf(v, partById(v, a.target.hostInstanceId) ?? p)?.mountPoints.find((m) => m.id === a.target.mountPointId)?.kind === "pcie_slot" && partById(v, a.target.hostInstanceId)?.attachments[0]?.target.hostInstanceId === host.instanceId));

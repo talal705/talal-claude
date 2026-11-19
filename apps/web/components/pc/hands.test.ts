@@ -121,3 +121,24 @@ describe("hands-on graphics card", () => {
     expect(out.placed).not.toContain("gpu");
   });
 });
+
+describe("hands-on M.2 drive (Q-Latch)", () => {
+  const must = <T,>(r: { ok: true; state: T } | { ok: false }) => { if (!r.ok) throw new Error(JSON.stringify(r)); return r.state; };
+  it("needs the Q-Latch unlocked, the notch matched and the drive in front of the slot; it counts once the latch is locked", () => {
+    let s = createSimpleBuild();
+    expect(simpleRetention(s, "storage")?.kind).toBe("m2_qlatch");
+    expect(lowerSimplePart(s, "storage", aligned)).toMatchObject({ ok: false, reason: "openFirst" });
+    s = must(setSimpleMechanism(s, "m2-1-qlatch", "open"));
+    expect(lowerSimplePart(s, "storage", { rotationDeg: 180, offsetMm: [0, 0] })).toMatchObject({ ok: false, reason: "turnPart" });
+    expect(lowerSimplePart(s, "storage", { rotationDeg: 0, offsetMm: [3, 0] })).toMatchObject({ ok: false, reason: "centrePart" });
+    s = must(lowerSimplePart(s, "storage", { rotationDeg: 0, offsetMm: [1, 0] }));
+    expect(simplePartInstalled(s, "storage")).toBe(false);
+    s = must(setSimpleMechanism(s, "m2-1-qlatch", "closed"));
+    expect(simplePartInstalled(s, "storage")).toBe(true);
+    expect(liftSimplePart(s, "storage")).toMatchObject({ ok: false, reason: "openFirst" });
+    s = must(setSimpleMechanism(s, "m2-1-qlatch", "open"));
+    expect(simplePartInstalled(s, "storage")).toBe(false);
+    s = must(liftSimplePart(s, "storage"));
+    expect(s.parts.find((p) => p.instanceId === "storage-5")?.attachments).toEqual([]);
+  });
+});

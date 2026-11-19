@@ -5,7 +5,7 @@
 // version "unrecorded": the engine then treats the CPU as supported, and the planner reports the BIOS
 // question as unknown (conditional) instead of guessing a version.
 import type { CaseEntry, CoolingEntry, CpuEntry, FanEntry, GpuEntry, MotherboardEntry, MountPointSpec, RamEntry, StorageEntry } from "@ytl/contracts";
-import { FASTENER_NOTE, L, NO_ASSET, SLOT_COVERS, boardPorts, dimmSlots, lgaSocketDetail, pcieSlotDetail, fanLead, fanMounts, frontPanelLeads, port, sataDataCables, source, zone } from "./helpers";
+import { FASTENER_NOTE, L, NO_ASSET, SLOT_COVERS, boardPorts, dimmSlots, lgaSocketDetail, m2QLatch, pcieSlotDetail, fanLead, fanMounts, frontPanelLeads, port, sataDataCables, source, zone } from "./helpers";
 
 const ON = "2026-11-18";
 /** BIOS history not read for this board; see the file comment. */
@@ -161,8 +161,8 @@ export const entryBoard: MotherboardEntry = {
     ...socket("lga1700", "LGA1700"),
     ...dimmSlots("ddr5"),
     x16(4, "PCIe 4.0"),
-    { id: "m2-1", kind: "m2_slot", lengths: ["m2_2242", "m2_2260", "m2_2280"], interfaces: ["nvme"], pcieGeneration: 4, label: L("M.2_1 slot (PCIe 4.0 x4, CPU)", "فتحة M.2_1 (PCIe 4.0 x4، من المعالج)"), fastener: { kind: "m2_latch", count: 1 } },
-    { id: "m2-2", kind: "m2_slot", lengths: ["m2_2242", "m2_2260", "m2_2280"], interfaces: ["nvme"], pcieGeneration: 4, label: L("M.2_2 slot (PCIe 4.0 x4, chipset)", "فتحة M.2_2 (PCIe 4.0 x4، من الشيبست)"), fastener: { kind: "m2_latch", count: 1 } },
+    { id: "m2-1", kind: "m2_slot", lengths: ["m2_2242", "m2_2260", "m2_2280"], interfaces: ["nvme"], pcieGeneration: 4, label: L("M.2_1 slot (PCIe 4.0 x4, CPU)", "فتحة M.2_1 (PCIe 4.0 x4، من المعالج)"), fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-1", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way.") },
+    { id: "m2-2", kind: "m2_slot", lengths: ["m2_2242", "m2_2260", "m2_2280"], interfaces: ["nvme"], pcieGeneration: 4, label: L("M.2_2 slot (PCIe 4.0 x4, chipset)", "فتحة M.2_2 (PCIe 4.0 x4، من الشيبست)"), fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-2", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way.") },
   ],
   mounting: [{ role: "main", kind: "motherboard_tray", label: L("Motherboard tray of the case", "صينية اللوحة الأم في الهيكل") }],
   zones: boardZones("Four DDR5 slots in two channels.", "أربع فتحات DDR5 على قناتين."),
