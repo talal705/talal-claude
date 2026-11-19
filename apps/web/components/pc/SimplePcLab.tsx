@@ -18,7 +18,7 @@ import {
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
   simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap,
   activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
-  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simplePrepMissing, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
+  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simplePrepMissing, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
 } from "./simple-model";
 import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-scene";
 import { guideFocus } from "./guide";
@@ -143,6 +143,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** The last power-on attempt, for the stage-by-stage panel. */
   const [attempt, setAttempt] = useState<{ state: PCBuildState; startup: StartupResult } | null>(null);
   const built = useMemo(() => simpleBuildFromSnapshot(saved), [saved]);
+  /** The lead in hand: which port the learner has picked for its next end, and whether the plug is turned the wrong way. */
+  const [plugHold, setPlugHold] = useState<{ key: string; portId: string | null; reversed: boolean } | null>(null);
   /** Physical steps ticked for the part in hand (they reset when another part is picked up). */
   const [ticked, setTicked] = useState(0);
   /** How the learner holds a keyed part (CPU, memory) over its place: turned and off centre until they line it up. */
@@ -259,6 +261,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (selection?.kind === "cable" && selection.key === key) { cancel(); return; }
     const next: Selection = { kind: "cable", key };
     setSelection(next);
+    // A plug comes out of the bag any way round: turning it to match the socket's key is the learner's job.
+    setPlugHold({ key, portId: null, reversed: true });
     setGuided(true);
     setTab("cables");
     react({ type: "select", selection: next }, state, saved.powered, next);
@@ -384,6 +388,31 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     }
     keepHand(r.state, (sn) => withPlace(sn, key), line);
   }
+  function handPlug(key: SimpleCableKey, endIndex: number) {
+    if (handsOff() || !plugHold || plugHold.key !== key) return;
+    if (!plugHold.portId) { speak({ lines: [{ key: "hands.pickPort" }], mood: "point", point: "cables" }); return; }
+    const r = plugSimpleEnd(state, key, endIndex, plugHold.portId, plugHold.reversed);
+    if (!r.ok) {
+      if (r.reason === "reversed") {
+        const end = simpleCableEnds(key)[endIndex]!;
+        const connector = simplePortChoices(state, end).find((c) => c.portId === end.portId)?.connector ?? "";
+        speak({ lines: [{ key: `hands.reversed.${simplePlugKeying(connector)}` }], mood: "concerned", point: "cables" });
+      } else if (r.reason === "wrongPort") {
+        if (r.message) sayEngine(r.message, "wrongPort");
+        else speak({ lines: [{ key: "hands.wrongPort" }], mood: "concerned", point: "cables" });
+      } else speak({ lines: [{ key: r.reason === "turnOffFirst" ? "blocked.turnOff" : "hands.wrongPort" }], mood: "concerned", point: "cables" });
+      return;
+    }
+    const ends = simpleCableEnds(key);
+    const all = ends.every((e) => simpleEndPlugged(r.state, e));
+    if (mode === "fault") { if (fault) setFault({ ...fault, state: r.state }); }
+    else setSaved((previous) => withPlug(previous, key, endIndex));
+    setVerdict(null);
+    setPlugHold({ key, portId: null, reversed: true });
+    if (all) { setSelection(null); setPlugHold(null); react({ type: "connected", key }, r.state, false, null); }
+    else speak({ lines: [{ key: "hands.endIn" }], mood: "point", point: "cables" });
+  }
+
   /** A liquid cooler, once its paste is on: pump block on the CPU and radiator in the case. */
   function handFitLiquid(key: SimplePartKey) {
     if (handsOff()) return;
@@ -468,11 +497,14 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   function connect(key: SimpleCableKey) {
     if (mode === "fault") {
       if (!fault || fault.solved) return;
+      if (!simpleCableConnected(state, key)) { if (!(selection?.kind === "cable" && selection.key === key)) chooseCable(key); return; }
       const step = connectSimpleCable(state, key);
       if (step.ok) { setFault({ ...fault, state: step.state }); setSelection(null); react({ type: "connected", key }, step.state, false, null); }
       return;
     }
     if (saved.powered) { react({ type: "select", selection: { kind: "cable", key } }); return; }
+    // Each end goes in by hand (see CablePanel): pick the port, turn the plug, push it home.
+    if (!simpleCableConnected(state, key)) { if (!(selection?.kind === "cable" && selection.key === key)) chooseCable(key); return; }
     const step = connectSimpleCable(state, key);
     if (!step.ok) { react({ type: "select", selection: { kind: "cable", key } }); return; }
     if (simpleCableConnected(state, key)) return;
@@ -755,6 +787,37 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     );
   }
 
+  /** One lead: each end into a port the learner picks, turned the right way. */
+  function CablePanel() {
+    const key = selectedCable!;
+    const ends = simpleCableEnds(key);
+    const next = ends.findIndex((e) => !simpleEndPlugged(state, e));
+    const end = ends[next];
+    const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved)) || Boolean(cableBlocked);
+    const hold = plugHold?.key === key ? plugHold : { key, portId: null, reversed: true };
+    const choices = end ? simplePortChoices(state, end) : [];
+    const hostName = (instanceId: string) => { const p = ALL_SIMPLE_PARTS.find((x) => x.id === instanceId); return p ? label(p.key) : t("hands.theDrive"); };
+    const owner = state.cables.find((c) => c.id === cableSpec(key).id)?.ownerInstanceId;
+    const captive = ends.length === 1 && Boolean(owner && pcCatalog.entries.find((e) => e.id === state.parts.find((p) => p.instanceId === owner)?.catalogId)?.category === "psu");
+    return (
+      <div className={styles.hands}>
+        <ol className={styles.substeps}>
+          {ends.map((e, i) => <li key={i}><span aria-hidden="true">{simpleEndPlugged(state, e) ? "✓" : i + 1}</span> {t("hands.endInto", { part: hostName(e.instanceId) })}</li>)}
+        </ol>
+        {captive && <p className={styles.cablesNote}>{t("hands.captive")}</p>}
+        {end && <div className={styles.holdControls} role="group" aria-label={t("hands.endInto", { part: hostName(end.instanceId) })}>
+          <div className={styles.holdRow} role="radiogroup" aria-label={t("hands.whichPort")}>
+            {choices.map((c) => <button key={c.portId} type="button" role="radio" aria-checked={hold.portId === c.portId} onClick={() => setPlugHold({ ...hold, portId: c.portId })}>{hold.portId === c.portId ? "● " : ""}{locale === "ar" ? c.label.ar : c.label.en}</button>)}
+          </div>
+          <p className={styles.alignState} aria-live="polite">{t(hold.reversed ? "hands.plugReversed" : "hands.plugMatched")}</p>
+          <div className={styles.holdRow}><button type="button" onClick={() => setPlugHold({ ...hold, reversed: !hold.reversed })}>{t("hands.turnPlug")}</button></div>
+          <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handPlug(key, next)}>{t("hands.plugIn")}</button>
+        </div>}
+        <p className={styles.cablesNote}>{t("hands.plugNote")}</p>
+      </div>
+    );
+  }
+
   /** Cooler, board, PSU or fan: the preparation it needs, putting it in place, then its screws one by one. */
   function PrepPanel() {
     const key = selectedPart!;
@@ -983,7 +1046,9 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
                 <strong>{cableName(selectedCable)}</strong>
                 <p>{cableRoute(selectedCable)}</p>
                 <code dir="ltr">{t(`cables.${selectedCable}.connector`)}</code>
-                <button className={styles.installButton} type="button" onClick={() => cableDone ? unplug(selectedCable) : connect(selectedCable)} disabled={!ready || lockedOn || (!cableDone && Boolean(cableBlocked))}>{cableDone ? t("disconnect") : t("connect")}</button>
+                {cableDone
+                  ? <button className={styles.installButton} type="button" onClick={() => unplug(selectedCable)} disabled={!ready || lockedOn}>{t("disconnect")}</button>
+                  : CablePanel()}
                 {cableBlocked && !cableDone && <p className={styles.hint}>{cableBlocked === "turnOffFirst" ? t("turnOffFirst") : t("fitCableParts", { parts: simpleCableMissingParts(state, selectedCable).map((key) => label(key)).join(locale === "ar" ? "، " : ", ") })}</p>}
                 {lockedOn && cableDone && <p className={styles.hint}>{t("turnOffFirst")}</p>}
                 <button className={styles.cancel} type="button" onClick={cancel}>{t("cancel")}</button>

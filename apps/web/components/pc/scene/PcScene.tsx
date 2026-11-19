@@ -1862,7 +1862,8 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
       })}
       {state.cables.filter((cable) => !simple || simpleCableIds?.includes(cable.id)).map((cable) => {
         const spec = pc.cableSpecOf(catalogIndex.byId.get(cable.catalogId), cable.cableSpecId);
-        const endIds = simple ? Object.keys(cable.ends).slice(0, 1) : Object.keys(cable.ends);
+        // Practice view: every end that is plugged in (so a lead shows both its plugs), plus the first one while loose.
+        const endIds = simple ? Object.keys(cable.ends).filter((id, i) => i === 0 || cable.ends[id]) : Object.keys(cable.ends);
         const ends = endIds.flatMap((endId) => {
           const end = cableEnds.get(`${cable.id}/${endId}`);
           return end ? [[endId, end] as [string, PlacedCableEnd]] : [];

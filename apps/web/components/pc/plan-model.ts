@@ -370,6 +370,7 @@ export function rebaseProgress(snapshot: { placed: string[]; connected: string[]
     const kind = step.slice(0, step.indexOf(":"));
     const key = step.slice(step.indexOf(":") + 1);
     if (kind === "cable") return keepCable(key);
+    if (kind === "plug") return keepCable(key.slice(0, key.lastIndexOf(":")));
     // Levers and latches belong to the board: they stay unless the board itself changed.
     if (kind === "mech") return !changed.has("motherboard");
     // prep:<part>:<what>:<value> and screw:<part>:<corner> belong to their part.

@@ -1219,7 +1219,16 @@
         "screwDiagonal": "Next, the opposite corner: {corner}. Across the diagonal keeps the pressure even.",
         "screwIn": "Screw in.",
         "screwsDone": "All screws in. It's secure.",
-        "liquidPrep": "Paste first: put a small drop on the CPU before the pump block goes on."
+        "liquidPrep": "Paste first: put a small drop on the CPU before the pump block goes on.",
+        "pickPort": "First pick which socket this end goes into.",
+        "reversed": {
+          "latch": "The clip has to sit over the socket's latch; this plug is keyed and won't go in the other way round.",
+          "ramp": "The ridge on the plug has to slide along the header's guide; turn it round.",
+          "pin": "The blanked hole on the plug has to line up with the header's missing pin; turn it round.",
+          "none": "Turn the plug round."
+        },
+        "wrongPort": "It would fit there, but this lead belongs in another socket. Check the label.",
+        "endIn": "That end is in. Now the other end."
       }
     },
     "partNotes": {
@@ -1595,7 +1604,16 @@
         "fan": "The arrows on the fan's frame show which way air moves. Front and bottom positions pull air in; rear and top blow it out."
       },
       "prepNote": "Each step changes the build and is saved; Undo takes it back. The screw count is the place's own; the force is not simulated.",
-      "liquidNote": "The pump block and radiator go in as one step here (block screws, radiator screws, and the case fans the radiator displaces are moved for you). Tube routing is not modelled."
+      "liquidNote": "The pump block and radiator go in as one step here (block screws, radiator screws, and the case fans the radiator displaces are moved for you). Tube routing is not modelled.",
+      "endInto": "End into the {part}",
+      "theDrive": "drive",
+      "captive": "This lead is fixed inside the power supply (captive): only its device end plugs in, and it cannot be taken off the PSU.",
+      "whichPort": "Which socket",
+      "plugReversed": "Plug turned the wrong way: its clip or key is on the far side",
+      "plugMatched": "Plug turned so its clip or key matches the socket",
+      "turnPlug": "Turn the plug round",
+      "plugIn": "Push it in until it clicks",
+      "plugNote": "Pick the socket by its label, match the clip to the latch (or the ridge to the guide), then push straight in. Only the planned socket is accepted; push force is not simulated."
     }
   },
   "learning": {

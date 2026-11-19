@@ -157,3 +157,27 @@ describe("assembly of a planned build", () => {
     expect(parsePlannedBuild({ version: 2 })).toBeNull();
   });
 });
+
+describe("hands-on cables", () => {
+  it("plugs a modular lead end by end: the PSU socket, then the device; wrong sockets and reversed plugs are refused", async () => {
+    const { plugSimpleEnd, simpleCableEnds, simplePortChoices, simpleCableConnected } = await import("./simple-model");
+    activateSimpleModel(planModel(build(gaming)));
+    let state = createSimpleBuild();
+    for (const key of simplePartOrder(state)) { const r = installSimplePart(state, key); if (r.ok) state = r.state; }
+    const ends = simpleCableEnds("cpuPower");
+    expect(ends.length).toBeGreaterThan(1);
+    const psuEnd = ends[0]!;
+    expect(plugSimpleEnd(state, "cpuPower", 0, psuEnd.portId, true)).toMatchObject({ ok: false, reason: "reversed" });
+    const r1 = plugSimpleEnd(state, "cpuPower", 0, psuEnd.portId, false);
+    if (!r1.ok) throw new Error(JSON.stringify(r1));
+    state = r1.state;
+    const device = ends.at(-1)!;
+    const wrong = simplePortChoices(state, device).find((c) => c.portId !== device.portId);
+    expect(wrong).toBeDefined();
+    expect(plugSimpleEnd(state, "cpuPower", ends.length - 1, wrong!.portId, false)).toMatchObject({ ok: false, reason: "wrongPort" });
+    const r2 = plugSimpleEnd(state, "cpuPower", ends.length - 1, device.portId, false);
+    if (!r2.ok) throw new Error(JSON.stringify(r2));
+    expect(simpleCableConnected(r2.state, "cpuPower")).toBe(true);
+    activateSimpleModel(LEGACY_MODEL);
+  });
+});

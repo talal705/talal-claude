@@ -216,7 +216,7 @@ const isCoolerKey = (key: SimplePartKey) => slotOf(key) === "cooler";
  *   a CPU or a module; replaying it opens and closes their mechanisms (the explicit migration of those saves).
  * - `cable:<key>`: a lead connected.
  */
-export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}` | `lower:${string}` | `seat:${string}` | `lift:${string}` | `fasten:${string}` | `unfasten:${string}` | `prep:${string}` | `place:${string}` | `screw:${string}`;
+export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}` | `lower:${string}` | `seat:${string}` | `lift:${string}` | `fasten:${string}` | `unfasten:${string}` | `prep:${string}` | `place:${string}` | `screw:${string}` | `plug:${string}`;
 /**
  * Saved progress. `placed` and `connected` say what is fitted; `history` is the same steps in the
  * order they were taken, so the latest one can be undone without breaking what depends on it.
@@ -640,6 +640,61 @@ export function connectSimpleCable(state: PCBuildState, key: SimpleCableKey): { 
   return { ok: true, state };
 }
 
+// ---------- Hands-on cables: each end into its own port, the right way round ----------
+
+/** The ends of a lead in the order a learner plugs them: a modular cable's PSU side, a data cable's drive side, then the device end. */
+export function simpleCableEnds(key: SimpleCableKey): CableExtraEnd[] {
+  const spec = cableSpec(key);
+  return [...(spec.extra ?? []), { cableId: spec.id, endId: spec.endId, instanceId: spec.instanceId, portId: spec.portId }];
+}
+export const simpleEndPlugged = (state: PCBuildState, end: CableExtraEnd) => endAt(state, end.cableId, end.endId, end.instanceId, end.portId);
+/** What a plug of this connector is held and keyed by, for the orientation hint. */
+export function simplePlugKeying(connector: string): "latch" | "ramp" | "pin" | "none" {
+  if (/atx|eps|pcie|psu_modular|12v|12vhpwr|sata_power|sata_data/.test(connector)) return "latch";
+  if (/fan|pump/.test(connector)) return "ramp";
+  if (/argb|rgb/.test(connector)) return "pin";
+  return "none";
+}
+const portOf = (state: PCBuildState, instanceId: string, portId: string) => {
+  const part = state.parts.find((p) => p.instanceId === instanceId);
+  return pcCatalog.entries.find((e) => e.id === part?.catalogId)?.ports.find((x) => x.id === portId);
+};
+/**
+ * The ports a learner can try one end in: the right one and the look-alikes on the same part
+ * (an EPS socket beside a PCIe one, a 12 V RGB header beside a 5 V ARGB one, the other fan headers).
+ * Sockets identical to the right one are left out, so a choice is right or wrong, never ambiguous.
+ */
+export function simplePortChoices(state: PCBuildState, end: CableExtraEnd): { portId: string; label: { en: string; ar: string }; connector: string }[] {
+  const part = state.parts.find((p) => p.instanceId === end.instanceId);
+  const entry = pcCatalog.entries.find((e) => e.id === part?.catalogId);
+  const right = entry?.ports.find((p) => p.id === end.portId);
+  if (!entry || !right) return [];
+  const family = (c: string) => (/argb|rgb|fan|pump/.test(c) ? "header" : /atx|eps|pcie|psu_modular|12v|sata_power/.test(c) ? "power" : /sata_data/.test(c) ? "data" : c);
+  const same = (p: typeof right) => p.connector === right.connector && (p as { keying?: string }).keying === (right as { keying?: string }).keying;
+  return entry.ports
+    .filter((p) => p.id === right.id || (family(p.connector) === family(right.connector) && !same(p)))
+    .slice(0, 8)
+    .map((p) => ({ portId: p.id, label: p.label, connector: p.connector }));
+}
+export type SimplePlugBlock = "reversed" | "wrongPort" | "turnOffFirst" | "fitCableParts";
+/** Plugs one end into a port, turned as the learner holds it. Only the planned port, the right way round, goes in. */
+export function plugSimpleEnd(state: PCBuildState, key: SimpleCableKey, endIndex: number, portId: string, reversed: boolean): { ok: true; state: PCBuildState } | { ok: false; reason: SimplePlugBlock; message?: { en: string; ar: string } } {
+  const blocked = simpleCableBlock(state, key);
+  if (blocked === "turnOffFirst") return { ok: false, reason: "turnOffFirst" };
+  if (blocked) return { ok: false, reason: "fitCableParts" };
+  const end = simpleCableEnds(key)[endIndex];
+  if (!end) return { ok: false, reason: "wrongPort" };
+  if (portId !== end.portId) {
+    // Let the engine say why a different socket does not take this plug; if it would, it is still not this lead's place.
+    const tryIt = pc.applyAction(state, { type: "connect_cable_end", cableId: end.cableId, endId: end.endId, to: { kind: "part", instanceId: end.instanceId, portId } }, pcCatalog);
+    return { ok: false, reason: "wrongPort", ...(tryIt.ok ? {} : { message: tryIt.rejection.message }) };
+  }
+  if (reversed && simplePlugKeying(portOf(state, end.instanceId, end.portId)?.connector ?? "") !== "none") return { ok: false, reason: "reversed" };
+  if (simpleEndPlugged(state, end)) return { ok: true, state };
+  const r = pc.applyAction(state, { type: "connect_cable_end", cableId: end.cableId, endId: end.endId, to: { kind: "part", instanceId: end.instanceId, portId } }, pcCatalog);
+  return r.ok ? { ok: true, state: r.state } : { ok: false, reason: "wrongPort", message: r.rejection.message };
+}
+
 export function disconnectSimpleCable(state: PCBuildState, key: SimpleCableKey): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleCableBlock } {
   if (state.power.pressed) return { ok: false, reason: "turnOffFirst" };
   if (!simpleCableConnected(state, key)) return { ok: true, state };
@@ -688,6 +743,7 @@ export function applySimpleStep(state: PCBuildState, step: SimpleStep): PCBuildS
     : kind === "lift" ? liftSimplePart(state, rest)
     : kind === "fasten" ? fastenSimplePart(state, rest)
     : kind === "unfasten" ? unfastenSimplePart(state, rest)
+    : kind === "plug" ? (() => { const i = rest.lastIndexOf(":"); const k = rest.slice(0, i); const end = simpleCableEnds(k)[Number(rest.slice(i + 1))]; return end ? plugSimpleEnd(state, k, Number(rest.slice(i + 1)), end.portId, false) : null; })()
     : kind === "prep" ? (() => { const [k, prep, value] = rest.split(":"); return prepSimplePart(state, k!, prep as PrepKind, value ?? ""); })()
     : kind === "place" ? placeSimplePart(state, rest)
     : kind === "screw" ? screwSimplePart(state, rest.slice(0, rest.lastIndexOf(":")))
@@ -712,6 +768,11 @@ export function deriveSimpleLists(history: readonly SimpleStep[]): { placed: Sim
     if ((kind === "part" || kind === "lower" || kind === "place") && !placed.includes(key)) placed.push(key);
     if (kind === "lift") placed.splice(placed.indexOf(key), 1);
     if (kind === "cable" && !connected.includes(key)) connected.push(key);
+    if (kind === "plug") {
+      const k = key.slice(0, key.lastIndexOf(":"));
+      const plugged = new Set(history.slice(0, history.indexOf(step) + 1).filter((x) => x.startsWith(`plug:${k}:`)));
+      if (!connected.includes(k) && cableSpec(k) && plugged.size >= simpleCableEnds(k).length) connected.push(k);
+    }
   }
   return { placed, connected };
 }
@@ -741,7 +802,8 @@ export const withCable = (snapshot: SimpleSnapshot, key: SimpleCableKey): Simple
 const withHistory = (snapshot: SimpleSnapshot, history: SimpleStep[]): SimpleSnapshot => ({ ...snapshot, history, ...deriveSimpleLists(history) });
 
 export const withoutCable = (snapshot: SimpleSnapshot, key: SimpleCableKey): SimpleSnapshot =>
-  withHistory(snapshot, snapshot.history.filter((step) => step !== `cable:${key}`));
+  withHistory(snapshot, snapshot.history.filter((step) => step !== `cable:${key}` && !step.startsWith(`plug:${key}:`)));
+export const withPlug = (snapshot: SimpleSnapshot, key: SimpleCableKey, endIndex: number) => withStep(snapshot, `plug:${key}:${endIndex}`);
 
 /** Takes a cooler back out (`simpleRemoveBlock` must allow it): its step leaves the history. */
 export const withoutPart = (snapshot: SimpleSnapshot, key: SimplePartKey): SimpleSnapshot =>
@@ -786,6 +848,7 @@ const isStep = (step: unknown): step is SimpleStep => {
   const rest = step.slice(colon + 1);
   if (kind === "cable") return isCableKey(rest);
   if (kind === "part" || kind === "lower" || kind === "seat" || kind === "lift" || kind === "fasten" || kind === "unfasten" || kind === "place") return isPartKey(rest);
+  if (kind === "plug") { const m = /^(.+):(\d)$/.exec(rest); return Boolean(m && isCableKey(m[1])); }
   if (kind === "prep") { const m = /^([a-z0-9]+):(paste|film|standoffs|io_shield|psu_fan|airflow):([a-z]*)$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
   if (kind === "screw") { const m = /^([a-z0-9]+):(\d{1,2})$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
   return kind === "mech" && /^[a-z0-9-]+:(open|closed)$/.test(rest);
