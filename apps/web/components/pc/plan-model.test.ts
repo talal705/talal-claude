@@ -138,7 +138,7 @@ describe("assembly of a planned build", () => {
   it("keeps hands-on CPU steps (lever, lowering) when an unrelated part changes", () => {
     const before = planModel(build(gaming));
     activateSimpleModel(before);
-    const history = ["mech:cpu-socket-plate:open", "lower:cpu", "mech:cpu-socket-plate:closed", "mech:dimm-a2-latch:open", "lower:ram"];
+    const history = ["mech:cpu-socket-plate:lever:open", "mech:cpu-socket-plate:open", "lower:cpu", "mech:cpu-socket-plate:closed", "mech:cpu-socket-plate:lever:closed", "mech:dimm-a2-latch:open", "lower:ram"];
     const kept = snapshotFromHistory(history);
     expect(kept.history).toEqual(history);
     const after = planModel(build({ ...gaming, gpu: "asus-dual-rtx4060-o8g" }));

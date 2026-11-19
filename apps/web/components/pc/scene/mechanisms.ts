@@ -17,19 +17,19 @@ const box = (id: string, at: Vec3, size: Vec3, finish: Solid["finish"], rotation
 const drawn = new WeakMap<PartGeometry, Map<string, PartGeometry>>();
 
 /** The host's geometry with its mechanisms drawn in their current state (and the socket's orientation mark). */
-export function withMechanisms(geometry: PartGeometry | undefined, part: InstalledPart): PartGeometry | undefined {
+export function withMechanisms(geometry: PartGeometry | undefined, part: InstalledPart, socketDrawnApart = false): PartGeometry | undefined {
   if (!geometry) return geometry;
-  const key = `${part.catalogId}|${JSON.stringify(part.mechanisms ?? {})}`;
+  const key = `${part.catalogId}|${socketDrawnApart}|${JSON.stringify(part.mechanisms ?? {})}`;
   let cache = drawn.get(geometry);
   if (!cache) { cache = new Map(); drawn.set(geometry, cache); }
   const hit = cache.get(key);
   if (hit) return hit;
-  const result = drawMechanisms(geometry, part);
+  const result = drawMechanisms(geometry, part, socketDrawnApart);
   if (result) cache.set(key, result);
   return result;
 }
 
-function drawMechanisms(geometry: PartGeometry, part: InstalledPart): PartGeometry {
+function drawMechanisms(geometry: PartGeometry, part: InstalledPart, socketDrawnApart: boolean): PartGeometry {
   const entry = catalogIndex.byId.get(part.catalogId);
   const retained = entry?.mountPoints.filter((m) => m.retention) ?? [];
   if (retained.length === 0) return geometry;
@@ -53,7 +53,8 @@ function drawMechanisms(geometry: PartGeometry, part: InstalledPart): PartGeomet
     if (!place?.size) continue;
     const [cx, cy, cz] = place.at;
     const [sx, sy, sz] = place.size;
-    if (ret.kind === "lga_load_plate" || ret.kind === "zif_lever") {
+    // The practice view draws the socket's lever and plate as moving parts of their own (SocketMechanism).
+    if ((ret.kind === "lga_load_plate" || ret.kind === "zif_lever") && !socketDrawnApart) {
       // The socket's own corner mark, at the corner where the CPU's gold triangle must sit.
       extra.push(box(`${mount.id}-mark`, [cx - sx / 2 + 3, cy + sy / 2 + 0.2, cz + sz / 2 - 3], [3, 0.4, 3], "gold"));
       const lever = solids.find((s) => s.id === `${mount.id}-lever`);

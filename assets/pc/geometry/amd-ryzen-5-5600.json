@@ -110,14 +110,14 @@
       "id": "corner-mark",
       "shape": "box",
       "at": [
-        2.5,
-        1.8,
-        37.5
+        3.5,
+        1.9,
+        36.5
       ],
       "size": [
-        3,
-        0.2,
-        3
+        5,
+        0.4,
+        5
       ],
       "role": "chip",
       "basis": "schematic",

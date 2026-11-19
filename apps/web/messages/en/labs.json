@@ -1166,10 +1166,10 @@
       "swapped": "Done: the {other} is out and the {part} is in.",
       "hands": {
         "cpuOpen": "Plate open. Now turn the CPU so its triangle meets the socket's mark.",
-        "cpuOpenFirst": "Lift the socket lever first, then the CPU can go in.",
+        "cpuOpenFirst": "Lift the socket lever first.",
         "cpuTurn": "Turn the CPU until its triangle matches the socket's mark.",
-        "cpuCentre": "The CPU is a little off. Centre it over the socket before lowering it.",
-        "cpuLowered": "It dropped in flat. Now close the plate and lock the lever.",
+        "cpuCentre": "Centre it over the socket, then lower it gently.",
+        "cpuLowered": "It sits flat in the socket. Close the plate, then lock the lever.",
         "cpuLowerFirst": "Lower the CPU fully before closing the plate.",
         "cpuClosed": "Locked in. The cover popped off: keep it for later.",
         "coolerOver": "The cooler is on top. Take the cooler off first.",
@@ -1228,7 +1228,14 @@
           "none": "Turn the plug round."
         },
         "wrongPort": "It would fit there, but this lead belongs in another socket. Check the label.",
-        "endIn": "That end is in. Now the other end."
+        "endIn": "That end is in. Now the other end.",
+        "cpuLeverUp": "Lever up. Now open the load plate.",
+        "cpuLeverReleased": "Lever released. Open the plate to lift the CPU out.",
+        "cpuLeverDown": "Lever locked. The socket is closed again.",
+        "cpuPlateFirst": "Close the plate first, then lock the lever under its tab.",
+        "cpuPlateNext": "The lever is up: open the load plate next.",
+        "cpuPlateClosed": "Plate down. Now push the lever down and lock it under its tab.",
+        "cpuPlateOpenSeated": "Plate open. You can lift the CPU straight up and out."
       }
     },
     "partNotes": {
@@ -1524,8 +1531,8 @@
     },
     "hands": {
       "title": "Hands-on",
-      "openPlate": "Lift the lever and open the plate",
-      "closePlate": "Close the plate and lock the lever",
+      "openPlate": "Open the load plate",
+      "closePlate": "Close the load plate",
       "openLatch": "Open the slot latch",
       "pressIn": "Press it in until it clicks",
       "lowerIn": "Lower it straight down",
@@ -1615,7 +1622,17 @@
       "plugIn": "Push it in until it clicks",
       "plugNote": "Pick the socket by its label, match the clip to the latch (or the ridge to the guide), then push straight in. Only the planned socket is accepted; push force is not simulated.",
       "coversLater": "once the board is in the case",
-      "gpuBoardFirst": "The card goes in after the board is in the case: its bracket has to meet the case's rear opening."
+      "gpuBoardFirst": "The card goes in after the board is in the case: its bracket has to meet the case's rear opening.",
+      "lever": "Lever: {state}",
+      "leverUp": "released and up",
+      "leverLocked": "locked under its tab",
+      "inScene": "Click or tap the lever and the plate in the 3D view, and drag the CPU there; these buttons do the same steps.",
+      "releaseLever": "Release the lever and lift it",
+      "liftZif": "Lift the lever to 90°",
+      "lockLever": "Push the lever down and lock it under its tab",
+      "lowerZif": "Lower the lever and lock it",
+      "lgaSource": "Intel socket steps: ASUS TUF GAMING Z790-PLUS WIFI manual E21279 pp. 2-1–2-2 and ASUS FAQ 1047659: hold the lever as you release it, lift it, then the plate; to close, plate first, then lock the lever under its tab — the protective cover then pops off (keep it). The same mechanism is used for the LGA1150 board (ASUS H81M-K). The TUF lever protector is not modelled.",
+      "zifSource": "AM4: ASUS FAQ 1047659 — lift the lever to 90°, match the CPU triangle to the socket's corner, lower the CPU straight down, lower the lever."
     }
   },
   "learning": {

@@ -45,7 +45,7 @@ function initialMechanisms(entry: CatalogEntry): { mechanisms?: Record<string, M
   for (const m of entry.mountPoints) {
     if (!m.retention) continue;
     out[m.retention.id] = "closed";
-    if (m.retention.kind === "lga_load_plate") out[`${m.retention.id}:cover`] = "closed";
+    if (m.retention.kind === "lga_load_plate") { out[`${m.retention.id}:cover`] = "closed"; out[`${m.retention.id}:lever`] = "closed"; }
   }
   return Object.keys(out).length ? { mechanisms: out } : {};
 }
@@ -193,29 +193,52 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       const host = partById(v, action.instanceId);
       const entry = host && entryOf(v, host);
       if (!host || !entry) return unknown(action.instanceId, pcTarget.part(action.instanceId));
-      const mount = entry.mountPoints.find((m) => m.retention?.id === action.mechanismId);
+      // An Intel load plate has its lever as a second mechanism, `<plate>:lever` (released and up = "open").
+      const leverOf = action.mechanismId.endsWith(":lever") ? action.mechanismId.slice(0, -":lever".length) : null;
+      const mount = entry.mountPoints.find((m) => m.retention?.id === (leverOf ?? action.mechanismId) && (!leverOf || m.retention.kind === "lga_load_plate"));
       if (!mount?.retention) return unknown(`${action.instanceId}/${action.mechanismId}`, pcTarget.part(action.instanceId));
       const ret = mount.retention;
       const at = { hostInstanceId: host.instanceId, mountPointId: mount.id };
       const occupant = state.parts.find((p) => p.attachments.some((a) => a.target.hostInstanceId === at.hostInstanceId && a.target.mountPointId === at.mountPointId));
       const occAttachment = occupant?.attachments.find((a) => a.target.hostInstanceId === at.hostInstanceId && a.target.mountPointId === at.mountPointId);
-      const current = host.mechanisms?.[ret.id] ?? "closed";
+      const current = host.mechanisms?.[action.mechanismId] ?? "closed";
       if (current === action.state) return ok({});
       const blocked = (en: string, ar: string) => fail("retention_blocked", pcTarget.mount(at), { why: L(en, ar) });
       const lever = mount.fastener?.count ?? 0;
       const setOccupant = (change: { seating?: "placed" | "seated"; fastenersSecured?: number }) =>
         occupant && occAttachment ? (p: InstalledPart) => (p.instanceId === occupant.instanceId ? { ...p, attachments: p.attachments.map((a) => (a === occAttachment ? { ...a, ...change } : a)) } : p) : (p: InstalledPart) => p;
       const setHost = (states: Record<string, MechanismState>) => (p: InstalledPart) => (p.instanceId === host.instanceId ? { ...p, mechanisms: { ...(p.mechanisms ?? {}), ...states } } : p);
-      if (ret.kind === "lga_load_plate" || ret.kind === "zif_lever") {
+      const coolerOn = () => state.parts.some((p) => p.attachments.some((a) => a.target.hostInstanceId === host.instanceId && entry.mountPoints.find((m) => m.id === a.target.mountPointId)?.kind === "cpu_cooler_mount"));
+      if (ret.kind === "lga_load_plate") {
+        // Intel's loading mechanism: the lever is released from its retention tab and lifted, then the
+        // plate is opened; to close, the plate comes down first, then the lever is pushed down under its tab.
+        const leverId = `${ret.id}:lever`;
+        const leverUp = (host.mechanisms?.[leverId] ?? "closed") === "open";
+        const plateOpen = (host.mechanisms?.[ret.id] ?? "closed") === "open";
+        if (coolerOn() && action.state === "open") return blocked("The cooler sits over the socket. Take the cooler off first.", "المبرّد فوق المقبس. شيل المبرّد أول.");
+        if (leverOf) {
+          if (action.state === "open") return ok({ parts: state.parts.map(setHost({ [leverId]: "open" })).map(setOccupant({ fastenersSecured: 0 })) });
+          if (plateOpen) return blocked("Close the load plate first; the lever then holds it down.", "سكّر غطا المقبس أول؛ بعدين الذراع يثبّته.");
+          // Locking the lever over a seated CPU pops the protective cover off; it is kept for a later return or repair.
+          const cover = occupant ? { [`${ret.id}:cover`]: "open" as MechanismState } : {};
+          return ok({ parts: state.parts.map(setHost({ [leverId]: "closed", ...cover })).map(setOccupant({ fastenersSecured: lever })) });
+        }
+        if (action.state === "open") {
+          if (!leverUp) return blocked("Release the lever from its retention tab and lift it first.", "حرّر الذراع من مكانه وارفعه أول.");
+          return ok({ parts: state.parts.map(setHost({ [ret.id]: "open" })) });
+        }
+        if (occupant && occAttachment?.seating !== "seated") return blocked("Lower the CPU fully into the socket before closing the plate.", "نزّل المعالج في المقبس لين الآخر قبل ما تسكّر الغطا.");
+        return ok({ parts: state.parts.map(setHost({ [ret.id]: "closed" })) });
+      }
+      if (ret.kind === "zif_lever") {
         if (action.state === "open") {
           const cooler = state.parts.find((p) => p.attachments.some((a) => a.target.hostInstanceId === host.instanceId && entry.mountPoints.find((m) => m.id === a.target.mountPointId)?.kind === "cpu_cooler_mount"));
           if (cooler) return blocked("The cooler sits over the socket. Take the cooler off first.", "المبرّد فوق المقبس. شيل المبرّد أول.");
           return ok({ parts: state.parts.map(setHost({ [ret.id]: "open" })).map(setOccupant({ fastenersSecured: 0 })) });
         }
-        if (occupant && occAttachment?.seating !== "seated") return blocked("Lower the CPU fully into the socket before closing the plate.", "نزّل المعالج في المقبس لين الآخر قبل ما تسكّر الغطا.");
-        // Closing over a seated CPU pops the socket cover off; it is kept for a later return or repair.
-        const cover = occupant ? { [`${ret.id}:cover`]: "open" as MechanismState } : {};
-        return ok({ parts: state.parts.map(setHost({ [ret.id]: "closed", ...cover })).map(setOccupant({ fastenersSecured: lever })) });
+        // AM4 (ASUS FAQ 1047659): the lever goes up to 90°, the CPU drops in, the lever comes down. No socket cap is modelled.
+        if (occupant && occAttachment?.seating !== "seated") return blocked("Let the CPU drop fully into the socket before lowering the lever.", "خلّ المعالج ينزل في المقبس لين الآخر قبل ما تنزّل الذراع.");
+        return ok({ parts: state.parts.map(setHost({ [ret.id]: "closed" })).map(setOccupant({ fastenersSecured: lever })) });
       }
       if (ret.kind === "m2_qlatch") {
         // Turned open, the drive's free end springs up off the standoff; turned shut over a drive pressed flat, it holds it.

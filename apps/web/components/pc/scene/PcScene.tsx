@@ -27,6 +27,7 @@ import { BENCH_MAT_COLOR, BENCH_TOP_COLOR, FINISHES } from "./palette";
 import { useGeometry } from "./use-geometry";
 import { HOSE_ROUTES } from "./visual-details";
 import { GuideRobot } from "./GuideRobot";
+import { SocketMechanism, socketLayout, socketMoved, socketPoint } from "./SocketMechanism";
 import type { GuideFocus } from "../guide";
 import { avoidObstacles, cableStrands, connectorSize, smoothCableRoute, type Obstacle } from "./cable-visuals";
 import { applyDetail, boxRaycast, cylinderRaycast, detailedBox, detailedCylinder, stretchTubeUv, surfaceSet } from "./surface-details";
@@ -436,7 +437,7 @@ function Part({
   function onClick(event: ThreeEvent<MouseEvent>) {
     if (onSelectPart) {
       // A place to install into, or a loose lead, wins over the body it lies on.
-      if (event.intersections.some((hit) => hit.object.userData.simpleTarget || hit.object.userData.looseEnd)) return;
+      if (event.intersections.some((hit) => hit.object.userData.simpleTarget || hit.object.userData.looseEnd || hit.object.userData.heldHandle || hit.object.userData.mechanismHandle)) return;
       event.stopPropagation(); onSelectPart(part.instanceId); return;
     }
     // While places are offered, a click that also hits a place marker (a slot on a board, the tray
@@ -1713,7 +1714,70 @@ function SceneEnvironment({ enabled }: { enabled: boolean }) {
   return null;
 }
 
-function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false, viewId, onSelectPart, simpleCableIds, selectedSimpleCableId, onSelectSimpleCable, simpleTargets, onSimpleTarget, benchOrder, beside, quality, guide, guideAnimate = true, rgb = false, held }: PcSceneProps & { quality: SceneQuality }) {
+/**
+ * An invisible grip around the held part: press on it and drag, and the part slides over its place in
+ * the plane it is held in (orbiting stops while dragging). It never lowers the part: that stays a
+ * separate, checked step.
+ */
+function HeldHandle({ item, offset, turnDeg, onDrag }: { item: PlacedPart; offset: [number, number]; turnDeg: number; onDrag: (offsetMm: [number, number]) => void }) {
+  const { camera, gl } = useThree();
+  const drag = useRef<{ plane: THREE.Plane; start: THREE.Vector3; offset: [number, number]; quat: THREE.Quaternion } | null>(null);
+  const centre = add(item.frame.at, rotate(item.frame.quat, scale(item.size, 0.5)));
+  const pointOn = (clientX: number, clientY: number, plane: THREE.Plane) => {
+    const rect = gl.domElement.getBoundingClientRect();
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1), camera);
+    return ray.ray.intersectPlane(plane, new THREE.Vector3());
+  };
+  useEffect(() => {
+    const move = (event: PointerEvent) => {
+      const d = drag.current;
+      if (!d) return;
+      const p = pointOn(event.clientX, event.clientY, d.plane);
+      if (!p) return;
+      const local = p.sub(d.start).applyQuaternion(d.quat.clone().invert());
+      onDrag([Math.round((d.offset[0] + local.x) * 2) / 2, Math.round((d.offset[1] + local.z) * 2) / 2]);
+    };
+    const up = () => {
+      if (!drag.current) return;
+      drag.current = null;
+      if (api) api.controls.enabled = true;
+      document.body.style.cursor = "";
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); };
+  });
+  const [qx, qy, qz, qw] = item.frame.quat;
+  return (
+    <mesh
+      position={centre}
+      quaternion={[qx, qy, qz, qw]}
+      userData={{ heldHandle: true }}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+        // The offset is measured along the place's own axes: the held part's frame without its turn.
+        const quat = new THREE.Quaternion(qx, qy, qz, qw).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (-turnDeg * Math.PI) / 180));
+        const normal = new THREE.Vector3(0, 1, 0).applyQuaternion(quat);
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, new THREE.Vector3(...centre));
+        const start = pointOn(event.nativeEvent.clientX, event.nativeEvent.clientY, plane);
+        if (!start) return;
+        drag.current = { plane, start, offset, quat };
+        if (api) api.controls.enabled = false;
+        document.body.style.cursor = "grabbing";
+      }}
+      onClick={(event) => event.stopPropagation()}
+      onPointerOver={() => { if (!drag.current) document.body.style.cursor = "grab"; }}
+      onPointerOut={() => { if (!drag.current) document.body.style.cursor = ""; }}
+    >
+      <boxGeometry args={[item.size[0] + 16, item.size[1] + 10, item.size[2] + 16]} />
+      <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+    </mesh>
+  );
+}
+
+function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false, viewId, onSelectPart, simpleCableIds, selectedSimpleCableId, onSelectSimpleCable, simpleTargets, onSimpleTarget, benchOrder, beside, quality, guide, guideAnimate = true, rgb = false, held, socket, onHeldDrag }: PcSceneProps & { quality: SceneQuality }) {
   const projectId = usePC((store) => store.projectId);
   const { geometry, ready } = useGeometry(useMemo(() => state.parts.map((part) => part.catalogId), [state.parts]));
   const benchSlots = useMemo(() => new Map<string, { at: Vec3; size: Vec3 }>(), [state, geometry, benchOrder, beside]);
@@ -1728,7 +1792,20 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
     next.set(held.instanceId, heldFrame(ghost, geometry.get(state.parts.find((p) => p.instanceId === held.instanceId)?.catalogId ?? ""), held));
     return next;
   }, [basePlaced, held, state, geometry, benchOrder, beside]);
-  const mechGeometry = useMemo(() => new Map(state.parts.map((p) => [p.instanceId, withMechanisms(geometry.get(p.catalogId), p)])), [state.parts, geometry]);
+  // In the practice view every CPU socket's lever and plate are moving parts of their own (SocketMechanism).
+  const socketHosts = useMemo(() => {
+    const out = new Map<string, { mountId: string; kind: "lga" | "zif"; retentionId: string; layout: NonNullable<ReturnType<typeof socketLayout>> }>();
+    if (!simple) return out;
+    for (const p of state.parts) {
+      const mount = catalogIndex.byId.get(p.catalogId)?.mountPoints.find((m) => m.kind === "cpu_socket" && (m.retention?.kind === "lga_load_plate" || m.retention?.kind === "zif_lever"));
+      if (!mount?.retention || !p.mechanisms) continue;
+      const kind = mount.retention.kind === "lga_load_plate" ? "lga" : "zif";
+      const layout = socketLayout(geometry.get(p.catalogId), mount.id, kind);
+      if (layout) out.set(p.instanceId, { mountId: mount.id, kind, retentionId: mount.retention.id, layout });
+    }
+    return out;
+  }, [simple, state.parts, geometry]);
+  const mechGeometry = useMemo(() => new Map(state.parts.map((p) => [p.instanceId, withMechanisms(geometry.get(p.catalogId), p, socketHosts.has(p.instanceId))])), [state.parts, geometry, socketHosts]);
   // A close-up only when the learner asks for one (the "close-up" button), never as a side effect.
   const focus = useScene((store) => store.focus);
   useEffect(() => {
@@ -1745,6 +1822,26 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
   lastPlaced = placed;
   const rich = quality !== "low";
   const cableEnds = useMemo(() => placeCableEnds(state, placed, geometry), [state, placed, geometry]);
+  // For browser checks (like window.__ytlSimplePc): where the socket's lever and plate and the held part are on screen.
+  const three = useThree();
+  useEffect(() => {
+    const w = window as unknown as { __ytlSocketScreen?: () => Record<string, [number, number]> };
+    w.__ytlSocketScreen = () => {
+      const out: Record<string, [number, number]> = {};
+      const rect = three.gl.domElement.getBoundingClientRect();
+      const screen = (p: Vec3): [number, number] => { const v = new THREE.Vector3(...p).project(three.camera); return [Math.round(rect.left + ((v.x + 1) / 2) * rect.width), Math.round(rect.top + ((1 - v.y) / 2) * rect.height)]; };
+      for (const [hostId, s] of socketHosts) {
+        const item = placed.get(hostId);
+        if (!item) continue;
+        out.centre = screen(compose(item.frame, { at: [s.layout.centre[0], s.layout.centre[1] + s.layout.size[1] / 2 + 22, s.layout.centre[2]], quat: [0, 0, 0, 1] }).at);
+        for (const what of ["lever", "plate", "mark"] as const) out[what] = screen(compose(item.frame, { at: socketPoint(s.layout, what, socketMoved(state.parts.find((p) => p.instanceId === hostId), s.retentionId, s.kind)), quat: [0, 0, 0, 1] }).at);
+      }
+      const h = held ? placed.get(held.instanceId) : undefined;
+      if (h) out.held = screen(add(h.frame.at, rotate(h.frame.quat, scale(h.size, 0.5))));
+      return out;
+    };
+    return () => { delete w.__ytlSocketScreen; };
+  }, [three, socketHosts, placed, held, state.parts]);
   // What a lead must not pass through: every solid of every part (a cooler's fin stack, its fan, a
   // card's shroud…), each as its own box, so a lead may run between them as real ones do. The case is
   // a container, not an obstacle; places for other parts and keep-out volumes are not solid.
@@ -1855,11 +1952,24 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
             rtl={rtl}
             onSelectPart={onSelectPart}
             animate={simple}
-            hiddenSolids={coveredPlaces.get(part.instanceId)}
+            hiddenSolids={socketHosts.has(part.instanceId) ? new Set([...(coveredPlaces.get(part.instanceId) ?? []), ...socketHosts.get(part.instanceId)!.layout.replaces]) : coveredPlaces.get(part.instanceId)}
             rgb={rgbState}
           />
         ) : null;
       })}
+      {[...socketHosts].map(([hostId, s]) => {
+        const item = placed.get(hostId);
+        const board = state.parts.find((p) => p.instanceId === hostId);
+        if (!item || !board) return null;
+        const active = socket && socket.hostInstanceId === hostId ? socket : null;
+        const cpuIn = state.parts.some((p) => p.attachments.some((a) => a.target.hostInstanceId === hostId && a.target.mountPointId === s.mountId));
+        return (
+          <FrameGroup key={`socket-${hostId}`} frame={item.frame} animate={simple} reducedMotion={reducedMotion} moveKey={`${hostId}#socket`}>
+            <SocketMechanism layout={s.layout} board={board} retentionId={s.retentionId} cpuIn={cpuIn} reducedMotion={reducedMotion} onLever={active?.onLever} onPlate={active?.onPlate} highlight={active?.highlight ?? null} />
+          </FrameGroup>
+        );
+      })}
+      {held && onHeldDrag && placed.get(held.instanceId) && <HeldHandle item={placed.get(held.instanceId)!} offset={held.offsetMm} turnDeg={held.rotationDeg} onDrag={onHeldDrag} />}
       {state.cables.filter((cable) => !simple || simpleCableIds?.includes(cable.id)).map((cable) => {
         const spec = pc.cableSpecOf(catalogIndex.byId.get(cable.catalogId), cable.cableSpecId);
         // Practice view: every end that is plugged in (so a lead shows both its plugs), plus the first one while loose.
@@ -1946,6 +2056,13 @@ export interface PcSceneProps {
   /** A fixed workbench (see `placeParts`). */
   benchOrder?: readonly string[];
   beside?: Readonly<Record<string, string>>;
+  /**
+   * The CPU socket the learner is working on: clicking its lever or plate in the view calls these (the
+   * engine still decides whether it may move). `highlight` glows the piece the current step is about.
+   */
+  socket?: { hostInstanceId: string; onLever?: () => void; onPlate?: () => void; highlight?: "lever" | "plate" | "mark" | null } | null;
+  /** Dragging the held part: its new offset from its place, mm along the place's own axes. */
+  onHeldDrag?: (offsetMm: [number, number]) => void;
   /** A part the learner is holding over its place (rotation and offset as held; nothing is fitted yet). */
   held?: { instanceId: string; target: { hostInstanceId: string; mountPointId: string }; rotationDeg: number; offsetMm: [number, number]; liftMm: number } | null;
 }

@@ -222,9 +222,23 @@ export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}`
  * order they were taken, so the latest one can be undone without breaking what depends on it.
  * Version 4 also carries the planned build it belongs to.
  */
+/** A part the learner is holding over its place: how it is turned and how far off centre (mm, along the place's own axes). */
+export interface SimpleHeld { key: SimplePartKey; rotationDeg: number; offsetMm: [number, number] }
 export type SimpleSnapshot =
-  | { version: 3; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean }
-  | { version: 4; plan: unknown; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean };
+  | { version: 3; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean; held?: SimpleHeld | null }
+  | { version: 4; plan: unknown; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean; held?: SimpleHeld | null };
+/** A held pose read from a save: a known part, a right-angle turn, an offset within reach. */
+export function parseHeld(value: unknown): SimpleHeld | null {
+  if (!value || typeof value !== "object") return null;
+  const h = value as Record<string, unknown>;
+  const off = h.offsetMm;
+  if (typeof h.key !== "string" || !ALL_SIMPLE_PARTS.some((p) => p.key === h.key)) return null;
+  if (typeof h.rotationDeg !== "number" || ![0, 90, 180, 270].includes(h.rotationDeg)) return null;
+  if (!Array.isArray(off) || off.length !== 2 || !off.every((n) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) <= HELD_REACH_MM)) return null;
+  return { key: h.key, rotationDeg: h.rotationDeg, offsetMm: [off[0] as number, off[1] as number] };
+}
+/** How far from its place a held part can be moved (it stays over the board, above the socket area). */
+export const HELD_REACH_MM = 40;
 export type SimpleBlock = "cpuFirst" | "boardFirst" | "prepareBoard" | "cannotFit" | "socketTaken" | "coolerTaken" | "openFirst" | "turnPart" | "centrePart" | "closeBlocked" | "alreadyIn" | "unplugFirst" | "unscrewFirst" | "prepMissing" | "prepWrong";
 export type SimpleCableBlock = "fitCableParts" | "turnOffFirst" | "cannotConnect";
 export type SimpleRemoveBlock = "turnOffFirst" | "removeCoolerFirst" | "unplugCoolerFirst" | "notSwappable" | "boardFirst";
@@ -257,13 +271,15 @@ export function createSimpleBuild(): PCBuildState {
 // ---------- Mechanisms (CPU load plate, memory latches) ----------
 
 /** The retention of the place a part goes, with the host that carries it; null for parts held by screws only. */
-export function simpleRetention(state: PCBuildState, key: SimplePartKey): { hostInstanceId: string; id: string; kind: string; open: boolean; mountPointId: string } | null {
+export function simpleRetention(state: PCBuildState, key: SimplePartKey): { hostInstanceId: string; id: string; kind: string; open: boolean; mountPointId: string; leverId: string | null; leverOpen: boolean } | null {
   const target = simpleTarget(state, key);
   const host = state.parts.find((p) => p.instanceId === target.hostInstanceId);
   const mount = pcCatalog.entries.find((e) => e.id === host?.catalogId)?.mountPoints.find((m) => m.id === target.mountPointId);
   // The case's slot covers are not what holds the board: they matter for a card (see caseCoversClosed).
   if (!host || !mount?.retention || mount.retention.kind === "slot_covers") return null;
-  return { hostInstanceId: host.instanceId, id: mount.retention.id, kind: mount.retention.kind, open: host.mechanisms?.[mount.retention.id] === "open", mountPointId: mount.id };
+  // An Intel load plate has a separate lever (released and lifted before the plate opens).
+  const leverId = mount.retention.kind === "lga_load_plate" ? `${mount.retention.id}:lever` : null;
+  return { hostInstanceId: host.instanceId, id: mount.retention.id, kind: mount.retention.kind, open: host.mechanisms?.[mount.retention.id] === "open", mountPointId: mount.id, leverId, leverOpen: leverId ? host.mechanisms?.[leverId] === "open" : false };
 }
 /** The keying the learner must match at a part's place (CPU triangle, DIMM notch), if any. */
 export function simpleKeying(state: PCBuildState, key: SimplePartKey) {
@@ -272,7 +288,7 @@ export function simpleKeying(state: PCBuildState, key: SimplePartKey) {
   return pcCatalog.entries.find((e) => e.id === host?.catalogId)?.mountPoints.find((m) => m.id === target.mountPointId)?.keying ?? null;
 }
 const hostOfRetention = (state: PCBuildState, retentionId: string) =>
-  state.parts.find((p) => pcCatalog.entries.find((e) => e.id === p.catalogId)?.mountPoints.some((m) => m.retention?.id === retentionId));
+  state.parts.find((p) => pcCatalog.entries.find((e) => e.id === p.catalogId)?.mountPoints.some((m) => m.retention?.id === retentionId.replace(/:lever$/, "")));
 
 /** Moves a lever, plate or latch. The engine refuses what cannot happen (a plate over a cooler, a latch over a half-in module). */
 export function setSimpleMechanism(state: PCBuildState, retentionId: string, desired: "open" | "closed"): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleBlock; message?: { en: string; ar: string } } {
@@ -281,6 +297,15 @@ export function setSimpleMechanism(state: PCBuildState, retentionId: string, des
   if (!host) return { ok: false, reason: "cannotFit" };
   const r = pc.applyAction(state, { type: "set_mechanism", instanceId: host.instanceId, mechanismId: retentionId, state: desired }, pcCatalog);
   return r.ok ? { ok: true, state: r.state } : { ok: false, reason: "closeBlocked", message: r.rejection.message };
+}
+
+/** Closes a socket over a seated CPU: the plate, then (Intel) the lever under its tab. */
+function closeRetention(state: PCBuildState, ret: { id: string; leverId: string | null }): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleBlock } {
+  const c = setSimpleMechanism(state, ret.id, "closed");
+  if (!c.ok) return { ok: false, reason: "cannotFit" };
+  if (!ret.leverId) return c;
+  const l = setSimpleMechanism(c.state, ret.leverId, "closed");
+  return l.ok ? l : { ok: false, reason: "cannotFit" };
 }
 
 /** How the learner holds a part over its place. */
@@ -505,7 +530,7 @@ export function installSimplePart(state: PCBuildState, key: SimplePartKey): { ok
     if (!r.ok) return r;
     const ret = simpleRetention(r.state, key)!;
     if (ret.kind !== "dimm_latch" && !ret.open) return r;
-    if (ret.kind !== "dimm_latch") { const c = setSimpleMechanism(r.state, ret.id, "closed"); return c.ok ? { ok: true, state: c.state } : { ok: false, reason: "cannotFit" }; }
+    if (ret.kind !== "dimm_latch") return closeRetention(r.state, ret);
     return r;
   }
   if (resting && !spec.radiator) {
@@ -522,12 +547,13 @@ export function installSimplePart(state: PCBuildState, key: SimplePartKey): { ok
     let next = state;
     // A card in a case needs the case's slot covers out first.
     if (retention.kind === "pcie_latch" && caseCoversClosed(next)) { const c = setSimpleMechanism(next, SLOT_COVERS_ID, "open"); if (!c.ok) return { ok: false, reason: "cannotFit" }; next = c.state; }
+    if (retention.leverId && !retention.leverOpen) { const o = setSimpleMechanism(next, retention.leverId, "open"); if (!o.ok) return { ok: false, reason: "cannotFit" }; next = o.state; }
     if (!retention.open) { const o = setSimpleMechanism(next, retention.id, "open"); if (!o.ok) return { ok: false, reason: "cannotFit" }; next = o.state; }
     const l = lowerSimplePart(next, key, ALIGNED);
     if (!l.ok) return { ok: false, reason: l.reason };
     next = l.state;
     if (retention.kind === "pcie_latch") { const f = fastenSimplePart(next, key); if (!f.ok) return { ok: false, reason: "cannotFit" }; next = f.state; }
-    else if (retention.kind !== "dimm_latch") { const c = setSimpleMechanism(next, retention.id, "closed"); if (!c.ok) return { ok: false, reason: "cannotFit" }; next = c.state; }
+    else if (retention.kind !== "dimm_latch") { const c = closeRetention(next, retention); if (!c.ok) return c; next = c.state; }
     return { ok: true, state: next };
   }
   try {
@@ -857,8 +883,21 @@ const isStep = (step: unknown): step is SimpleStep => {
   if (kind === "plug") { const m = /^(.+):(\d)$/.exec(rest); return Boolean(m && isCableKey(m[1])); }
   if (kind === "prep") { const m = /^([a-z0-9]+):(paste|film|standoffs|io_shield|psu_fan|airflow):([a-z]*)$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
   if (kind === "screw") { const m = /^([a-z0-9]+):(\d{1,2})$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
-  return kind === "mech" && /^[a-z0-9-]+:(open|closed)$/.test(rest);
+  return kind === "mech" && /^[a-z0-9-]+(:lever)?:(open|closed)$/.test(rest);
 };
+
+/**
+ * Saves from before the Intel lever became its own step said `mech:cpu-socket-plate:open|closed` for
+ * lever and plate together. They are read as the two steps they stood for, in the real order.
+ */
+export function migrateLeverSteps(history: readonly string[]): string[] {
+  if (history.some((st) => st.includes(":lever:"))) return [...history];
+  return history.flatMap((st) => {
+    const m = /^mech:(cpu-socket-plate):(open|closed)$/.exec(st);
+    if (!m) return [st];
+    return m[2] === "open" ? [`mech:${m[1]}:lever:open`, st] : [st, `mech:${m[1]}:lever:closed`];
+  });
+}
 
 export function parseSimpleSnapshot(value: unknown): SimpleSnapshot | null {
   if (!value || typeof value !== "object") return null;
@@ -876,7 +915,7 @@ export function parseSimpleSnapshot(value: unknown): SimpleSnapshot | null {
   let history: SimpleStep[];
   if (data.version === 3 || data.version === 4) {
     if (!Array.isArray(data.history) || data.history.length > 400 || !data.history.every(isStep)) return null;
-    history = [...data.history] as SimpleStep[];
+    history = migrateLeverSteps(data.history as string[]) as SimpleStep[];
     // The lists must say what the steps say.
     const derived = deriveSimpleLists(history);
     const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x));
@@ -886,9 +925,10 @@ export function parseSimpleSnapshot(value: unknown): SimpleSnapshot | null {
     history = [...placed.map((k): SimpleStep => `part:${k}`), ...(connected as SimpleCableKey[]).map((k): SimpleStep => `cable:${k}`)];
   }
   const cables = data.version === 3 || data.version === 4 ? deriveSimpleLists(history).connected : ([...connected] as SimpleCableKey[]);
+  const held = parseHeld(data.held);
   const migrated: SimpleSnapshot = data.version === 4
-    ? { version: 4, plan: active.plan, placed, connected: cables, history, powered: data.powered }
-    : { version: 3, placed, connected: cables, history, powered: data.powered };
+    ? { version: 4, plan: active.plan, placed, connected: cables, history, powered: data.powered, ...(held ? { held } : {}) }
+    : { version: 3, placed, connected: cables, history, powered: data.powered, ...(held ? { held } : {}) };
   try {
     const state = simpleBuildFromSnapshot(migrated);
     if (migrated.powered && (pc.evaluateStartup(state, pcCatalog).outcome !== "operational" || simpleRuleBlock(state))) return null;

@@ -12,6 +12,9 @@ import type { GuideFocus, GuideTarget } from "../guide";
 import type { PartGeometry, Vec3 } from "./geometry";
 import type { Obstacle } from "./cable-visuals";
 import { add, compose, rotate, scale, type PlacedPart } from "./placement";
+import { socketLayout, socketMoved, socketPoint } from "./SocketMechanism";
+import { catalogIndex } from "../catalog";
+const pcCatalogMount = (catalogId: string | undefined, mountId: string) => (catalogId ? catalogIndex.byId.get(catalogId)?.mountPoints.find((m) => m.id === mountId)?.retention?.id : undefined);
 
 const noRaycast = () => null;
 /** Compact guide: about 110 mm tall, leaving the component and its mounting point visible. */
@@ -21,7 +24,8 @@ const BASE_RADIUS = 46 * SIZE;
  * Seen from close up (a phone's view glides in to a small place), the robot shrinks and comes closer, so
  * it stays about the same size on screen and never fills the view: 1 from the default distance, down to 0.4.
  */
-export const nearScale = (cameraToTarget: number) => THREE.MathUtils.clamp(cameraToTarget / 1300, 0.4, 1);
+// Close up it shrinks well below the size of a socket, so it never covers what it points at.
+export const nearScale = (cameraToTarget: number) => THREE.MathUtils.clamp(cameraToTarget / 1300, 0.15, 1);
 const TABLE_CLEAR = 60;
 
 // ---------- Where things are ----------
@@ -46,6 +50,12 @@ export function targetPoint(target: GuideTarget, placed: ReadonlyMap<string, Pla
   const host = placed.get(target.hostInstanceId);
   const own = geometry.get(catalogOf(target.hostInstanceId) ?? "");
   if (!host || !own) return null;
+  if (target.kind === "socket") {
+    const layout = socketLayout(own, target.placeId, target.socket);
+    const board = state.parts.find((part) => part.instanceId === target.hostInstanceId);
+    const retentionId = pcCatalogMount(board?.catalogId, target.placeId);
+    return layout ? compose(host.frame, { at: socketPoint(layout, target.what, retentionId ? socketMoved(board, retentionId, target.socket) : {}), quat: [0, 0, 0, 1] }).at : null;
+  }
   if (target.kind === "mount") {
     const mount = own.mounts[target.placeId];
     return mount ? compose(host.frame, { at: mount.at, quat: mount.quat }).at : null;
@@ -90,7 +100,8 @@ export function hoverPoint(target: Vec3, eye: Vec3, obstacles: readonly Obstacle
   let best: THREE.Vector3 | null = null;
   let bestScore = Infinity;
   for (const c of candidates) {
-    c.y = Math.max(c.y, RADIUS + TABLE_CLEAR);
+    // Close up (small k) it may come down near the board, or it would hang halfway to the camera and look huge.
+    c.y = Math.max(c.y, RADIUS + TABLE_CLEAR * k);
     if (obstacles.some((box) => inside(c, box, RADIUS))) continue;
     if (caseBox && inside(c, caseBox, RADIUS * 0.6)) continue;
     // Outside the case, it never hovers over it either: seen from above, it would look as if it were inside.

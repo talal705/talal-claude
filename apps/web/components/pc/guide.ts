@@ -19,6 +19,8 @@ export type GuideTarget =
   | { kind: "mount"; hostInstanceId: string; placeId: string }
   | { kind: "port"; hostInstanceId: string; placeId: string }
   | { kind: "part"; instanceId: string }
+  /** A moving piece of a CPU socket: its lever, its load plate, or its orientation mark. */
+  | { kind: "socket"; hostInstanceId: string; placeId: string; what: "lever" | "plate" | "mark"; socket: "lga" | "zif" }
   | { kind: "powerButton" };
 
 export interface GuideFocus {

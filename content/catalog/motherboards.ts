@@ -11,7 +11,8 @@ const socketMounts = (socket: "lga1700" | "am4", name: string): MountPointSpec[]
     // ASUS manuals: lift the load lever (hold it while releasing), the CPU fits one way only, keep the PnP cap.
     ...(socket === "lga1700"
       ? lgaSocketDetail("ASUS TUF GAMING Z790-PLUS WIFI manual E21279 pp. 1-4, 2-1, 2-2: hold the lever while releasing it; the CPU fits in one orientation; keep the PnP cap. The board's lever protector is not modelled.")
-      : { retention: { id: "cpu-socket-lever", kind: "zif_lever" as const, note: "AM4 lever not walked through in this lab." } }),
+      // ASUS FAQ 1047659 (AM4 example): lift the lever to 90°, match the CPU triangle to the socket corner, lower it straight, lower the lever.
+      : { retention: { id: "cpu-socket-lever", kind: "zif_lever" as const, note: "AM4 lever per ASUS FAQ 1047659; the board is archived (not offered in the planner)." }, keying: { rotationDeg: 0, toleranceMm: 3, mark: "triangle" as const } }),
   },
   {
     id: "cooler-mount",

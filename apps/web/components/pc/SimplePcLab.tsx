@@ -18,7 +18,7 @@ import {
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
   simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap,
   activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
-  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simplePrepMissing, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
+  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simplePrepMissing, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, HELD_REACH_MM, type SimpleHeld, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
 } from "./simple-model";
 import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-scene";
 import { guideFocus } from "./guide";
@@ -184,6 +184,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const snapshot = restored ?? emptySimpleSnapshot();
     if (restored) {
       setSaved(restored);
+      // A part left in hand comes back exactly as it was held (turn and offset), still in hand.
+      if (restored.held) { setHold(restored.held); setSelection({ kind: "part", key: restored.held.key }); }
       setVerdict(restored.powered ? "success" : null);
       if (simpleAllPartsIn(simpleBuildFromSnapshot(restored))) setTab("cables");
     }
@@ -201,6 +203,12 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (!ready) return;
     try { localStorage.setItem(saveKey, JSON.stringify(saved)); } catch { /* Keep working. */ }
   }, [ready, saved, saveKey]);
+  // The pose of a part in hand is saved with the progress, so a reload does not reset it.
+  useEffect(() => {
+    if (!ready || mode === "fault") return;
+    const held: SimpleHeld | null = hold ? { key: hold.key, rotationDeg: hold.rotationDeg, offsetMm: hold.offsetMm } : null;
+    setSaved((previous) => (JSON.stringify(previous.held ?? null) === JSON.stringify(held) ? previous : { ...previous, held }));
+  }, [ready, mode, hold]);
 
   function changeView(patch: Partial<SimpleView>) {
     setView((previous) => {
@@ -230,7 +238,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** How a keyed part comes off the bench: turned and off centre, so lining it up is the learner's job. */
   const pickup = (key: SimplePartKey, retKind: string) => {
     const k = handKind(retKind);
-    return { key, rotationDeg: k === "cpu" ? 90 : 180, offsetMm: (k === "cpu" ? [5, -4] : k === "ram" ? [6, 0] : k === "m2" ? [4, 0] : [4, 3]) as [number, number] };
+    // A CPU comes up from the bench beside the socket, turned: bringing it over the socket is the learner's job.
+    return { key, rotationDeg: k === "cpu" ? 90 : 180, offsetMm: (k === "cpu" ? [-32, -18] : k === "ram" ? [6, 0] : k === "m2" ? [4, 0] : [4, 3]) as [number, number] };
   };
   function choosePart(key: SimplePartKey) {
     setConfirmRestart(false);
@@ -249,7 +258,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const ret = simpleRetention(state, key);
     if (ret && !simplePartInstalled(state, key) && !inPlace) {
       const k = handKind(ret.kind);
-      const line = k === "gpu" ? (caseCoversClosed(state) ? "gpuCoversFirst" : ret.open ? "gpuOpen" : "gpuLatchFirst") : ret.open ? `${k}Open` : `${k}OpenFirst`;
+      const line = k === "gpu" ? (caseCoversClosed(state) ? "gpuCoversFirst" : ret.open ? "gpuOpen" : "gpuLatchFirst")
+        : ret.leverId && ret.leverOpen && !ret.open ? "cpuPlateNext" : ret.open ? `${k}Open` : `${k}OpenFirst`;
       speak({ lines: [{ key: `hands.${line}` }], mood: "point", point: "scene" });
       return;
     }
@@ -325,12 +335,36 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const r = setSimpleMechanism(state, ret.id, desired);
     const k = handKind(ret.kind);
     const cpu = k === "cpu";
-    if (!r.ok) { speak({ lines: [{ key: k === "gpu" ? "hands.closeBlocked" : desired === "open" ? "hands.coolerOver" : `hands.${k === "m2" ? "m2" : "cpu"}LowerFirst` }], mood: "concerned", point: "scene" }); return; }
+    if (!r.ok) {
+      const cooler = /cooler/.test(r.message?.en ?? "");
+      const leverFirst = /lever/.test(r.message?.en ?? "") && desired === "open";
+      speak({ lines: [{ key: k === "gpu" ? "hands.closeBlocked" : cooler ? "hands.coolerOver" : leverFirst ? "hands.cpuOpenFirst" : desired === "open" ? "hands.closeBlocked" : `hands.${k === "m2" ? "m2" : "cpu"}LowerFirst` }], mood: "concerned", point: "scene" });
+      return;
+    }
     const attached = (r.state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments.length ?? 0) > 0;
-    const line = cpu || k === "m2" ? (desired === "open" ? (attached ? `${k}Released` : `${k}Open`) : `${k}Closed`) : attached ? `${k}Released` : `${k}Open`;
+    // The Intel plate closes before its lever locks; the AM4 lever closes the socket by itself.
+    const plateLine = ret.leverId ? (desired === "open" ? (attached ? "cpuPlateOpenSeated" : "cpuOpen") : "cpuPlateClosed") : null;
+    const line = plateLine ?? (cpu || k === "m2" ? (desired === "open" ? (attached ? `${k}Released` : `${k}Open`) : `${k}Closed`) : attached ? `${k}Released` : `${k}Open`);
     keepHand(r.state, (sn) => withMechanism(sn, ret.id, desired), line, desired === "closed" ? "happy" : "point");
     if ((cpu || k === "m2") && desired === "closed" && simplePartInstalled(r.state, key)) { setSelection(null); setHold(null); if (simpleAllPartsIn(r.state)) setTab("cables"); }
   }
+  /** The Intel socket's load lever: released from its tab and lifted, or pushed down and locked under it. */
+  function handLever(key: SimplePartKey, desired: "open" | "closed") {
+    if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
+    const ret = simpleRetention(state, key);
+    if (!ret?.leverId) return;
+    const r = setSimpleMechanism(state, ret.leverId, desired);
+    if (!r.ok) {
+      const cooler = /cooler|المبرّد/.test(r.message?.en ?? "");
+      speak({ lines: [{ key: cooler ? "hands.coolerOver" : desired === "closed" ? "hands.cpuPlateFirst" : "hands.closeBlocked" }], mood: "concerned", point: "scene" });
+      return;
+    }
+    const attached = (r.state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments.length ?? 0) > 0;
+    keepHand(r.state, (sn) => withMechanism(sn, ret.leverId!, desired), desired === "open" ? (attached ? "cpuLeverReleased" : "cpuLeverUp") : attached ? "cpuClosed" : "cpuLeverDown", desired === "closed" && attached ? "happy" : "point");
+    if (desired === "closed" && simplePartInstalled(r.state, key)) { setSelection(null); setHold(null); }
+  }
+  /** Clamps a dragged pose to the reach over the board (it never leaves the socket area or goes through parts). */
+  const dragHeld = (offsetMm: [number, number]) => setHold((h) => (h ? { ...h, offsetMm: clampHeld(h.key, offsetMm) } : h));
   function handLower(key: SimplePartKey) {
     if (lockedOn || !hold || hold.key !== key) return;
     const ret = simpleRetention(state, key);
@@ -338,7 +372,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const cpu = k === "cpu";
     const r = lowerSimplePart(state, key, hold);
     if (!r.ok) {
-      const first = k === "gpu" ? (caseCoversClosed(state) ? "gpuCoversFirst" : "gpuLatchFirst") : `${k}OpenFirst`;
+      const first = k === "gpu" ? (caseCoversClosed(state) ? "gpuCoversFirst" : "gpuLatchFirst") : ret?.leverId && ret.leverOpen ? "cpuPlateNext" : `${k}OpenFirst`;
       const line = r.reason === "openFirst" ? first : r.reason === "turnPart" ? `${k}Turn` : r.reason === "centrePart" ? `${k}Centre` : null;
       if (line) speak({ lines: [{ key: `hands.${line}` }], mood: "concerned", point: "scene" });
       else react({ type: "select", selection: { kind: "part", key } });
@@ -462,9 +496,20 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     keepHand(r.state, (sn) => withUnfasten(sn, key), "gpuUnscrewed");
   }
   const turn = (deg: number) => setHold((h) => (h ? { ...h, rotationDeg: (((h.rotationDeg + deg) % 360) + 360) % 360 } : h));
+  /**
+   * Where a held part may be: within reach of its place, and for a CPU not past the socket's far edge
+   * or the lever side, where the opened plate and the raised lever stand (it never moves through them).
+   */
+  const clampHeld = (key: SimplePartKey, offsetMm: [number, number]): [number, number] => {
+    let [x, z] = offsetMm;
+    if (handKind(simpleRetention(state, key)?.kind ?? "") === "cpu") { x = Math.min(x, 6); z = Math.min(z, 3); }
+    const d = Math.hypot(x, z);
+    const k = d > HELD_REACH_MM ? HELD_REACH_MM / d : 1;
+    return [Math.round(x * k * 2) / 2, Math.round(z * k * 2) / 2];
+  };
   // A module or an M.2 drive only slides along its slot; a CPU or card can be off in both directions.
   const alongOnly = (key: SimplePartKey) => { const k = simpleRetention(state, key)?.kind; return k === "dimm_latch" || k === "m2_qlatch"; };
-  const nudge = (dx: number, dz: number) => setHold((h) => (h ? { ...h, offsetMm: [Math.round((h.offsetMm[0] + dx) * 10) / 10, alongOnly(h.key) ? 0 : Math.round((h.offsetMm[1] + dz) * 10) / 10] } : h));
+  const nudge = (dx: number, dz: number) => setHold((h) => (h ? { ...h, offsetMm: clampHeld(h.key, [Math.round((h.offsetMm[0] + dx) * 10) / 10, alongOnly(h.key) ? 0 : Math.round((h.offsetMm[1] + dz) * 10) / 10]) } : h));
 
   /** Replaces the CPU or cooler that is in with its alternative. */
   function swap(from: SimplePartKey, to: SimplePartKey) {
@@ -548,11 +593,13 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (!ret) return;
     const gpu = ret.kind === "pcie_latch";
     if (!at && gpu && caseCoversClosed(state)) { handCovers("open"); return; }
+    if (ret.leverId && !ret.leverOpen && !ret.open) { handLever(key, "open"); return; }
     if (!at && !ret.open) { handMechanism(key, "open"); return; }
     if (!at) { handLower(key); return; }
     if (at.seating !== "seated") { handSeat(key); return; }
     if (gpu) { if (!simpleFastened(state, key)) handFasten(key); return; }
-    if (ret.open && ret.kind !== "dimm_latch") handMechanism(key, "closed");
+    if (ret.open && ret.kind !== "dimm_latch") { handMechanism(key, "closed"); return; }
+    if (ret.leverId && ret.leverOpen) handLever(key, "closed");
   }
 
   function onScenePart(instanceId: string) {
@@ -717,6 +764,25 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const blockHint = (reason: string) => t(reason === "turnOffFirst" ? "turnOffToSwap" : reason);
   const canUndo = Boolean(lastSimpleStep(saved));
   const keyed = selectedPart ? simpleRetention(state, selectedPart) : null;
+  // Undoing a lowering puts the CPU back in hand where it was lowered from: over the socket, lined up
+  // (it could only have been lowered lined up).
+  const inPlaceNow = selectedPart ? (state.parts.find((p) => p.instanceId === partSpec(selectedPart).id)?.attachments.length ?? 0) > 0 : false;
+  useEffect(() => {
+    if (!selectedPart || !keyed || inPlaceNow || hold?.key === selectedPart || handKind(keyed.kind) !== "cpu") return;
+    setHold({ key: selectedPart, rotationDeg: 0, offsetMm: [0, 0] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPart, inPlaceNow]);
+  const cpuKind: "lga" | "zif" | null = selectedPart && keyed && handKind(keyed.kind) === "cpu" ? (keyed.leverId ? "lga" : "zif") : null;
+  const cpuStep = cpuKind && selectedPart ? cpuFocus(selectedPart) : null;
+  // The CPU's socket in the view: its lever and plate answer clicks and taps (one checked step each).
+  const socketHands = cpuKind && selectedPart && keyed ? {
+    hostInstanceId: keyed.hostInstanceId,
+    highlight: cpuStep,
+    onLever: () => (keyed.leverId ? handLever(selectedPart, keyed.leverOpen ? "closed" : "open") : handMechanism(selectedPart, keyed.open ? "closed" : "open")),
+    onPlate: keyed.leverId ? () => handMechanism(selectedPart, keyed.open ? "closed" : "open") : undefined,
+  } : null;
+  // The robot points at the exact piece of the socket the next step is about.
+  const sceneGuide = guide && cpuKind && cpuStep && keyed ? { ...guide, targets: [{ kind: "socket" as const, hostInstanceId: keyed.hostInstanceId, placeId: keyed.mountPointId, what: cpuStep, socket: cpuKind }] } : guide;
   const heldNow = selectedPart && keyed && hold?.key === selectedPart && !(state.parts.find((p) => p.instanceId === partSpec(selectedPart).id)?.attachments.length)
     ? { instanceId: partSpec(selectedPart).id, target: simpleTarget(state, selectedPart), rotationDeg: hold.rotationDeg, offsetMm: hold.offsetMm, liftMm: keyed.kind === "pcie_latch" ? 40 : isRamKey(selectedPart) ? 30 : 22 }
     : null;
@@ -727,7 +793,9 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const ret = keyed!;
     const kind = handKind(ret.kind);
     if (kind === "gpu") return GpuHands();
-    const cpu = kind === "cpu";
+    if (kind === "cpu") return CpuHands();
+    // The CPU has its own panel (CpuHands); this one is memory and M.2.
+    const cpu = (kind as string) === "cpu";
     const m2 = kind === "m2";
     const name = (cpuKey: string, ramKey: string, m2Key: string) => t(cpu ? cpuKey : m2 ? m2Key : ramKey);
     const at = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
@@ -868,6 +936,76 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     );
   }
 
+  /** Which piece of the socket the next CPU step is about (the robot points at it and it glows). */
+  function cpuFocus(key: SimplePartKey): "lever" | "plate" | "mark" | null {
+    const ret = simpleRetention(state, key);
+    if (!ret) return null;
+    const at = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
+    const lga = Boolean(ret.leverId);
+    if (!ret.open && !(lga ? ret.leverOpen : false)) return at && simplePartInstalled(state, key) ? null : "lever";
+    if (lga && ret.leverOpen && !ret.open) return at ? "lever" : "plate";
+    if (!at) return "mark";
+    return lga ? "plate" : "lever";
+  }
+
+  /** The CPU and its socket: lever and plate (Intel) or lever (AM4), the CPU held, turned and centred, then lowered. */
+  function CpuHands() {
+    const key = selectedPart!;
+    const ret = keyed!;
+    const lga = Boolean(ret.leverId);
+    const at = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
+    const host = state.parts.find((p) => p.instanceId === ret.hostInstanceId);
+    const coverOn = lga && host?.mechanisms?.[`${ret.id}:cover`] !== "open";
+    const rival = simpleSlotPart(state, "cpu");
+    const otherIn = rival && rival !== key ? rival : null;
+    const off = hold ? Math.hypot(hold.offsetMm[0], hold.offsetMm[1]) : 0;
+    const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved));
+    const leverUp = lga ? ret.leverOpen : ret.open;
+    const btn = (label: string, onClick: () => void, primary = true) => <button className={primary ? styles.installButton : styles.cancel} type="button" disabled={disabled} onClick={onClick}>{label}</button>;
+    return (
+      <div className={styles.hands}>
+        <div className={styles.handsHead}>
+          <p className={styles.handsState}>{t("hands.lever", { state: t(leverUp ? "hands.leverUp" : "hands.leverLocked") })}{lga ? ` · ${t("hands.plate", { state: t(ret.open ? "hands.open" : "hands.closed") })}` : ""}{coverOn ? ` · ${t("hands.cover")}` : ""}</p>
+          <button type="button" className={styles.closeup} onClick={() => focusOn(ret.hostInstanceId, ret.mountPointId)}>{t("hands.closeup")}</button>
+        </div>
+        <p className={styles.cablesNote}>{t("hands.inScene")}</p>
+        {otherIn ? <p className={styles.hint}>{t("hands.takeOther")}</p> : <>
+          {/* Opening: lever first (Intel: then the plate). Closing: plate first, then the lever under its tab. */}
+          {!leverUp && !ret.open && btn(t(lga ? "hands.releaseLever" : "hands.liftZif"), () => (lga ? handLever(key, "open") : handMechanism(key, "open")), !at || !simplePartInstalled(state, key) ? true : false)}
+          {lga && leverUp && !ret.open && (!at || at.seating === "seated") && btn(t("hands.openPlate"), () => handMechanism(key, "open"), !at)}
+          {lga && leverUp && !ret.open && at && btn(t("hands.lockLever"), () => handLever(key, "closed"))}
+          {!at && hold && <div className={styles.holdControls} role="group" aria-label={t("hands.title")} tabIndex={0} onKeyDown={(e) => holdKeys(e, key)}>
+            <p className={styles.alignState} aria-live="polite">{t("hands.turned", { deg: hold.rotationDeg })} · {off < 0.05 ? t("hands.aligned") : t("hands.off", { mm: Math.round(off * 10) / 10 })}</p>
+            <div className={styles.holdRow}>
+              <button type="button" onClick={() => turn(-90)} aria-label={t("hands.rotateLeft")}>⟲</button>
+              <button type="button" onClick={() => turn(90)} aria-label={t("hands.rotateRight")}>⟳</button>
+              <button type="button" onClick={() => nudge(-1, 0)} aria-label={t("hands.nudgeLeft")}>←</button>
+              <button type="button" onClick={() => nudge(1, 0)} aria-label={t("hands.nudgeRight")}>→</button>
+              <button type="button" onClick={() => nudge(0, -1)} aria-label={t("hands.nudgeUp")}>↑</button>
+              <button type="button" onClick={() => nudge(0, 1)} aria-label={t("hands.nudgeDown")}>↓</button>
+            </div>
+            <p className={styles.cablesNote}>{t("hands.keys")}</p>
+            {btn(t("hands.lowerIn"), () => handLower(key))}
+          </div>}
+          {at && at.seating === "seated" && ret.open && <>
+            {btn(t(lga ? "hands.closePlate" : "hands.lowerZif"), () => handMechanism(key, "closed"))}
+            {btn(t("hands.liftOut"), () => handLift(key), false)}
+          </>}
+        </>}
+        <p className={styles.hint}>{t("hands.markCpu")}</p>
+        <p className={styles.cablesNote}>{t(lga ? "hands.lgaSource" : "hands.zifSource")}</p>
+        <p className={styles.cablesNote}>{t("hands.note")}</p>
+      </div>
+    );
+  }
+  /** Keyboard for a part in hand: Q/E turn, arrows move, Enter lowers. */
+  function holdKeys(e: React.KeyboardEvent, key: SimplePartKey) {
+    const k = e.key.toLowerCase();
+    const cpu = handKind(simpleRetention(state, key)?.kind ?? "") === "cpu";
+    const map: Record<string, () => void> = { q: () => turn(cpu ? -90 : 180), e: () => turn(cpu ? 90 : 180), arrowleft: () => nudge(-1, 0), arrowright: () => nudge(1, 0), arrowup: () => nudge(0, -1), arrowdown: () => nudge(0, 1), enter: () => handLower(key) };
+    if (map[k]) { e.preventDefault(); e.stopPropagation(); map[k](); }
+  }
+
   /** The graphics card: slot covers, the slot's push latch, bracket alignment, screws; and the same in reverse. */
   function GpuHands() {
     const key = selectedPart!;
@@ -938,6 +1076,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
             <button type="button" aria-label={t("zoomOut")} onClick={() => moveCamera("out")}>−</button>
           </div>
           <div className={styles.canvas} role="group" tabIndex={0} aria-label={t("scene")} onKeyDown={(event) => {
+            if (heldNow && selectedPart) { holdKeys(event, selectedPart); if (event.defaultPrevented) return; }
             const commands = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down", "+": "in", "-": "out" } as const;
             const command = commands[event.key as keyof typeof commands];
             if (command && !event.ctrlKey && !event.metaKey && !event.altKey) { event.preventDefault(); moveCamera(command); }
@@ -956,13 +1095,15 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
                   simpleCableIds={cableIds}
                   selectedSimpleCableId={selectedCable ? cableSpec(selectedCable).id : null}
                   onSelectSimpleCable={onSceneCable}
-                  simpleTargets={targets}
+                  simpleTargets={cpuKind && keyed ? targets.filter((x) => !(x.hostInstanceId === keyed.hostInstanceId && x.placeId === keyed.mountPointId)) : targets}
                   onSimpleTarget={onTarget}
                   onSimpleMiss={() => { if (selection) react({ type: "missedTarget" }); }}
-                  guide={guide}
+                  guide={sceneGuide}
                   guideAnimate={view.guideMotion}
                   rgb={view.rgb}
                   held={heldNow}
+                  onHeldDrag={heldNow ? dragHeld : undefined}
+                  socket={socketHands}
                   benchOrder={bench.benchOrder}
                   beside={bench.beside}
                   onContextLost={() => setWebgl(false)}

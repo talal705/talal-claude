@@ -13,7 +13,12 @@ describe("hands-on CPU and memory", () => {
   it("lowers a CPU only with the plate open and the triangle matched; it counts as installed once the plate is closed", () => {
     let s = createSimpleBuild();
     expect(lowerSimplePart(s, "cpu", aligned)).toMatchObject({ ok: false, reason: "openFirst" });
-    const open = setSimpleMechanism(s, "cpu-socket-plate", "open");
+    // The plate does not open before the lever is released and lifted.
+    expect(setSimpleMechanism(s, "cpu-socket-plate", "open").ok).toBe(false);
+    const lever = setSimpleMechanism(s, "cpu-socket-plate:lever", "open");
+    if (!lever.ok) throw new Error();
+    expect(lowerSimplePart(lever.state, "cpu", aligned)).toMatchObject({ ok: false, reason: "openFirst" });
+    const open = setSimpleMechanism(lever.state, "cpu-socket-plate", "open");
     if (!open.ok) throw new Error();
     s = open.state;
     expect(lowerSimplePart(s, "cpu", { rotationDeg: 90, offsetMm: [0, 0] })).toMatchObject({ ok: false, reason: "turnPart" });
@@ -21,7 +26,12 @@ describe("hands-on CPU and memory", () => {
     const low = lowerSimplePart(s, "cpu", { rotationDeg: 0, offsetMm: [1, 1] });
     if (!low.ok) throw new Error();
     expect(simplePartInstalled(low.state, "cpu")).toBe(false);
-    const closed = setSimpleMechanism(low.state, "cpu-socket-plate", "closed");
+    // The lever cannot lock while the plate is up.
+    expect(setSimpleMechanism(low.state, "cpu-socket-plate:lever", "closed").ok).toBe(false);
+    const plate = setSimpleMechanism(low.state, "cpu-socket-plate", "closed");
+    if (!plate.ok) throw new Error();
+    expect(simplePartInstalled(plate.state, "cpu")).toBe(false);
+    const closed = setSimpleMechanism(plate.state, "cpu-socket-plate:lever", "closed");
     if (!closed.ok) throw new Error();
     expect(simplePartInstalled(closed.state, "cpu")).toBe(true);
     expect(liftSimplePart(closed.state, "cpu")).toMatchObject({ ok: false, reason: "openFirst" });
@@ -29,9 +39,11 @@ describe("hands-on CPU and memory", () => {
 
   it("records each physical step, undoes them one at a time and restores them after a reload", () => {
     let snap = emptySimpleSnapshot();
+    snap = withMechanism(snap, "cpu-socket-plate:lever", "open");
     snap = withMechanism(snap, "cpu-socket-plate", "open");
     snap = withLower(snap, "cpu");
     snap = withMechanism(snap, "cpu-socket-plate", "closed");
+    snap = withMechanism(snap, "cpu-socket-plate:lever", "closed");
     snap = withMechanism(snap, "dimm-a2-latch", "open");
     snap = withLower(snap, "ram");
     expect(snap.placed).toEqual(["cpu", "ram"]);
@@ -46,6 +58,13 @@ describe("hands-on CPU and memory", () => {
     const lifted = withLift(withMechanism(snap, "dimm-a2-latch", "open"), "ram");
     expect(lifted.placed).toEqual(["cpu"]);
     expect(simpleBuildFromSnapshot(lifted).parts.find((p) => p.instanceId === "ram-4")?.attachments).toEqual([]);
+  });
+
+  it("reads a save from before the lever had its own step as the two steps it stood for", () => {
+    const old = { version: 3, placed: ["cpu"], connected: [], history: ["mech:cpu-socket-plate:open", "lower:cpu", "mech:cpu-socket-plate:closed"], powered: false };
+    const parsed = parseSimpleSnapshot(old)!;
+    expect(parsed.history).toEqual(["mech:cpu-socket-plate:lever:open", "mech:cpu-socket-plate:open", "lower:cpu", "mech:cpu-socket-plate:closed", "mech:cpu-socket-plate:lever:closed"]);
+    expect(simplePartInstalled(simpleBuildFromSnapshot(parsed), "cpu")).toBe(true);
   });
 
   it("migrates an older save explicitly: its one-step CPU and memory fittings replay through the mechanisms", () => {
@@ -187,5 +206,19 @@ describe("hands-on preparation, placing and screws", () => {
     expect(restored.history).toEqual(snap.history);
     expect(simplePartInstalled(simpleBuildFromSnapshot(restored), "psu")).toBe(true);
     expect(simplePartInstalled(simpleBuildFromSnapshot(undoSimpleStep(restored)!), "psu")).toBe(false);
+  });
+});
+
+describe("a CPU in hand is saved as it is held", () => {
+  it("keeps the turn and offset of a held CPU through a save, and refuses an impossible pose", async () => {
+    const { parseHeld, HELD_REACH_MM } = await import("./simple-model");
+    let snap = emptySimpleSnapshot();
+    snap = withMechanism(snap, "cpu-socket-plate:lever", "open");
+    snap = { ...snap, held: { key: "cpu", rotationDeg: 90, offsetMm: [-12.5, 3] } };
+    const restored = parseSimpleSnapshot(JSON.parse(JSON.stringify(snap)))!;
+    expect(restored.held).toEqual({ key: "cpu", rotationDeg: 90, offsetMm: [-12.5, 3] });
+    expect(parseHeld({ key: "cpu", rotationDeg: 45, offsetMm: [0, 0] })).toBeNull();
+    expect(parseHeld({ key: "cpu", rotationDeg: 0, offsetMm: [HELD_REACH_MM + 1, 0] })).toBeNull();
+    expect(parseHeld({ key: "nope", rotationDeg: 0, offsetMm: [0, 0] })).toBeNull();
   });
 });

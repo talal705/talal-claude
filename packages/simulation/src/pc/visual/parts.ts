@@ -176,7 +176,7 @@ export function cpuGeometry(entry: CpuEntry, v: string): PartGeometry {
   // Two processors can share a package; the model marking on the lid is what tells them apart.
   b.box("heat-spreader", "plate", [X * 0.15, 2.5, Z * 0.15], [X * 0.7, 1.9, Z * 0.7], "schematic", { finish: "nickel", label: entry.model.replace(/^Core |^Ryzen \d /, "").toUpperCase() });
   // The gold triangle in one corner shows the one orientation in which the CPU drops into its socket.
-  b.box("corner-mark", "chip", [1, 1.7, Z - 4], [3, 0.2, 3], "schematic", { finish: "gold" });
+  b.box("corner-mark", "chip", [1, 1.7, Z - 6], [5, 0.4, 5], "schematic", { finish: "gold" });
   return finish(entry, v, b, [X, 4.4, Z], {
     attach: { main: { at: [r1(X / 2), 0, r1(Z / 2)], quat: IDENTITY } },
     zones: { "heat-spreader": ["heat-spreader", "lid-flange"], contacts: ["contacts", "corner-mark"] },
