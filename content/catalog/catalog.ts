@@ -103,6 +103,11 @@ export function suppliedPartActions(caseCatalogId: string, caseInstanceId: strin
     const instanceId = `${entry.category}-${serial++}`;
     const fasteners = caseEntry?.mountPoints.find((m) => m.id === item.mountPointId)?.fastener?.count ?? 0;
     actions.push({ type: "add_part", catalogId: item.catalogId });
+    // A fan fitted at the factory already faces the way its position needs.
+    const place = caseEntry?.mountPoints.find((m) => m.id === item.mountPointId);
+    if (entry.category === "fan" && place && (place.kind === "fan_mount" || place.kind === "radiator_mount")) {
+      actions.push({ type: "set_prep", instanceId, prep: "airflow", value: place.location === "rear" || place.location === "top" ? "exhaust" : "intake" });
+    }
     actions.push({ type: "mount_part", instanceId, target: { hostInstanceId: caseInstanceId, mountPointId: item.mountPointId } });
     actions.push({ type: "set_seating", instanceId, seating: "seated" });
     if (fasteners > 0) actions.push({ type: "set_fasteners", instanceId, secured: fasteners });

@@ -412,7 +412,7 @@ export const compactAirCooler: CoolingEntry = {
   cables: [fanLead("fan", "fan_4pin_pwm", L("Cooler fan lead (4-pin PWM)", "سلك مروحة المبرّد (PWM من 4 سنون)"))],
   rgb: null,
   asset: NO_ASSET,
-  spec: { type: "air", supportedSockets: ["lga1851", "lga1700", "lga1200", "lga1150", "am5", "am4"], heightMm: 132.5, radiatorSizeMm: null, fanCount: 1, fanSizeMm: 100, coolingCapacityW: null },
+  spec: { type: "air", supportedSockets: ["lga1851", "lga1700", "lga1200", "lga1150", "am5", "am4"], heightMm: 132.5, radiatorSizeMm: null, fanCount: 1, fanSizeMm: 100, coolingCapacityW: null, paste: { supplied: "pre_applied", film: true, source: "ARCTIC product page as recorded for this entry: pre-applied MX-4 under a protective cover peeled off before mounting." } },
 };
 
 export const expansionEntries = { cpus: [legacyCpu], motherboards: [entryBoard, legacyBoard], ram: [legacyRam], gpus: [rtx5060], storage: [hdd], cases: [smallCase, largeCase], fans: [fan140], cooling: [compactAirCooler] };

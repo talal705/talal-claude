@@ -50,6 +50,7 @@ describe("detailed mechanics: CPU", () => {
       { type: "mount_part", instanceId: "cpu-2", target: at("cpu-socket"), alignment: good },
       { type: "set_seating", instanceId: "cpu-2", seating: "seated" },
       { type: "set_mechanism", instanceId: "motherboard-1", mechanismId: "cpu-socket-plate", state: "closed" },
+      { type: "set_prep", instanceId: "cooling-4", prep: "paste", value: "applied" },
       { type: "mount_part", instanceId: "cooling-4", target: at("cooler-mount") },
     ]);
     expect(code(s, { type: "set_mechanism", instanceId: "motherboard-1", mechanismId: "cpu-socket-plate", state: "open" })).toBe("retention_blocked");
@@ -76,5 +77,22 @@ describe("detailed mechanics: memory", () => {
       { type: "mount_part", instanceId: "ram-3", target: at("dimm-a2"), alignment: good },
     ]);
     expect(evaluateStartup(s, pcCatalog).outcome).not.toBe("operational");
+  });
+});
+
+describe("detailed mechanics: preparation before fitting", () => {
+  it("a cooler supplied with a tube needs paste on the CPU first, and only once", () => {
+    let s = run(start(), [
+      { type: "set_mechanism", instanceId: "motherboard-1", mechanismId: "cpu-socket-plate", state: "open" },
+      { type: "mount_part", instanceId: "cpu-2", target: at("cpu-socket"), alignment: good },
+      { type: "set_seating", instanceId: "cpu-2", seating: "seated" },
+      { type: "set_mechanism", instanceId: "motherboard-1", mechanismId: "cpu-socket-plate", state: "closed" },
+    ]);
+    expect(code(s, { type: "mount_part", instanceId: "cooling-4", target: at("cooler-mount") })).toBe("prep_missing");
+    // The film is not recorded for this cooler, so peeling it is neither asked for nor accepted.
+    expect(code(s, { type: "set_prep", instanceId: "cooling-4", prep: "film", value: "removed" })).toBe("prep_wrong");
+    s = run(s, [{ type: "set_prep", instanceId: "cooling-4", prep: "paste", value: "applied" }]);
+    expect(code(s, { type: "set_prep", instanceId: "cooling-4", prep: "paste", value: "applied" })).toBe("prep_wrong");
+    expect(code(s, { type: "mount_part", instanceId: "cooling-4", target: at("cooler-mount") })).toBe("ok");
   });
 });

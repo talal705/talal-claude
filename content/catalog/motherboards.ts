@@ -234,6 +234,7 @@ export const motherboards: MotherboardEntry[] = [
       ],
       factoryBiosVersion: "0802",
       biosFlashWithoutCpu: false,
+      ioShield: { kind: "pre_mounted", source: "ASUS feature list as carried by Newegg (N82E16813119618) and Guru3D launch news: \"Pre-mounted I/O shield\"." },
       hasIntegratedDisplayOutputs: true,
       sataPorts: 4,
       rearPanel: [
@@ -394,6 +395,7 @@ export const motherboards: MotherboardEntry[] = [
       ],
       factoryBiosVersion: "0411",
       biosFlashWithoutCpu: false,
+      ioShield: { kind: "pre_mounted", source: "Newegg listing N82E16813119602: \"Pre-mount I/O shield\"." },
       hasIntegratedDisplayOutputs: true,
       sataPorts: 4,
       rearPanel: [

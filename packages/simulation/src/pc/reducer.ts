@@ -4,6 +4,8 @@ import type {
   CableInstance,
   CatalogEntry,
   MechanismState,
+  MountPointSpec,
+  PrepKind,
   RetentionSpec,
   InstalledPart,
   PCAction,
@@ -57,6 +59,38 @@ const retentionName = (kind: RetentionSpec["kind"]) =>
   : kind === "m2_qlatch" ? L("The M.2 Q-Latch", "مشبك M.2 ‏(Q-Latch)")
   : kind === "zif_lever" ? L("The socket lever", "ذراع المقبس")
   : L("The socket's load plate and lever", "غطا المقبس وذراعه");
+
+/** Detailed builds: what has to be done to a part before it goes in a place. Null when nothing is missing. */
+function prepGate(v: View, instanceId: string, place: MountPointSpec, fail: (code: PCDiagnosticCode, target: TutorTargetRef, params: TextParams) => PCActionResult) {
+  const part = partById(v, instanceId);
+  const entry = part && entryOf(v, part);
+  if (!part || !entry) return null;
+  const prep = part.prep ?? {};
+  const target = pcTarget.part(instanceId);
+  const missing = (en: string, ar: string) => fail("prep_missing", target, { what: L(en, ar) });
+  const wrong = (en: string, ar: string) => fail("prep_wrong", target, { why: L(en, ar) });
+  if (place.kind === "cpu_cooler_mount" && entry.category === "cooling" && entry.spec.paste) {
+    if (entry.spec.paste.film && prep.film !== "removed") return missing("Peel the protective film off the cooler's plate first.", "شيل غلاف الحماية عن قاعدة المبرّد أول.");
+    if (entry.spec.paste.supplied === "tube" && prep.paste !== "applied") return missing("Put a small amount of thermal paste on the CPU first.", "حط كمية صغيرة من المعجون الحراري على المعالج أول.");
+  }
+  if (place.kind === "motherboard_tray" && entry.category === "motherboard") {
+    if (prep.standoffs !== "checked") return missing("Check the case's standoffs line up with the board's screw holes first.", "تأكد إن القواعد في الكيس تطابق فتحات البراغي في اللوحة أول.");
+    if (entry.spec.ioShield?.kind === "separate" && prep.io_shield !== "fitted") return missing("Press the board's I/O shield into the case's rear opening first.", "ركّب غطا المنافذ الخلفي في فتحة الكيس أول.");
+  }
+  if (place.kind === "psu_bay" && entry.category === "psu") {
+    if (!prep.psu_fan) return missing("Decide which way the PSU's fan faces before sliding it in.", "حدّد اتجاه مروحة مزوّد الطاقة قبل ما تدخله.");
+    if (place.bottomVent?.present && prep.psu_fan === "up") return wrong("This case has a filtered vent under the PSU: turn the PSU so its fan faces down and draws cool air from outside.", "هالكيس فيه فتحة تهوية بفلتر تحت مزوّد الطاقة: اقلبه لين تصير مروحته تحت وتسحب هوا بارد من برّا.");
+  }
+  if ((place.kind === "fan_mount" || place.kind === "radiator_mount") && entry.category === "fan") {
+    const want = place.location === "rear" || place.location === "top" ? "exhaust" : "intake";
+    if (!prep.airflow) return missing("Check the arrows on the fan frame and turn it for the airflow this position needs first.", "شوف الأسهم على إطار المروحة واقلبها حسب اتجاه الهوا اللي يحتاجه المكان أول.");
+    if (prep.airflow !== want) return wrong(
+      want === "intake" ? "This position pulls air in: turn the fan so its airflow arrow points into the case." : "This position blows air out: turn the fan so its airflow arrow points out of the case.",
+      want === "intake" ? "هالمكان يسحب الهوا للداخل: اقلب المروحة لين يصير سهم الهوا داخل الكيس." : "هالمكان يطلّع الهوا: اقلب المروحة لين يصير سهم الهوا طالع من الكيس.",
+    );
+  }
+  return null;
+}
 
 export const DEFAULT_LIGHTING = { enabled: true, color: "#00e5ff", effect: "static" } as const;
 
@@ -201,12 +235,47 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       return ok({ parts: state.parts.map(setHost({ [ret.id]: action.state })).map(action.state === "open" ? release : (p) => p) });
     }
 
+    case "set_prep": {
+      const part = partById(v, action.instanceId);
+      const entry = part && entryOf(v, part);
+      if (!part || !entry) return unknown(action.instanceId, pcTarget.part(action.instanceId));
+      const target = pcTarget.part(part.instanceId);
+      const wrong = (en: string, ar: string) => fail("prep_wrong", target, { why: L(en, ar) });
+      const allowed: Record<PrepKind, { category: CatalogEntry["category"]; values: string[] }> = {
+        paste: { category: "cooling", values: ["applied"] }, film: { category: "cooling", values: ["removed"] },
+        standoffs: { category: "motherboard", values: ["checked"] }, io_shield: { category: "motherboard", values: ["fitted"] },
+        psu_fan: { category: "psu", values: ["down", "up"] }, airflow: { category: "fan", values: ["intake", "exhaust"] },
+      };
+      const rule = allowed[action.prep];
+      if (!rule || entry.category !== rule.category || (action.value !== "" && !rule.values.includes(action.value))) {
+        return invalid(target, "That step does not apply to this part.", "هذي الخطوة ما تنطبق على هالقطعة.");
+      }
+      if (part.attachments.length > 0 && action.prep !== "airflow") return invalid(target, "Take the part out first; this is done before it is fitted.", "طلّع القطعة أول؛ هذي الخطوة قبل التركيب.");
+      if (part.attachments.length > 0) return invalid(target, "Take the fan off before turning it round.", "فك المروحة قبل ما تقلبها.");
+      if (action.value !== "" && entry.category === "cooling") {
+        const paste = entry.spec.paste;
+        if (action.prep === "paste" && paste?.supplied === "pre_applied") return wrong("This cooler's paste is already on its plate. Adding more on top makes too thick a layer.", "المعجون محطوط على قاعدة هالمبرّد من المصنع. إضافة فوقه تخلّي الطبقة سميكة زيادة.");
+        if (action.prep === "paste" && part.prep?.paste === "applied") return wrong("There is paste on already; one small amount is enough.", "فيه معجون من قبل؛ كمية صغيرة وحدة تكفي.");
+        if (action.prep === "film" && paste?.film === false) return wrong("This cooler's plate has no protective film to peel.", "قاعدة هالمبرّد ما عليها غلاف حماية ينشال.");
+        if (action.prep === "film" && !paste?.film) return wrong("The lab has no record of a film on this cooler's plate. On a real one, look: peel a film if there is one.", "ما عندنا معلومة عن غلاف على قاعدة هالمبرّد. على القطعة الحقيقية شوف بنفسك: إذا فيه غلاف شيله.");
+      }
+      if (action.value !== "" && entry.category === "motherboard" && action.prep === "io_shield" && entry.spec.ioShield?.kind === "pre_mounted") {
+        return wrong("This board's I/O shield is already fixed to it. There is no separate plate to fit in the case.", "غطا المنافذ الخلفي مركّب على هاللوحة من المصنع. ما فيه غطا منفصل تركّبه في الكيس.");
+      }
+      const prep = { ...(part.prep ?? {}) };
+      if (action.value === "") delete prep[action.prep];
+      else prep[action.prep] = action.value;
+      return ok({ parts: withPart(part.instanceId, (p) => ({ ...p, prep })) });
+    }
+
     case "mount_part": {
       const check = checkMount(v, action.instanceId, action.role, action.target);
       if (!check.ok) return rejected(check.rejection);
       const hostPart = partById(v, action.target.hostInstanceId);
       const hostEntry = hostPart && entryOf(v, hostPart);
       const place = hostEntry?.mountPoints.find((m) => m.id === action.target.mountPointId);
+      const gate = detailed && place ? prepGate(v, action.instanceId, place, fail) : null;
+      if (gate) return gate;
       if (detailed && place?.retention && place.retention.kind !== "slot_covers" && (hostPart?.mechanisms?.[place.retention.id] ?? "closed") !== "open") {
         return fail("retention_closed", pcTarget.mount(action.target), { mechanism: retentionName(place.retention.kind) });
       }

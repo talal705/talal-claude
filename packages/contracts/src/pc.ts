@@ -307,7 +307,13 @@ interface MountPointBase {
 /** A place on a part where another part is installed. The `kind` discriminates what fits. */
 export type MountPointSpec =
   | (MountPointBase & { kind: "motherboard_tray"; formFactors: MotherboardFormFactor[] })
-  | (MountPointBase & { kind: "psu_bay"; formFactors: PsuFormFactor[]; maxLengthMm: number | null })
+  | (MountPointBase & {
+      kind: "psu_bay";
+      formFactors: PsuFormFactor[];
+      maxLengthMm: number | null;
+      /** A filtered vent under the bay, so the PSU's fan faces down. Null when not verified. */
+      bottomVent?: { present: boolean; source: string } | null;
+    })
   | (MountPointBase & { kind: "drive_bay"; sizes: ("2.5_inch" | "3.5_inch")[] })
   | (MountPointBase & { kind: "fan_mount"; location: CaseLocation; sizesMm: number[] })
   | (MountPointBase & {
@@ -442,6 +448,8 @@ export interface MotherboardSpec {
   sataPorts: number;
   /** The back panel as the spec page lists it; absent when not recorded. Used by the visual model only. */
   rearPanel?: RearPanelItem[];
+  /** Whether the rear I/O shield comes fixed to the board or as a separate plate for the case. Absent when not recorded. */
+  ioShield?: { kind: "pre_mounted" | "separate"; source: string };
 }
 
 export interface CpuSpec {
@@ -547,6 +555,11 @@ export interface CoolingSpec {
    * `source` says whether the manufacturer publishes it or it is a labelled teaching assumption.
    */
   coolingCapacityW: { value: number; source: "manufacturer" | "teaching_assumption" } | null;
+  /**
+   * Thermal paste as the cooler comes: already on the plate, or in a tube to apply. `film`: a protective
+   * cover on the contact plate that must come off. Absent when not recorded (the lab then asks for neither).
+   */
+  paste?: { supplied: "pre_applied" | "tube"; film: boolean | null; source: string };
 }
 
 /** Kept for saved data from before 2026-10-27 only (decision 11): no monitor is offered or required. */
@@ -687,7 +700,12 @@ export interface InstalledPart {
   bootable?: boolean;
   /** Retention mechanisms on this part by `RetentionSpec.id`, and the CPU socket cover / lever protector. */
   mechanisms?: Record<string, MechanismState>;
+  /** Detailed builds: preparation done on this part before it is fitted (paste, film, standoffs, orientation). */
+  prep?: Partial<Record<PrepKind, string>>;
 }
+
+/** Preparation a learner does before fitting a part, and the values each takes. */
+export type PrepKind = "paste" | "film" | "standoffs" | "io_shield" | "psu_fan" | "airflow";
 
 export type MechanismState = "open" | "closed";
 
@@ -759,6 +777,8 @@ export type PCAction =
   | { type: "set_mechanics"; mode: "detailed" }
   /** Opens or closes a retention mechanism on a host part. */
   | { type: "set_mechanism"; instanceId: InstanceId; mechanismId: string; state: MechanismState }
+  /** paste: "applied"; film: "removed"; standoffs: "checked"; io_shield: "fitted"; psu_fan: "down" | "up"; airflow: "intake" | "exhaust"; "" undoes. */
+  | { type: "set_prep"; instanceId: InstanceId; prep: PrepKind; value: string }
   | { type: "unmount_part"; instanceId: InstanceId; role?: string }
   | { type: "set_seating"; instanceId: InstanceId; role?: string; seating: SeatingState }
   | { type: "set_fasteners"; instanceId: InstanceId; role?: string; secured: number }
@@ -858,6 +878,8 @@ export type PCDiagnosticCode =
   | "keying_wrong"
   | "alignment_off"
   | "alignment_required"
+  | "prep_missing"
+  | "prep_wrong"
   // Build diagnostics
   | "part_missing"
   | "part_not_mounted"

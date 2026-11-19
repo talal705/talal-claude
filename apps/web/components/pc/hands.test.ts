@@ -3,6 +3,7 @@ import {
   activateSimpleModel, createSimpleBuild, emptySimpleSnapshot, LEGACY_MODEL, liftSimplePart, lowerSimplePart, parseSimpleSnapshot, setSimpleMechanism, simpleBuildFromSnapshot,
   simplePartInstalled, simpleRetention, undoSimpleStep, withLift, withLower, withMechanism,
   caseCoversClosed, connectSimpleCable, disconnectSimpleCable, fastenSimplePart, installSimplePart, simpleFastened, SLOT_COVERS_ID, unfastenSimplePart, withFasten, withUnfasten,
+  placeSimplePart, prepSimplePart, screwSimplePart, simpleScrewOrder, withPlace, withPrep, withScrew,
 } from "./simple-model";
 
 afterEach(() => activateSimpleModel(LEGACY_MODEL));
@@ -140,5 +141,51 @@ describe("hands-on M.2 drive (Q-Latch)", () => {
     expect(simplePartInstalled(s, "storage")).toBe(false);
     s = must(liftSimplePart(s, "storage"));
     expect(s.parts.find((p) => p.instanceId === "storage-5")?.attachments).toEqual([]);
+  });
+});
+
+describe("hands-on preparation, placing and screws", () => {
+  const must = <T,>(r: { ok: true; state: T } | { ok: false }) => { if (!r.ok) throw new Error(JSON.stringify(r)); return r.state; };
+  const withBoardReady = () => {
+    let snap = emptySimpleSnapshot();
+    for (const k of ["cpu", "ram", "ram2", "storage"]) snap = { ...snap, history: [...snap.history, `part:${k}` as const] };
+    return simpleBuildFromSnapshot(snap);
+  };
+  it("a cooler needs the paste its catalog entry asks for; the film is refused when not recorded; screws go across the diagonal", () => {
+    let s = withBoardReady();
+    expect(placeSimplePart(s, "cooler")).toMatchObject({ ok: false, reason: "prepMissing" });
+    expect(prepSimplePart(s, "cooler", "film", "removed")).toMatchObject({ ok: false, reason: "prepWrong" });
+    s = must(prepSimplePart(s, "cooler", "paste", "applied"));
+    expect(prepSimplePart(s, "cooler", "paste", "applied")).toMatchObject({ ok: false, reason: "prepWrong" });
+    s = must(placeSimplePart(s, "cooler"));
+    expect(simplePartInstalled(s, "cooler")).toBe(false);
+    for (let i = 0; i < 4; i++) s = must(screwSimplePart(s, "cooler"));
+    expect(simplePartInstalled(s, "cooler")).toBe(true);
+    const history = ["place:cooler", "screw:cooler:0"] as const;
+    expect(simpleScrewOrder([...history], "cooler").next).toBe(2);
+    expect(simpleScrewOrder([...history, "screw:cooler:2"], "cooler").next).toBeNull();
+  });
+  it("the board needs its standoffs checked and refuses a separate I/O shield it does not have", () => {
+    let s = withBoardReady();
+    expect(placeSimplePart(s, "motherboard")).toMatchObject({ ok: false, reason: "prepMissing" });
+    expect(prepSimplePart(s, "motherboard", "io_shield", "fitted")).toMatchObject({ ok: false, reason: "prepWrong" });
+    s = must(prepSimplePart(s, "motherboard", "standoffs", "checked"));
+    s = must(placeSimplePart(s, "motherboard"));
+    for (let i = 0; i < 9; i++) s = must(screwSimplePart(s, "motherboard"));
+    expect(simplePartInstalled(s, "motherboard")).toBe(true);
+  });
+  it("the PSU's fan faces down over the 4000D's filtered vent; the steps replay from a save", () => {
+    let snap = emptySimpleSnapshot();
+    for (const k of ["cpu", "ram", "ram2", "storage", "cooler", "motherboard"]) snap = { ...snap, history: [...snap.history, `part:${k}` as const] };
+    let s = simpleBuildFromSnapshot(snap);
+    s = must(prepSimplePart(s, "psu", "psu_fan", "up"));
+    expect(placeSimplePart(s, "psu")).toMatchObject({ ok: false, reason: "prepWrong" });
+    snap = withPrep(snap, "psu", "psu_fan", "down");
+    snap = withPlace(snap, "psu");
+    for (let i = 0; i < 4; i++) snap = withScrew(snap, "psu", i);
+    const restored = parseSimpleSnapshot(JSON.parse(JSON.stringify(snap)))!;
+    expect(restored.history).toEqual(snap.history);
+    expect(simplePartInstalled(simpleBuildFromSnapshot(restored), "psu")).toBe(true);
+    expect(simplePartInstalled(simpleBuildFromSnapshot(undoSimpleStep(restored)!), "psu")).toBe(false);
   });
 });

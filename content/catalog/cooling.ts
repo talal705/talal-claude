@@ -63,6 +63,7 @@ export const cooling: CoolingEntry[] = [
       fanCount: 2,
       fanSizeMm: 120,
       coolingCapacityW: null,
+      paste: { supplied: "tube", film: null, source: "Retailer listings (Galaxus, Digitec, ChannelOnline 2026): MX-6 included as a tube, not pre-applied. Whether the plate has a protective film is not recorded." },
     },
   },
   {
@@ -122,6 +123,7 @@ export const cooling: CoolingEntry[] = [
       fanCount: 2,
       fanSizeMm: 120,
       coolingCapacityW: null,
+      paste: { supplied: "tube", film: null, source: "Retailer answer for the Liquid Freezer III family (Digitec 2026): MX-6 supplied in the box. Not confirmed for this exact size; film not recorded." },
     },
   },
   {
@@ -218,6 +220,7 @@ export const cooling: CoolingEntry[] = [
       fanCount: 2,
       fanSizeMm: 140,
       coolingCapacityW: null,
+      paste: { supplied: "tube", film: null, source: "Retailer answer for the Liquid Freezer III family (Digitec 2026): MX-6 supplied in the box. Not confirmed for this exact size; film not recorded." },
     },
   },
 ];

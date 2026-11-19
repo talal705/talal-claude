@@ -194,6 +194,15 @@ const T: Record<PCDiagnosticCode, Entry> = {
     x: ["In this build every keyed part is aligned by the learner before it goes in.", "في هالتجميعة كل قطعة مفتاحية يحاذيها المتعلم قبل ما تدخل."],
   },
 
+  prep_missing: {
+    m: ["{what}", "{what}"],
+    x: ["Some parts need a step before they go in: paste on the CPU, the film off the cooler, the standoffs checked, the right way round for air.", "بعض القطع تحتاج خطوة قبل ما تركب: معجون على المعالج، شيل الغلاف عن المبرّد، التأكد من القواعد، والاتجاه الصح للهوا."],
+  },
+  prep_wrong: {
+    m: ["{why}", "{why}"],
+    x: ["Doing a step the part does not need, or the wrong way round, causes problems of its own.", "خطوة ما تحتاجها القطعة، أو بالاتجاه الغلط، تسبب مشاكل بحد ذاتها."],
+  },
+
   // ---------- Build diagnostics ----------
   part_missing: {
     o: ["{symptom}", "{symptom}"],

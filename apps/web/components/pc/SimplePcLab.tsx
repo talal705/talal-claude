@@ -18,7 +18,7 @@ import {
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
   simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap,
   activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
-  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
+  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simplePrepMissing, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
 } from "./simple-model";
 import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-scene";
 import { guideFocus } from "./guide";
@@ -270,17 +270,27 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     react({ type: "cancel" }, state, saved.powered, null);
   }
 
+  /** A part fitted with its own preparation and screws goes in only through its panel (not one generic install). */
+  function screwedByHand(key: SimplePartKey): boolean {
+    if (!(simpleUsesScrews(key) || simpleIsLiquid(key)) || simplePartInstalled(state, key)) return false;
+    const rival = simpleSlotPart(state, slotOf(key));
+    if (rival && rival !== key) return false;
+    if (!(selection?.kind === "part" && selection.key === key)) choosePart(key);
+    return true;
+  }
   function install(key: SimplePartKey) {
     if (mode === "fault") {
       if (!fault || fault.solved) return;
       if (simpleRetention(state, key)) { primaryHand(key); return; }
+      if (screwedByHand(key)) return;
       const step = installSimplePart(state, key);
       if (step.ok) { setFault({ ...fault, state: step.state }); setSelection(null); react({ type: "installed", key }, step.state, false, null); }
       return;
     }
     if (saved.powered) return;
-    // A keyed part goes in only through its mechanism and alignment.
+    // A keyed part goes in only through its mechanism and alignment; a screwed one through its own steps.
     if (simpleRetention(state, key)) { primaryHand(key); return; }
+    if (screwedByHand(key)) return;
     // The physical steps come first (pushing a resting part home has none to repeat).
     if (!simplePartInstalled(state, key) && ticked < substepsFor(key).length && !simpleSlotPart(state, slotOf(key))) { speak({ lines: [{ key: "blocked.substeps" }], mood: "concerned", point: "parts" }); return; }
     const rival = simpleSlotPart(state, slotOf(key));
@@ -354,6 +364,53 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     keepHand(r.state, (sn) => withLift(sn, key), "lifted");
     if (ret) setHold(pickup(key, ret.kind));
   }
+  /** Says an engine refusal as the engine worded it, in the page's language. */
+  const sayEngine = (message: { en: string; ar: string } | undefined, fallback: string) =>
+    speak({ lines: [message ? { key: "hands.engine", values: { text: locale === "ar" ? message.ar : message.en } } : { key: `hands.${fallback}` }], mood: "concerned", point: "scene" });
+  const handsOff = () => lockedOn || (mode === "fault" && (!fault || fault.solved));
+  function handPrep(key: SimplePartKey, prep: "paste" | "film" | "standoffs" | "io_shield" | "psu_fan" | "airflow", value: string, line: string) {
+    if (handsOff()) return;
+    const r = prepSimplePart(state, key, prep, value);
+    if (!r.ok) { sayEngine(r.message, "closeBlocked"); return; }
+    keepHand(r.state, (sn) => withPrep(sn, key, prep, value), line);
+  }
+  function handPlace(key: SimplePartKey, line: string) {
+    if (handsOff()) return;
+    const r = placeSimplePart(state, key);
+    if (!r.ok) {
+      if (r.reason === "prepMissing" || r.reason === "prepWrong") sayEngine(r.message, "closeBlocked");
+      else react({ type: "select", selection: { kind: "part", key } });
+      return;
+    }
+    keepHand(r.state, (sn) => withPlace(sn, key), line);
+  }
+  /** A liquid cooler, once its paste is on: pump block on the CPU and radiator in the case. */
+  function handFitLiquid(key: SimplePartKey) {
+    if (handsOff()) return;
+    if (simplePrepMissing(state, key).length > 0) { speak({ lines: [{ key: "hands.liquidPrep" }], mood: "concerned", point: "scene" }); return; }
+    const step = installSimplePart(state, key);
+    if (!step.ok) { react({ type: "select", selection: { kind: "part", key } }); return; }
+    if (mode === "fault") { if (fault) setFault({ ...fault, state: step.state }); }
+    else setSaved((previous) => withPart(previous, key));
+    setSelection(null);
+    setVerdict(null);
+    if (simpleAllPartsIn(step.state)) setTab("cables");
+    react({ type: "installed", key }, step.state, false, null);
+  }
+  function handScrew(key: SimplePartKey, corner: number) {
+    if (handsOff()) return;
+    if (mode !== "fault") {
+      const order = simpleScrewOrder(saved.history, key);
+      if (order.done.includes(corner)) return;
+      if (order.next !== null && corner !== order.next) { speak({ lines: [{ key: "hands.screwDiagonal", values: { corner: t(`hands.corner${order.next}`) } }], mood: "concerned", point: "scene" }); return; }
+    }
+    const r = screwSimplePart(state, key);
+    if (!r.ok) return;
+    const done = simplePartInstalled(r.state, key);
+    keepHand(r.state, (sn) => withScrew(sn, key, corner), done ? "screwsDone" : "screwIn", done ? "happy" : "point");
+    if (done) { setSelection(null); if (simpleAllPartsIn(r.state)) setTab("cables"); }
+  }
+
   /** The case's expansion-slot covers beside the card's slot: out before a card, back once no card is there. */
   function handCovers(desired: "open" | "closed") {
     if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
@@ -698,6 +755,56 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     );
   }
 
+  /** Cooler, board, PSU or fan: the preparation it needs, putting it in place, then its screws one by one. */
+  function PrepPanel() {
+    const key = selectedPart!;
+    const liquid = simpleIsLiquid(key);
+    const role = liquid ? "cooler" : roleOf(key);
+    const spec = ALL_SIMPLE_PARTS.find((p) => p.key === key)!;
+    const part = state.parts.find((p) => p.instanceId === spec.id);
+    const at = part?.attachments[0];
+    const prep = part?.prep ?? {};
+    const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved));
+    const secured = at?.fastenersSecured ?? 0;
+    const order = simpleScrewOrder(saved.history, key);
+    const choice = (active: boolean, label: string, onClick: () => void) =>
+      <button type="button" className={active ? styles.installButton : styles.cancel} aria-pressed={active} disabled={disabled || Boolean(at)} onClick={onClick}>{active ? "✓ " : ""}{label}</button>;
+    return (
+      <div className={styles.hands}>
+        {!at && <>
+          {role === "cooler" && <>
+            {choice(prep.paste === "applied", t("hands.applyPaste"), () => handPrep(key, "paste", "applied", "pasteOn"))}
+            {choice(prep.film === "removed", t("hands.peelFilm"), () => handPrep(key, "film", "removed", "filmOff"))}
+          </>}
+          {role === "motherboard" && <>
+            {choice(prep.standoffs === "checked", t("hands.checkStandoffs"), () => handPrep(key, "standoffs", "checked", "standoffsOk"))}
+            {choice(prep.io_shield === "fitted", t("hands.fitIoShield"), () => handPrep(key, "io_shield", "fitted", "ioShieldIn"))}
+          </>}
+          {role === "psu" && <>
+            {choice(prep.psu_fan === "down", t("hands.psuFanDown"), () => handPrep(key, "psu_fan", "down", "psuDown"))}
+            {choice(prep.psu_fan === "up", t("hands.psuFanUp"), () => handPrep(key, "psu_fan", "up", "psuUp"))}
+          </>}
+          {role === "fan" && <>
+            {choice(prep.airflow === "intake", t("hands.fanIntake"), () => handPrep(key, "airflow", "intake", "fanTurned"))}
+            {choice(prep.airflow === "exhaust", t("hands.fanExhaust"), () => handPrep(key, "airflow", "exhaust", "fanTurned"))}
+          </>}
+          {liquid
+            ? <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handFitLiquid(key)}>{t("hands.place.liquid")}</button>
+            : <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handPlace(key, role === "cooler" ? "coolerPlaced" : "placedScrews")}>{t(`hands.place.${role}`)}</button>}
+        </>}
+        {at && secured < spec.screws && (role === "cooler"
+          ? <div className={styles.holdRow} role="group" aria-label={t("hands.screwsTitle")}>
+              {[0, 1, 2, 3].map((c) => <button key={c} type="button" disabled={disabled || order.done.includes(c)} aria-pressed={order.done.includes(c)} onClick={() => handScrew(key, c)}>{order.done.includes(c) ? "✓ " : ""}{t(`hands.corner${c}`)}</button>)}
+            </div>
+          : <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handScrew(key, secured)}>{t("hands.nextScrew", { n: secured + 1, total: spec.screws })}</button>)}
+        {at && <p className={styles.handsState}>{t("hands.screwsState", { n: secured, total: spec.screws })}</p>}
+        <p className={styles.hint}>{t(`hands.why.${role}`)}</p>
+        {liquid && <p className={styles.cablesNote}>{t("hands.liquidNote")}</p>}
+        <p className={styles.cablesNote}>{t("hands.prepNote")}</p>
+      </div>
+    );
+  }
+
   /** The graphics card: slot covers, the slot's push latch, bracket alignment, screws; and the same in reverse. */
   function GpuHands() {
     const key = selectedPart!;
@@ -842,12 +949,12 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
               <div className={styles.install}>
                 {selectedPart ? <>
                   <div className={styles.selection}><strong>{label(selectedPart)}</strong><span>{partInstalled ? t("installed") : placeName(selectedPart)}</span></div>
-                  {keyed ? HandsPanel() : partInstalled && removable
+                  {keyed ? HandsPanel() : !partInstalled && !rival && (simpleUsesScrews(selectedPart) || simpleIsLiquid(selectedPart)) ? PrepPanel() : partInstalled && removable
                     ? <button className={styles.installButton} type="button" onClick={() => remove(selectedPart)} disabled={!ready || Boolean(removeBlocked)}>{t("remove")}</button>
                     : rival
                       ? <button className={styles.installButton} type="button" onClick={() => swap(rival, selectedPart)} disabled={!ready || Boolean(swapBlocked)}>{t("swap", { other: label(rival) })}</button>
                       : <button className={styles.installButton} type="button" onClick={() => install(selectedPart)} disabled={!ready || partInstalled || Boolean(partBlocked) || lockedOn || (mode !== "fault" && ticked < substepsFor(selectedPart).length)}>{partInstalled ? t("installed") : t("install")}</button>}
-                  {mode !== "fault" && !partInstalled && !rival && !partBlocked && substepsFor(selectedPart).length > 0 && <ol className={styles.substeps} aria-label={t("substeps.title")}>
+                  {mode !== "fault" && !partInstalled && !rival && !partBlocked && !simpleUsesScrews(selectedPart) && !simpleIsLiquid(selectedPart) && substepsFor(selectedPart).length > 0 && <ol className={styles.substeps} aria-label={t("substeps.title")}>
                     {substepsFor(selectedPart).map((step, i) => <li key={step}><button type="button" aria-pressed={i < ticked} disabled={i > ticked} onClick={() => setTicked(i < ticked ? i : i + 1)}><span aria-hidden="true">{i < ticked ? "✓" : i + 1}</span>{t(`substeps.${step}`)}</button></li>)}
                   </ol>}
                   {partBlocked && !partInstalled && !rival && <p className={styles.hint}>{t(partBlocked)}</p>}

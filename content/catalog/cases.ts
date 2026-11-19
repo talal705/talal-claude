@@ -10,11 +10,12 @@ const tray = (formFactors: ("atx" | "micro_atx" | "mini_itx" | "e_atx")[]): Moun
   retention: SLOT_COVERS,
 });
 
-const psuBay = (maxLengthMm: number): MountPointSpec => ({
+const psuBay = (maxLengthMm: number, bottomVent: { present: boolean; source: string } | null): MountPointSpec => ({
   id: "psu-bay",
   kind: "psu_bay",
   formFactors: ["atx"],
   maxLengthMm,
+  bottomVent,
   label: L("Power supply bay", "حجرة مزوّد الطاقة"),
   fastener: { kind: "case_screw", count: 4 },
 });
@@ -89,7 +90,7 @@ export const cases: CaseEntry[] = [
     formFactor: "Mid-Tower",
     mountPoints: [
       tray(["mini_itx", "micro_atx", "atx", "e_atx"]),
-      psuBay(220),
+      psuBay(220, { present: true, source: "TechPowerUp and HEXUS 4000D Airflow reviews: a pull-out dust filter under the PSU." }),
       ...fanMounts("front", 3, [120, 140], "Front", "أمامية"),
       ...fanMounts("top", 2, [120, 140], "Top", "علوية"),
       ...fanMounts("rear", 1, [120], "Rear", "خلفية"),
@@ -160,7 +161,7 @@ export const cases: CaseEntry[] = [
     formFactor: "Mid-Tower",
     mountPoints: [
       tray(["atx", "micro_atx", "mini_itx"]),
-      psuBay(255),
+      psuBay(255, null),
       ...fanMounts("front", 3, [120, 140], "Front", "أمامية"),
       ...fanMounts("top", 2, [120, 140], "Top", "علوية"),
       ...fanMounts("side", 2, [120, 140], "Side", "جانبية"),

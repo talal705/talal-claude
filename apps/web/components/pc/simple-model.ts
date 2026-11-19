@@ -4,7 +4,7 @@
 // kept so every saved build replays) or a build the learner planned (`plan-model.ts`). The exported
 // lists below are live bindings that `activateSimpleModel` replaces, so every reader sees the build
 // that is on the page.
-import type { PCAction, PCBuildState, StartupResult } from "@ytl/contracts";
+import type { PCAction, PCBuildState, PrepKind, StartupResult } from "@ytl/contracts";
 import { pc } from "@ytl/simulation";
 import { pcCatalog, suppliedPartActions } from "./catalog";
 
@@ -216,7 +216,7 @@ const isCoolerKey = (key: SimplePartKey) => slotOf(key) === "cooler";
  *   a CPU or a module; replaying it opens and closes their mechanisms (the explicit migration of those saves).
  * - `cable:<key>`: a lead connected.
  */
-export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}` | `lower:${string}` | `seat:${string}` | `lift:${string}` | `fasten:${string}` | `unfasten:${string}`;
+export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}` | `lower:${string}` | `seat:${string}` | `lift:${string}` | `fasten:${string}` | `unfasten:${string}` | `prep:${string}` | `place:${string}` | `screw:${string}`;
 /**
  * Saved progress. `placed` and `connected` say what is fitted; `history` is the same steps in the
  * order they were taken, so the latest one can be undone without breaking what depends on it.
@@ -225,7 +225,7 @@ export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}`
 export type SimpleSnapshot =
   | { version: 3; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean }
   | { version: 4; plan: unknown; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean };
-export type SimpleBlock = "cpuFirst" | "boardFirst" | "prepareBoard" | "cannotFit" | "socketTaken" | "coolerTaken" | "openFirst" | "turnPart" | "centrePart" | "closeBlocked" | "alreadyIn" | "unplugFirst" | "unscrewFirst";
+export type SimpleBlock = "cpuFirst" | "boardFirst" | "prepareBoard" | "cannotFit" | "socketTaken" | "coolerTaken" | "openFirst" | "turnPart" | "centrePart" | "closeBlocked" | "alreadyIn" | "unplugFirst" | "unscrewFirst" | "prepMissing" | "prepWrong";
 export type SimpleCableBlock = "fitCableParts" | "turnOffFirst" | "cannotConnect";
 export type SimpleRemoveBlock = "turnOffFirst" | "removeCoolerFirst" | "unplugCoolerFirst" | "notSwappable" | "boardFirst";
 /**
@@ -403,6 +403,93 @@ export function simpleBlock(state: PCBuildState, key: SimplePartKey): SimpleBloc
   return null;
 }
 
+/** The airflow a fan position needs: rear and top blow out, the rest pull in. */
+export const airflowFor = (location: string) => (location === "rear" || location === "top" ? "exhaust" : "intake");
+
+/**
+ * The preparation a part needs before it is fitted, the right way: paste and film for a cooler,
+ * standoffs and I/O shield for a board, the PSU's fan direction, a fan's airflow. Only what the
+ * catalog records is asked for.
+ */
+export function simplePrepFor(state: PCBuildState, key: SimplePartKey): { prep: PrepKind; value: string; optional?: boolean }[] {
+  const spec = partSpec(key);
+  const entry = pcCatalog.entries.find((e) => e.id === spec.catalogId);
+  const target = simpleTarget(state, key);
+  const host = state.parts.find((p) => p.instanceId === target.hostInstanceId);
+  const place = pcCatalog.entries.find((e) => e.id === host?.catalogId)?.mountPoints.find((m) => m.id === target.mountPointId);
+  if (!entry) return [];
+  if (entry.category === "cooling") {
+    const paste = entry.spec.paste;
+    return [...(paste?.film ? [{ prep: "film" as const, value: "removed" }] : []), ...(paste?.supplied === "tube" ? [{ prep: "paste" as const, value: "applied" }] : [])];
+  }
+  if (entry.category === "motherboard") return [{ prep: "standoffs", value: "checked" }, ...(entry.spec.ioShield?.kind === "separate" ? [{ prep: "io_shield" as const, value: "fitted" }] : [])];
+  if (entry.category === "psu") return [{ prep: "psu_fan", value: "down" }];
+  if (entry.category === "fan" && place && (place.kind === "fan_mount" || place.kind === "radiator_mount")) return [{ prep: "airflow", value: airflowFor(place.location) }];
+  return [];
+}
+const prepActions = (state: PCBuildState, key: SimplePartKey): PCAction[] => {
+  const part = state.parts.find((p) => p.instanceId === partSpec(key).id);
+  return simplePrepFor(state, key).filter((p) => part?.prep?.[p.prep] !== p.value).map((p) => ({ type: "set_prep", instanceId: partSpec(key).id, prep: p.prep, value: p.value }));
+};
+
+// ---------- Hands-on: preparation, placing and screws (cooler, board, PSU, fans) ----------
+
+type Engine = { ok: true; state: PCBuildState } | { ok: false; reason: SimpleBlock; message?: { en: string; ar: string } };
+const engineResult = (r: ReturnType<typeof pc.applyAction>): Engine => {
+  if (r.ok) return { ok: true, state: r.state };
+  const reason: SimpleBlock = r.rejection.code === "prep_missing" ? "prepMissing" : r.rejection.code === "prep_wrong" ? "prepWrong" : "cannotFit";
+  return { ok: false, reason, message: r.rejection.message };
+};
+/** Does a preparation step on a part in hand (paste, film, standoffs, I/O shield, PSU fan, fan airflow); "" undoes it. */
+export function prepSimplePart(state: PCBuildState, key: SimplePartKey, prep: PrepKind, value: string): Engine {
+  if (state.power.pressed) return { ok: false, reason: "cannotFit" };
+  return engineResult(pc.applyAction(state, { type: "set_prep", instanceId: partSpec(key).id, prep, value }, pcCatalog));
+}
+/** Puts a prepared part in its place, home but not yet screwed. */
+export function placeSimplePart(state: PCBuildState, key: SimplePartKey): Engine {
+  const blocked = simpleBlock(state, key);
+  if (blocked) return { ok: false, reason: blocked };
+  const spec = partSpec(key);
+  if (state.parts.find((p) => p.instanceId === spec.id)?.attachments.length) return { ok: false, reason: "alreadyIn" };
+  const m = pc.applyAction(state, { type: "mount_part", instanceId: spec.id, target: simpleTarget(state, key) }, pcCatalog);
+  if (!m.ok) return engineResult(m);
+  return engineResult(pc.applyAction(m.state, { type: "set_seating", instanceId: spec.id, seating: "seated" }, pcCatalog));
+}
+/** Tightens one more screw of a placed part. Which screw is the learner's (see simpleScrewOrder). */
+export function screwSimplePart(state: PCBuildState, key: SimplePartKey): Engine {
+  const spec = partSpec(key);
+  const at = state.parts.find((p) => p.instanceId === spec.id)?.attachments[0];
+  if (!at) return { ok: false, reason: "cannotFit" };
+  if (at.fastenersSecured >= spec.screws) return { ok: false, reason: "alreadyIn" };
+  return engineResult(pc.applyAction(state, { type: "set_fasteners", instanceId: spec.id, secured: at.fastenersSecured + 1 }, pcCatalog));
+}
+/** True for parts fitted with preparation, placing and screws in the scene (not a mechanism, not a one-step install). */
+export function simpleUsesScrews(key: SimplePartKey): boolean {
+  const spec = partSpec(key);
+  const role = roleOf(key);
+  return !spec.radiator && (role === "cooler" || role === "motherboard" || role === "psu" || role === "fan");
+}
+/** A liquid cooler: its paste is the learner's; the pump block and radiator then go in together. */
+export const simpleIsLiquid = (key: SimplePartKey) => Boolean(partSpec(key)?.radiator);
+/** What preparation is still missing on a part (the right values from the catalog), empty when ready. */
+export function simplePrepMissing(state: PCBuildState, key: SimplePartKey): PrepKind[] {
+  const part = state.parts.find((p) => p.instanceId === partSpec(key).id);
+  return simplePrepFor(state, key).filter((p) => part?.prep?.[p.prep] !== p.value).map((p) => p.prep);
+}
+
+/**
+ * The cooler's screws go in corner by corner across the diagonal, so the plate meets the CPU evenly:
+ * after one corner, its opposite corner next. Returns the corner that has to come next, or null.
+ */
+export function simpleScrewOrder(history: readonly SimpleStep[], key: SimplePartKey): { done: number[]; next: number | null } {
+  const lastPlace = history.lastIndexOf(`place:${key}`);
+  const done = history.slice(lastPlace + 1).filter((st) => st.startsWith(`screw:${key}:`)).map((st) => Number(st.slice(st.lastIndexOf(":") + 1)));
+  if (roleOf(key) !== "cooler" || done.length === 0) return { done, next: null };
+  const last = done.at(-1)!;
+  const opposite = (last + 2) % 4;
+  return { done, next: done.includes(opposite) ? null : opposite };
+}
+
 export function installSimplePart(state: PCBuildState, key: SimplePartKey): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleBlock } {
   if (simplePartInstalled(state, key)) return { ok: true, state };
   const blocked = simpleBlock(state, key);
@@ -445,12 +532,14 @@ export function installSimplePart(state: PCBuildState, key: SimplePartKey): { ok
   }
   try {
     return { ok: true, state: run(state, [
+      ...prepActions(state, key),
       { type: "mount_part", instanceId: spec.id, target, ...role("block") },
       { type: "set_seating", instanceId: spec.id, seating: "seated", ...role("block") },
       ...(spec.screws ? [{ type: "set_fasteners", instanceId: spec.id, secured: spec.screws, ...role("block") } as PCAction] : []),
       ...(spec.radiator ? [
         ...spec.radiator.moveFans.flatMap(([fan, place]): PCAction[] => [
           { type: "unmount_part", instanceId: fan },
+          { type: "set_prep", instanceId: fan, prep: "airflow", value: airflowFor(radiatorLocation(state, spec.radiator!.host, place)) },
           { type: "mount_part", instanceId: fan, target: { hostInstanceId: spec.radiator!.host, mountPointId: place } },
           { type: "set_seating", instanceId: fan, seating: "seated" },
           { type: "set_fasteners", instanceId: fan, secured: FAN_SCREWS },
@@ -461,6 +550,12 @@ export function installSimplePart(state: PCBuildState, key: SimplePartKey): { ok
       ] : []),
     ]) };
   } catch { return { ok: false, reason: "cannotFit" }; }
+}
+
+function radiatorLocation(state: PCBuildState, hostInstanceId: string, mountPointId: string): string {
+  const host = state.parts.find((p) => p.instanceId === hostInstanceId)?.catalogId;
+  const m = pcCatalog.entries.find((e) => e.id === host)?.mountPoints.find((x) => x.id === mountPointId);
+  return m && (m.kind === "fan_mount" || m.kind === "radiator_mount") ? m.location : "front";
 }
 
 /** Where the radiator of a liquid cooler goes, for the 3D view; null for every other part. */
@@ -593,6 +688,9 @@ export function applySimpleStep(state: PCBuildState, step: SimpleStep): PCBuildS
     : kind === "lift" ? liftSimplePart(state, rest)
     : kind === "fasten" ? fastenSimplePart(state, rest)
     : kind === "unfasten" ? unfastenSimplePart(state, rest)
+    : kind === "prep" ? (() => { const [k, prep, value] = rest.split(":"); return prepSimplePart(state, k!, prep as PrepKind, value ?? ""); })()
+    : kind === "place" ? placeSimplePart(state, rest)
+    : kind === "screw" ? screwSimplePart(state, rest.slice(0, rest.lastIndexOf(":")))
     : kind === "mech" ? setSimpleMechanism(state, rest.slice(0, rest.lastIndexOf(":")), rest.slice(rest.lastIndexOf(":") + 1) as "open" | "closed")
     : null;
   if (!result?.ok) throw new Error(`Invalid simple step ${step}`);
@@ -611,7 +709,7 @@ export function deriveSimpleLists(history: readonly SimpleStep[]): { placed: Sim
   const connected: SimpleCableKey[] = [];
   for (const step of history) {
     const [kind, key] = [step.slice(0, step.indexOf(":")), step.slice(step.indexOf(":") + 1)];
-    if ((kind === "part" || kind === "lower") && !placed.includes(key)) placed.push(key);
+    if ((kind === "part" || kind === "lower" || kind === "place") && !placed.includes(key)) placed.push(key);
     if (kind === "lift") placed.splice(placed.indexOf(key), 1);
     if (kind === "cable" && !connected.includes(key)) connected.push(key);
   }
@@ -627,6 +725,9 @@ export const withSeat = (snapshot: SimpleSnapshot, key: SimplePartKey) => withSt
 export const withLift = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `lift:${key}`);
 export const withFasten = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `fasten:${key}`);
 export const withUnfasten = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `unfasten:${key}`);
+export const withPrep = (snapshot: SimpleSnapshot, key: SimplePartKey, prep: PrepKind, value: string) => withStep(snapshot, `prep:${key}:${prep}:${value}`);
+export const withPlace = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `place:${key}`);
+export const withScrew = (snapshot: SimpleSnapshot, key: SimplePartKey, corner: number) => withStep(snapshot, `screw:${key}:${corner}`);
 
 // ---------- Learner steps on a snapshot ----------
 
@@ -684,7 +785,9 @@ const isStep = (step: unknown): step is SimpleStep => {
   const kind = step.slice(0, colon);
   const rest = step.slice(colon + 1);
   if (kind === "cable") return isCableKey(rest);
-  if (kind === "part" || kind === "lower" || kind === "seat" || kind === "lift" || kind === "fasten" || kind === "unfasten") return isPartKey(rest);
+  if (kind === "part" || kind === "lower" || kind === "seat" || kind === "lift" || kind === "fasten" || kind === "unfasten" || kind === "place") return isPartKey(rest);
+  if (kind === "prep") { const m = /^([a-z0-9]+):(paste|film|standoffs|io_shield|psu_fan|airflow):([a-z]*)$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
+  if (kind === "screw") { const m = /^([a-z0-9]+):(\d{1,2})$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
   return kind === "mech" && /^[a-z0-9-]+:(open|closed)$/.test(rest);
 };
 

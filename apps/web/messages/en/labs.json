@@ -1205,7 +1205,21 @@
         "m2Lowered": "In at an angle. Now press it flat and turn the Q-Latch to lock it.",
         "m2Closed": "Q-Latch locked. The drive is held flat.",
         "m2Released": "Latch unlocked; the drive springs up. You can slide it out now.",
-        "m2LowerFirst": "Push the drive fully into the slot first."
+        "m2LowerFirst": "Push the drive fully into the slot first.",
+        "engine": "{text}",
+        "pasteOn": "Paste on. A small amount is enough; the cooler's pressure spreads it.",
+        "filmOff": "Film off. Don't touch the plate now.",
+        "standoffsOk": "Standoffs checked: they match the board's holes.",
+        "ioShieldIn": "I/O shield pressed in.",
+        "psuDown": "Fan facing down.",
+        "psuUp": "Fan facing up.",
+        "fanTurned": "Fan turned. Check the arrow before you fix it.",
+        "coolerPlaced": "Resting on the CPU. Tighten the corners across the diagonal.",
+        "placedScrews": "In place. Now the screws.",
+        "screwDiagonal": "Next, the opposite corner: {corner}. Across the diagonal keeps the pressure even.",
+        "screwIn": "Screw in.",
+        "screwsDone": "All screws in. It's secure.",
+        "liquidPrep": "Paste first: put a small drop on the CPU before the pump block goes on."
       }
     },
     "partNotes": {
@@ -1551,7 +1565,37 @@
       "closeQLatch": "Press the drive flat and turn the Q-Latch to lock",
       "slideIn": "Slide it into the slot at an angle",
       "markM2": "The drive's connector has a notch (M key) that matches a ridge in the slot: the label side up, gold contacts towards the slot. It goes in at about 20–30°, then is pressed flat.",
-      "m2Source": "Q-Latch steps: ASUS TUF GAMING Z790-PLUS WIFI manual (E21279), p. 2-8. The insertion angle is typical, not a figure from the manual."
+      "m2Source": "Q-Latch steps: ASUS TUF GAMING Z790-PLUS WIFI manual (E21279), p. 2-8. The insertion angle is typical, not a figure from the manual.",
+      "applyPaste": "Put a pea-sized drop of paste on the CPU",
+      "peelFilm": "Peel the film off the cooler's plate",
+      "checkStandoffs": "Check the standoffs match the board's holes",
+      "fitIoShield": "Press the I/O shield into the case",
+      "psuFanDown": "Turn the PSU: fan facing down",
+      "psuFanUp": "Turn the PSU: fan facing up",
+      "fanIntake": "Turn the fan: air into the case",
+      "fanExhaust": "Turn the fan: air out of the case",
+      "place": {
+        "cooler": "Lower the cooler onto the CPU",
+        "motherboard": "Lower the board onto the standoffs",
+        "psu": "Slide the PSU into its bay",
+        "fan": "Hold the fan to its mount",
+        "liquid": "Fit the pump block and the radiator"
+      },
+      "screwsTitle": "Cooler screws",
+      "corner0": "top-left",
+      "corner1": "top-right",
+      "corner2": "bottom-right",
+      "corner3": "bottom-left",
+      "nextScrew": "Tighten screw {n} of {total}",
+      "screwsState": "Screws tightened: {n} / {total}",
+      "why": {
+        "cooler": "Paste fills the tiny gaps between the CPU and the cooler. Tighten the screws across the diagonal so the plate meets the CPU evenly. Note: ARCTIC's own LGA1700 instructions for the Freezer 36 and Liquid Freezer III replace the socket's loading mechanism with a contact frame (support.arctic.de); the lab keeps the board's plate and models only the four screws.",
+        "motherboard": "The board sits on standoffs so it never touches the metal tray. Some boards come with the I/O shield already fixed to them (the TUF GAMING Z790-PLUS WIFI does); fitting a separate one then is a mistake.",
+        "psu": "With a filtered vent under the bay, the fan faces down and draws cool air from outside (Corsair's guidance; the 4000D Airflow has that filter). Where the vent is not recorded, either way is accepted.",
+        "fan": "The arrows on the fan's frame show which way air moves. Front and bottom positions pull air in; rear and top blow it out."
+      },
+      "prepNote": "Each step changes the build and is saved; Undo takes it back. The screw count is the place's own; the force is not simulated.",
+      "liquidNote": "The pump block and radiator go in as one step here (block screws, radiator screws, and the case fans the radiator displaces are moved for you). Tube routing is not modelled."
     }
   },
   "learning": {
