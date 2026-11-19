@@ -210,7 +210,9 @@ const isCoolerKey = (key: SimplePartKey) => slotOf(key) === "cooler";
 /**
  * One learner step, in the order it was taken.
  * - `mech:<retentionId>:open|closed`: the learner moved a lever, plate or latch.
- * - `lower:<key>`: the part, aligned by the learner, was lowered into its open place (a module pressed home).
+ * - `lower:<key>[:<turn>:<x>:<z>]`: the part, aligned by the learner, was lowered into its open place (a
+ *   module pressed home). The pose it was held in just before (turn in degrees, offset in mm) is kept, so
+ *   undoing puts it back in hand exactly as it was.
  * - `seat:<key>` / `lift:<key>`: a released part pushed home again / taken out of its open place.
  * - `part:<key>`: the whole fitting as one step. Only saves from before the detailed mechanics use it for
  *   a CPU or a module; replaying it opens and closes their mechanisms (the explicit migration of those saves).
@@ -770,7 +772,7 @@ export function applySimpleStep(state: PCBuildState, step: SimpleStep): PCBuildS
   const rest = step.slice(colon + 1);
   const result = kind === "part" ? installSimplePart(state, rest)
     : kind === "cable" ? connectSimpleCable(state, rest)
-    : kind === "lower" ? lowerSimplePart(state, rest, ALIGNED)
+    : kind === "lower" ? (() => { const pose = loweredPose(step); return lowerSimplePart(state, rest.split(":")[0]!, pose ? { rotationDeg: pose.rotationDeg, offsetMm: pose.offsetMm } : ALIGNED); })()
     : kind === "seat" ? reseatSimplePart(state, rest)
     : kind === "lift" ? liftSimplePart(state, rest)
     : kind === "fasten" ? fastenSimplePart(state, rest)
@@ -796,7 +798,8 @@ export function deriveSimpleLists(history: readonly SimpleStep[]): { placed: Sim
   const placed: SimplePartKey[] = [];
   const connected: SimpleCableKey[] = [];
   for (const step of history) {
-    const [kind, key] = [step.slice(0, step.indexOf(":")), step.slice(step.indexOf(":") + 1)];
+    const kind = step.slice(0, step.indexOf(":"));
+    const key = kind === "lower" ? step.slice(step.indexOf(":") + 1).split(":")[0]! : step.slice(step.indexOf(":") + 1);
     if ((kind === "part" || kind === "lower" || kind === "place") && !placed.includes(key)) placed.push(key);
     if (kind === "lift") placed.splice(placed.indexOf(key), 1);
     if (kind === "cable" && !connected.includes(key)) connected.push(key);
@@ -813,7 +816,13 @@ const withStep = (snapshot: SimpleSnapshot, step: SimpleStep): SimpleSnapshot =>
   return { ...snapshot, history, ...deriveSimpleLists(history) };
 };
 export const withMechanism = (snapshot: SimpleSnapshot, retentionId: string, state: "open" | "closed") => withStep(snapshot, `mech:${retentionId}:${state}`);
-export const withLower = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `lower:${key}`);
+export const withLower = (snapshot: SimpleSnapshot, key: SimplePartKey, pose?: SimpleAlignment) =>
+  withStep(snapshot, pose ? `lower:${key}:${pose.rotationDeg}:${pose.offsetMm[0]}:${pose.offsetMm[1]}` : `lower:${key}`);
+/** The pose a lowered part was held in just before (from its `lower:` step), or null when not recorded. */
+export function loweredPose(step: string): SimpleHeld | null {
+  const m = /^lower:([a-z0-9]+):(0|90|180|270):(-?\d+(?:\.\d+)?):(-?\d+(?:\.\d+)?)$/.exec(step);
+  return m ? { key: m[1]!, rotationDeg: Number(m[2]), offsetMm: [Number(m[3]), Number(m[4])] } : null;
+}
 export const withSeat = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `seat:${key}`);
 export const withLift = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `lift:${key}`);
 export const withFasten = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `fasten:${key}`);
@@ -848,7 +857,7 @@ export const withoutPart = (snapshot: SimpleSnapshot, key: SimplePartKey): Simpl
  */
 export function withSwap(snapshot: SimpleSnapshot, from: SimplePartKey, to: SimplePartKey): SimpleSnapshot {
   if (slotOf(from) !== "cpu") return withPart(withoutPart(snapshot, from), to);
-  const swap = (item: SimpleStep) => (item === `part:${from}` ? `part:${to}` : item === `lower:${from}` ? `lower:${to}` : item) as SimpleStep;
+  const swap = (item: SimpleStep) => (item === `part:${from}` ? `part:${to}` : item === `lower:${from}` || item.startsWith(`lower:${from}:`) ? `lower:${to}` : item) as SimpleStep;
   return withHistory(snapshot, snapshot.history.map(swap));
 }
 
@@ -879,7 +888,8 @@ const isStep = (step: unknown): step is SimpleStep => {
   const kind = step.slice(0, colon);
   const rest = step.slice(colon + 1);
   if (kind === "cable") return isCableKey(rest);
-  if (kind === "part" || kind === "lower" || kind === "seat" || kind === "lift" || kind === "fasten" || kind === "unfasten" || kind === "place") return isPartKey(rest);
+  if (kind === "lower") return isPartKey(rest) || Boolean(loweredPose(step) && isPartKey((rest as string).split(":")[0]));
+  if (kind === "part" || kind === "seat" || kind === "lift" || kind === "fasten" || kind === "unfasten" || kind === "place") return isPartKey(rest);
   if (kind === "plug") { const m = /^(.+):(\d)$/.exec(rest); return Boolean(m && isCableKey(m[1])); }
   if (kind === "prep") { const m = /^([a-z0-9]+):(paste|film|standoffs|io_shield|psu_fan|airflow):([a-z]*)$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
   if (kind === "screw") { const m = /^([a-z0-9]+):(\d{1,2})$/.exec(rest); return Boolean(m && isPartKey(m[1])); }

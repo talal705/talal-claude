@@ -222,3 +222,44 @@ describe("a CPU in hand is saved as it is held", () => {
     expect(parseHeld({ key: "nope", rotationDeg: 0, offsetMm: [0, 0] })).toBeNull();
   });
 });
+
+describe("phase 1 review fixes", () => {
+  it("records the pose a CPU was lowered from, replays it, and gives it back on undo", async () => {
+    const { loweredPose } = await import("./simple-model");
+    let snap = emptySimpleSnapshot();
+    snap = withMechanism(snap, "cpu-socket-plate:lever", "open");
+    snap = withMechanism(snap, "cpu-socket-plate", "open");
+    snap = withLower(snap, "cpu", { rotationDeg: 0, offsetMm: [1.5, -1] });
+    expect(snap.history.at(-1)).toBe("lower:cpu:0:1.5:-1");
+    expect(snap.placed).toEqual(["cpu"]);
+    const restored = parseSimpleSnapshot(JSON.parse(JSON.stringify(snap)))!;
+    expect(restored.history).toEqual(snap.history);
+    expect(simpleBuildFromSnapshot(restored).parts.find((p) => p.instanceId === "cpu-3")?.attachments[0]?.seating).toBe("seated");
+    expect(loweredPose(snap.history.at(-1)!)).toEqual({ key: "cpu", rotationDeg: 0, offsetMm: [1.5, -1] });
+    const undone = undoSimpleStep(snap)!;
+    expect(undone.history).toEqual(snap.history.slice(0, -1));
+    const board = simpleBuildFromSnapshot(undone).parts.find((p) => p.instanceId === "motherboard-2")!;
+    expect(board.mechanisms).toMatchObject({ "cpu-socket-plate": "open", "cpu-socket-plate:lever": "open", "cpu-socket-plate:cover": "closed" });
+    // A pose that could not have been lowered is not a valid save.
+    expect(parseSimpleSnapshot({ ...snap, history: [...snap.history.slice(0, -1), "lower:cpu:0:9:0"] })).toBeNull();
+    expect(parseSimpleSnapshot({ ...snap, history: [...snap.history.slice(0, -1), "lower:cpu:45:0:0"] })).toBeNull();
+  });
+
+  it("says what was undone for every kind of step, never a raw key", async () => {
+    const { undoLine } = await import("./companion");
+    const en = (await import("../../messages/en/labs.json")).default as { simplePc: { companion: { undo: Record<string, string> } } };
+    const lines = ["lower:cpu:0:1.5:-1", "lower:cpu", "mech:cpu-socket-plate:lever:open", "mech:cpu-socket-plate:open", "mech:dimm-a2-latch:open", "mech:slot-covers:open", "part:cpu", "cable:atx", "seat:ram", "lift:cpu", "fasten:gpu", "unfasten:gpu", "prep:cooler:paste:applied", "place:cooler", "screw:cooler:0", "weird:thing"].map(undoLine);
+    expect(lines.map((l) => l.key)).toEqual(["undo.lower", "undo.lower", "undo.lever", "undo.plate", "undo.latch", "undo.covers", "undo.part", "undo.cable", "undo.seat", "undo.lift", "undo.fasten", "undo.unfasten", "undo.prep", "undo.place", "undo.screw", "undo.step"]);
+    for (const l of lines) expect(en.simplePc.companion.undo[l.key.slice(5)]).toBeTruthy();
+    expect(lines[0]!.values).toEqual({ part: expect.anything() });
+    expect(JSON.stringify(lines)).not.toContain("cables");
+  });
+
+  it("accepts the CPU only the right way round: 90°, 180° and 270° are refused", () => {
+    let s = createSimpleBuild();
+    s = (setSimpleMechanism(s, "cpu-socket-plate:lever", "open") as { state: typeof s }).state;
+    s = (setSimpleMechanism(s, "cpu-socket-plate", "open") as { state: typeof s }).state;
+    for (const deg of [90, 180, 270]) expect(lowerSimplePart(s, "cpu", { rotationDeg: deg, offsetMm: [0, 0] })).toMatchObject({ ok: false, reason: "turnPart" });
+    expect(lowerSimplePart(s, "cpu", { rotationDeg: 0, offsetMm: [2, 1] }).ok).toBe(true);
+  });
+});

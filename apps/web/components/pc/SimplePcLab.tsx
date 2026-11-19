@@ -18,7 +18,7 @@ import {
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
   simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap,
   activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
-  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simplePrepMissing, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, HELD_REACH_MM, type SimpleHeld, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
+  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simplePrepMissing, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, HELD_REACH_MM, type SimpleHeld, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
 } from "./simple-model";
 import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-scene";
 import { guideFocus } from "./guide";
@@ -379,7 +379,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
       return;
     }
     setHold(null);
-    keepHand(r.state, (sn) => withLower(sn, key), cpu ? "cpuLowered" : k === "gpu" ? "gpuIn" : k === "m2" ? "m2Lowered" : "ramIn", "happy");
+    keepHand(r.state, (sn) => withLower(sn, key, cpu ? { rotationDeg: hold.rotationDeg, offsetMm: hold.offsetMm } : undefined), cpu ? "cpuLowered" : k === "gpu" ? "gpuIn" : k === "m2" ? "m2Lowered" : "ramIn", "happy");
     if (k === "ram") { setSelection(null); if (simpleAllPartsIn(r.state)) setTab("cables"); }
   }
   function handSeat(key: SimplePartKey) {
@@ -623,10 +623,13 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (!step || !next) { react({ type: "nothingToUndo" }); return; }
     const after = simpleBuildFromSnapshot(next);
     setSaved(next);
-    setSelection(null);
+    // Undoing a lowering puts the part back in hand, above its place, exactly as it was held before.
+    const pose = loweredPose(step);
+    if (pose) { setSelection({ kind: "part", key: pose.key }); setHold(pose); }
+    else setSelection(null);
     setVerdict(null);
     if (step.startsWith("part:")) setTab("parts");
-    react({ type: "undo", step }, after, false, null);
+    react({ type: "undo", step }, after, false, pose ? { kind: "part", key: pose.key } : null);
   }
 
   function restart() {

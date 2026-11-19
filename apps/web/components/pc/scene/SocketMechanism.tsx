@@ -10,6 +10,7 @@ import * as THREE from "three";
 import type { InstalledPart } from "@ytl/contracts";
 import type { PartGeometry, Vec3 } from "./geometry";
 import { FINISHES } from "./palette";
+import { WEDGE } from "./wedge";
 
 export interface SocketLayout {
   /** "lga": load lever + load plate (Intel); "zif": a single lever (AMD AM4). */
@@ -44,7 +45,8 @@ export function socketLayout(geometry: PartGeometry | undefined, mountId: string
     leverPivot: [lever.at[0], lever.at[1], lever.at[2] - length / 2],
     leverLength: length,
     plateHinge: [cx, top + 0.4, cz + sz / 2 - 2],
-    mark: [cx - sx / 2 + 3.5, top + 0.25, cz + sz / 2 - 3.5],
+    // The socket's pin-1 corner: the CPU's gold triangle sits over this corner when it is the right way round.
+    mark: [cx - sx / 2 + 4.5, top + 0.35, cz + sz / 2 - 4.5],
   };
 }
 
@@ -150,16 +152,15 @@ export function SocketMechanism({ layout, board, retentionId, cpuIn, reducedMoti
 
   return (
     <group>
-      {/* The contacts: visible only while the socket is open and empty (an LGA socket's pins, an AM4 socket's holes). */}
-      {(lga ? plateOpen && !coverOn : leverOpen) && !cpuIn && (
+      {/* The contacts, whenever the socket is open and empty (an LGA socket's pins, an AM4 socket's holes). The
+          protective cover clips into the load plate, so it rises with the plate and does not hide them. */}
+      {(lga ? plateOpen : leverOpen) && !cpuIn && (
         <mesh position={[cx, top + 0.15, cz]} material={mats.contacts}>
           <boxGeometry args={[sx - 14, 0.3, sz - 14]} />
         </mesh>
       )}
       {/* The socket's orientation mark. */}
-      <mesh position={layout.mark} material={highlight === "mark" ? mats.goldGlow : mats.gold}>
-        <boxGeometry args={[4, 0.5, 4]} />
-      </mesh>
+      <mesh position={layout.mark} geometry={WEDGE} scale={[7, 0.6, 7]} material={highlight === "mark" ? mats.goldGlow : mats.gold} />
 
       {lga && (
         <group position={layout.plateHinge}>

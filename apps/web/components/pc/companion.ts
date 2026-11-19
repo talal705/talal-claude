@@ -4,7 +4,7 @@
 // when the server has one configured.
 import type { PCBuildState } from "@ytl/contracts";
 import {
-  isRamKey, RAM_SLOTS, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
+  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, isRamKey, RAM_SLOTS, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
   simpleCablesFor, simpleCableOrder, simplePartInstalled, simplePartOrder, simplePrerequisites, simpleRuleBlock, REMOVABLE, simpleSlotFilled, simpleSlotPart, simpleTarget, slotOf,
   type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,
 } from "./simple-model";
@@ -160,6 +160,41 @@ function helpLines(state: PCBuildState, powered: boolean, selection: Selection):
  * Recognises the three quick questions in a typed message, in English or Arabic. Anything else is a
  * free question: answered by the AI tutor when the server has one, otherwise the robot says so.
  */
+/**
+ * What the robot says after an undo, from the kind of step that was taken back. Every step kind in the
+ * history has its own line; anything unknown gets a plain "undone" (never a raw key).
+ */
+export function undoLine(step: string): CompanionLine {
+  const colon = step.indexOf(":");
+  const kind = step.slice(0, colon);
+  const rest = step.slice(colon + 1);
+  const key = rest.split(":")[0] ?? "";
+  const part = () => (ALL_SIMPLE_PARTS.some((p) => p.key === key) ? { part: partName(key as SimplePartKey) } : null);
+  const cable = (k: string) => (ALL_SIMPLE_CABLES.some((c) => c.key === k) ? { cable: { cable: k as SimpleCableKey } } : null);
+  const withPart = (line: string) => { const v = part(); return v ? { key: `undo.${line}`, values: v } : { key: "undo.step" }; };
+  switch (kind) {
+    case "part": return withPart("part");
+    case "cable": { const v = cable(rest); return v ? { key: "undo.cable", values: v } : { key: "undo.step" }; }
+    case "plug": { const v = cable(rest.slice(0, rest.lastIndexOf(":"))); return v ? { key: "undo.plug", values: v } : { key: "undo.step" }; }
+    case "lower": return withPart("lower");
+    case "seat": return withPart("seat");
+    case "lift": return withPart("lift");
+    case "place": return withPart("place");
+    case "screw": return withPart("screw");
+    case "fasten": return withPart("fasten");
+    case "unfasten": return withPart("unfasten");
+    case "prep": return withPart("prep");
+    case "mech": {
+      const id = rest.slice(0, rest.lastIndexOf(":"));
+      if (id.endsWith(":lever") || id === "cpu-socket-lever") return { key: "undo.lever" };
+      if (id === "cpu-socket-plate") return { key: "undo.plate" };
+      if (id === "slot-covers") return { key: "undo.covers" };
+      return { key: "undo.latch" };
+    }
+    default: return { key: "undo.step" };
+  }
+}
+
 export function intentOf(text: string): "next" | "help" | "explain" | "undo" | null {
   const t = text.toLowerCase().trim();
   if (/\b(undo|go back)\b|تراجع|ارجع/.test(t)) return "undo";
@@ -256,10 +291,9 @@ export function companionSay(event: CompanionEvent, state: PCBuildState, powered
       return { lines: [{ key: "missedTarget" }], mood: "point", point: "scene" };
     case "cancel":
       return nextSay([{ key: "cancelled" }], "idle");
-    case "undo": {
-      const [kind, key] = event.step.split(":") as ["part" | "cable", string];
-      return nextSay([kind === "part" ? { key: "undo.part", values: { part: partName(key as SimplePartKey) } } : { key: "undo.cable", values: { cable: { cable: key as SimpleCableKey } } }], "idle");
-    }
+    case "undo":
+      // A lowering undone leaves the part in hand: the next thing is to lower it again, not a new step.
+      return event.step.startsWith("lower:") ? { lines: [undoLine(event.step)], mood: "idle", point: "scene" } : nextSay([undoLine(event.step)], "idle");
     case "nothingToUndo":
       return { lines: [{ key: powered ? "undo.turnOff" : "undo.nothing" }], mood: "thinking", point: powered ? "power" : undefined };
     case "restart":

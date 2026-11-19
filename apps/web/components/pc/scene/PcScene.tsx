@@ -27,6 +27,7 @@ import { BENCH_MAT_COLOR, BENCH_TOP_COLOR, FINISHES } from "./palette";
 import { useGeometry } from "./use-geometry";
 import { HOSE_ROUTES } from "./visual-details";
 import { GuideRobot } from "./GuideRobot";
+import { WEDGE } from "./wedge";
 import { SocketMechanism, socketLayout, socketMoved, socketPoint } from "./SocketMechanism";
 import type { GuideFocus } from "../guide";
 import { avoidObstacles, cableStrands, connectorSize, smoothCableRoute, type Obstacle } from "./cable-visuals";
@@ -213,7 +214,7 @@ function labelTexture(name: string, note: string, rtl: boolean): THREE.CanvasTex
   return texture;
 }
 
-const drawable = (solid: Solid) => (solid.shape === "box" || solid.shape === "cylinder" || solid.shape === "fins" || solid.shape === "rotor" || solid.shape === "ring") && !solid.role.endsWith("_keepout");
+const drawable = (solid: Solid) => (solid.shape === "box" || solid.shape === "cylinder" || solid.shape === "fins" || solid.shape === "rotor" || solid.shape === "ring" || solid.shape === "wedge") && !solid.role.endsWith("_keepout");
 /** Empty places for other parts (a tray, a bay, a fan or radiator position): drawn as outlines, never as solid shapes. */
 const PLACE_ROLES = new Set(["tray", "bay", "fan_mount", "radiator_mount"]);
 const PLACE_EDGE = new THREE.LineDashedMaterial({ color: "#9a9aa6", dashSize: 0.08, gapSize: 0.06 });
@@ -293,6 +294,7 @@ function Fins({ solid, material }: { solid: Solid; material: THREE.Material }) {
 /** One solid of a part, in its own frame: a box, a cylinder or a fin stack, with its outline. */
 function SolidView({ solid, category, lit, partId, override }: { solid: Solid; category: string; lit: string | null; partId: string; override?: THREE.MeshStandardMaterial }) {
   const material = override ?? solidMaterial(solid, category, lit);
+  if (solid.shape === "wedge") return <mesh geometry={WEDGE} material={material} position={solid.at as [number, number, number]} quaternion={(solid.rotation ?? [0, 0, 0, 1]) as [number, number, number, number]} scale={(solid.size ?? [1, 1, 1]) as [number, number, number]} userData={{ part: partId }} castShadow receiveShadow />;
   if (solid.shape === "ring") return <mesh geometry={RING} material={material} position={solid.at as [number, number, number]} quaternion={AXIS_TURN[solid.axis ?? "y"]} scale={solid.radius ?? 1} userData={{ part: partId }} castShadow receiveShadow />;
   if (solid.shape === "fins") {
     return (

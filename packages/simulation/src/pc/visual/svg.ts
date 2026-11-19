@@ -71,6 +71,8 @@ function pins(r: Rect, count: number): string {
 function symbol(s: Solid, r: Rect, facesViewer: boolean): string {
   const cx = r.x + r.w / 2;
   const cy = r.y + r.h / 2;
+  // A corner triangle (seen from above: right angle at the rect's lower-left, as +z runs down the drawing).
+  if (s.shape === "wedge") return `<path d="M${n(r.x)} ${n(r.y)}L${n(r.x)} ${n(r.y + r.h)}L${n(r.x + r.w)} ${n(r.y + r.h)}Z" fill="${C.light}" stroke="${C.line}" stroke-width="0.4"/>`;
   if (s.shape === "cylinder" && r.round && s.role === "light") return `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r.w / 2)}" fill="${C.light}"/>`;
   if ((s.shape === "cylinder" || s.shape === "rotor") && r.round && s.role === "fan") {
     const rad = r.w / 2;

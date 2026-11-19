@@ -108,16 +108,16 @@
     },
     {
       "id": "corner-mark",
-      "shape": "box",
+      "shape": "wedge",
       "at": [
-        3.5,
-        1.9,
-        34
+        4.1,
+        2.2,
+        33.5
       ],
       "size": [
-        5,
-        0.4,
-        5
+        6.5,
+        1,
+        6.5
       ],
       "role": "chip",
       "basis": "schematic",

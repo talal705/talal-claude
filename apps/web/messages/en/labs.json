@@ -1098,7 +1098,21 @@
         "part": "I took the {part} back out.",
         "cable": "I unplugged the {cable} lead again.",
         "nothing": "There's nothing to undo yet.",
-        "turnOff": "Turn the PC off before undoing a step."
+        "turnOff": "Turn the PC off before undoing a step.",
+        "plug": "I took one end of the {cable} lead out again.",
+        "lower": "The {part} is back in your hand above its place, held as before.",
+        "seat": "The {part} is back as it was before you pressed it in.",
+        "lift": "The {part} is back in its place.",
+        "place": "I took the {part} back out of its place.",
+        "screw": "I loosened the last screw of the {part} again.",
+        "fasten": "I took the {part}'s screws out again.",
+        "unfasten": "The {part}'s screws are back in.",
+        "prep": "I took back the last preparation step on the {part}.",
+        "lever": "The socket lever is back where it was.",
+        "plate": "The load plate is back where it was.",
+        "covers": "The slot covers are back as they were.",
+        "latch": "The latch is back as it was.",
+        "step": "I undid the last step."
       },
       "restart": "Fresh start! Everything is back on the bench.",
       "power": {
