@@ -42,7 +42,9 @@ export function PcBuilder({ aiConfigured = false }: { aiConfigured?: boolean }) 
     if (progressPlan && checkBuildPlan(progressPlan.parts).ready) {
       try { planModel(progressPlan); setAssembled(progressPlan); ok = true; } catch { /* A plan the catalog no longer assembles: planner only. */ }
     }
-    if (stored?.phase === "assemble" && ok && progressPlan) { activateSimpleModel(planModel(progressPlan)); setPhase("assemble"); }
+    // /pc?practice=1 (the home page's optional link) opens the older practice build.
+    if (new URLSearchParams(window.location.search).get("practice") === "1") { activateSimpleModel(LEGACY_MODEL); setPhase("legacy"); }
+    else if (stored?.phase === "assemble" && ok && progressPlan) { activateSimpleModel(planModel(progressPlan)); setPhase("assemble"); }
     else if (stored?.phase === "legacy") { activateSimpleModel(LEGACY_MODEL); setPhase("legacy"); }
     else setPhase("plan");
   }, []);

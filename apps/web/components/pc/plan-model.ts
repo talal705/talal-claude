@@ -7,7 +7,7 @@
 import type { CatalogEntry, PCAction, PCBuildState, PortSpec } from "@ytl/contracts";
 import { pc } from "@ytl/simulation";
 import { pcCatalog, suppliedPartActions } from "./catalog";
-import { emptySimpleSnapshot, simpleBuildFromSnapshot, withCable, withPart, type CableExtraEnd, type CableSpec, type PartSpec, type SimpleModel, type SimplePartKey, type SimpleSnapshot } from "./simple-model";
+import { applySimpleStep, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, type SimpleStep, type CableExtraEnd, type CableSpec, type PartSpec, type SimpleModel, type SimplePartKey, type SimpleSnapshot } from "./simple-model";
 
 /** What the learner is building for. */
 export type BuildPurpose = "study" | "gaming" | "creator";
@@ -367,24 +367,28 @@ export function rebaseProgress(snapshot: { placed: string[]; connected: string[]
     return !!a && !!b && norm(a, fromKeys) === norm(b, toKeys) && !b.requires.some((k) => changed.has(k));
   };
   const history = snapshot.history.filter((step) => {
-    const [kind, key] = step.split(":") as ["part" | "cable", string];
-    return kind === "part" ? toPart.has(key) && !changed.has(key) : keepCable(key);
+    const kind = step.slice(0, step.indexOf(":"));
+    const key = step.slice(step.indexOf(":") + 1);
+    if (kind === "cable") return keepCable(key);
+    // Levers and latches belong to the board: they stay unless the board itself changed.
+    if (kind === "mech") return !changed.has("motherboard");
+    return toPart.has(key) && !changed.has(key);
   });
   return { history, changed: [...changed] };
 }
 
 /** The active model's snapshot of these steps, in order, without any step that can no longer be taken. */
 export function snapshotFromHistory(history: readonly string[]): SimpleSnapshot {
-  let snapshot = emptySimpleSnapshot();
-  for (const step of history) {
-    const [kind, key] = step.split(":") as ["part" | "cable", string];
-    const next = kind === "part" ? withPart(snapshot, key) : withCable(snapshot, key);
+  const empty = emptySimpleSnapshot();
+  let state = createSimpleBuild();
+  const kept: SimpleStep[] = [];
+  for (const step of history as SimpleStep[]) {
     try {
-      simpleBuildFromSnapshot(next);
-      snapshot = next;
+      state = applySimpleStep(state, step);
+      kept.push(step);
     } catch { /* Dropped: it depended on something no longer in. */ }
   }
-  return snapshot;
+  return { ...empty, history: kept, ...deriveSimpleLists(kept) };
 }
 
 /** Parses a saved planned build; null when it is not one. */

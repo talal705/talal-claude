@@ -26,9 +26,11 @@ interface SceneState {
   pressSeq: number;
   /** A camera move asked for by a button or a key; `seq` changes on every request. */
   camera: { seq: number; command: CameraCommand } | null;
+  /** A close-up the learner asked for: the camera glides to this place (never on its own). */
+  focus: { seq: number; hostInstanceId: string; mountPointId: string } | null;
 }
 
-export const sceneStore = createStore<SceneState>()(() => ({ selectedPartId: null, selectedCableEnd: null, quality: "medium", pickInScene: false, pressSeq: 0, camera: null }));
+export const sceneStore = createStore<SceneState>()(() => ({ selectedPartId: null, selectedCableEnd: null, quality: "medium", pickInScene: false, pressSeq: 0, camera: null, focus: null }));
 
 export function useScene<T>(selector: (state: SceneState) => T): T {
   return useStore(sceneStore, selector);
@@ -45,4 +47,9 @@ export function moveCamera(command: CameraCommand) {
 
 export function selectCableEnd(key: string | null) {
   sceneStore.setState({ selectedCableEnd: key, selectedPartId: null });
+}
+
+/** Asks the 3D view for a close-up of one place (a socket, a slot); the learner's own button triggers it. */
+export function focusOn(hostInstanceId: string, mountPointId: string) {
+  sceneStore.setState((state) => ({ focus: { seq: (state.focus?.seq ?? 0) + 1, hostInstanceId, mountPointId } }));
 }

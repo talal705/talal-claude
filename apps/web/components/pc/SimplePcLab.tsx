@@ -11,13 +11,14 @@ import { BuildCompanion, type CompanionMessage } from "./BuildCompanion";
 import { pcCatalog } from "./catalog";
 import { askCompanionAi, companionAskRequest, fetchTutorStatus, type AiStatus } from "./companion-ai";
 import { buildContext, companionSay, intentOf, nextLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
-import { moveCamera, selectPart } from "./scene/scene-store";
+import { focusOn, moveCamera, selectPart } from "./scene/scene-store";
 import {
   ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, connectSimpleCable, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, isRamKey, lastSimpleStep,
   parseSimpleSnapshot, SIMPLE_PART_LIST, SIMPLE_PARTS, SIMPLE_SAVE_KEY, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot,
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
   simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap,
-  activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
+  activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
+  withMechanism, withLower, withSeat, withLift, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
 } from "./simple-model";
 import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-scene";
 import { guideFocus } from "./guide";
@@ -144,6 +145,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const built = useMemo(() => simpleBuildFromSnapshot(saved), [saved]);
   /** Physical steps ticked for the part in hand (they reset when another part is picked up). */
   const [ticked, setTicked] = useState(0);
+  /** How the learner holds a keyed part (CPU, memory) over its place: turned and off centre until they line it up. */
+  const [hold, setHold] = useState<({ key: SimplePartKey } & SimpleAlignment) | null>(null);
   const state = mode === "fault" && fault ? fault.state : built;
   const startup = useMemo(() => pc.evaluateStartup(state, pcCatalog), [state]);
   const targets = useMemo(() => simpleSceneTargets(state, selection), [state, selection]);
@@ -226,9 +229,19 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const next: Selection = { kind: "part", key };
     setSelection(next);
     setTicked(0);
+    // A keyed part is picked up turned and off centre: lining it up is the learner's job.
+    const inPlace = (state.parts.find((p) => p.instanceId === partSpec(key)?.id)?.attachments.length ?? 0) > 0;
+    setHold(simpleRetention(state, key) && !inPlace ? { key, rotationDeg: isRamKey(key) ? 180 : 90, offsetMm: isRamKey(key) ? [6, 0] : [5, -4] } : null);
     setGuided(true);
     setTab("parts");
     if (lockedOn) { speak({ lines: [{ key: "blocked.turnOff" }], mood: "concerned", point: "power" }); return; }
+    // A keyed part: the robot names the first physical step it actually needs now.
+    const ret = simpleRetention(state, key);
+    if (ret && !simplePartInstalled(state, key) && !inPlace) {
+      const cpu = ret.kind !== "dimm_latch";
+      speak({ lines: [{ key: `hands.${ret.open ? (cpu ? "cpuOpen" : "ramOpen") : cpu ? "cpuOpenFirst" : "ramOpenFirst"}` }], mood: "point", point: "scene" });
+      return;
+    }
     react({ type: "select", selection: next }, state, lockedOn, next);
   }
 
@@ -251,11 +264,14 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   function install(key: SimplePartKey) {
     if (mode === "fault") {
       if (!fault || fault.solved) return;
+      if (simpleRetention(state, key)) { primaryHand(key); return; }
       const step = installSimplePart(state, key);
       if (step.ok) { setFault({ ...fault, state: step.state }); setSelection(null); react({ type: "installed", key }, step.state, false, null); }
       return;
     }
     if (saved.powered) return;
+    // A keyed part goes in only through its mechanism and alignment.
+    if (simpleRetention(state, key)) { primaryHand(key); return; }
     // The physical steps come first (pushing a resting part home has none to repeat).
     if (!simplePartInstalled(state, key) && ticked < substepsFor(key).length && !simpleSlotPart(state, slotOf(key))) { speak({ lines: [{ key: "blocked.substeps" }], mood: "concerned", point: "parts" }); return; }
     const rival = simpleSlotPart(state, slotOf(key));
@@ -269,6 +285,58 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (simpleAllPartsIn(step.state)) setTab("cables");
     react({ type: "installed", key }, step.state, false, null);
   }
+
+  // ---------- Hands-on: mechanisms and alignment (CPU, memory) ----------
+
+  /** Keeps a mechanism or seating change: a step in the saved progress, or the fault build's state. */
+  function keepHand(next: ReturnType<typeof createSimpleBuild>, step: (s: SimpleSnapshot) => SimpleSnapshot, line: string, mood: "happy" | "point" | "concerned" = "point") {
+    if (mode === "fault") { if (fault) setFault({ ...fault, state: next }); }
+    else setSaved((previous) => step(previous));
+    setVerdict(null);
+    speak({ lines: [{ key: `hands.${line}` }], mood, point: "scene" });
+  }
+  function handMechanism(key: SimplePartKey, desired: "open" | "closed") {
+    if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
+    const ret = simpleRetention(state, key);
+    if (!ret) return;
+    const r = setSimpleMechanism(state, ret.id, desired);
+    const cpu = ret.kind !== "dimm_latch";
+    if (!r.ok) { speak({ lines: [{ key: desired === "open" ? "hands.coolerOver" : "hands.cpuLowerFirst" }], mood: "concerned", point: "scene" }); return; }
+    const attached = (r.state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments.length ?? 0) > 0;
+    const line = cpu ? (desired === "open" ? (attached ? "cpuReleased" : "cpuOpen") : "cpuClosed") : attached ? "ramReleased" : "ramOpen";
+    keepHand(r.state, (sn) => withMechanism(sn, ret.id, desired), line, desired === "closed" ? "happy" : "point");
+    if (cpu && desired === "closed" && simplePartInstalled(r.state, key)) { setSelection(null); setHold(null); }
+  }
+  function handLower(key: SimplePartKey) {
+    if (lockedOn || !hold || hold.key !== key) return;
+    const cpu = !isRamKey(key);
+    const r = lowerSimplePart(state, key, hold);
+    if (!r.ok) {
+      const line = r.reason === "openFirst" ? (cpu ? "cpuOpenFirst" : "ramOpenFirst") : r.reason === "turnPart" ? (cpu ? "cpuTurn" : "ramTurn") : r.reason === "centrePart" ? (cpu ? "cpuCentre" : "ramCentre") : null;
+      if (line) speak({ lines: [{ key: `hands.${line}` }], mood: "concerned", point: "scene" });
+      else react({ type: "select", selection: { kind: "part", key } });
+      return;
+    }
+    setHold(null);
+    keepHand(r.state, (sn) => withLower(sn, key), cpu ? "cpuLowered" : "ramIn", "happy");
+    if (!cpu) { setSelection(null); if (simpleAllPartsIn(r.state)) setTab("cables"); }
+  }
+  function handSeat(key: SimplePartKey) {
+    if (lockedOn) return;
+    const r = reseatSimplePart(state, key);
+    if (!r.ok) return;
+    keepHand(r.state, (sn) => withSeat(sn, key), "ramIn", "happy");
+    setSelection(null);
+  }
+  function handLift(key: SimplePartKey) {
+    if (lockedOn) return;
+    const r = liftSimplePart(state, key);
+    if (!r.ok) { speak({ lines: [{ key: isRamKey(key) ? "hands.ramOpenFirst" : "hands.cpuOpenFirst" }], mood: "concerned", point: "scene" }); return; }
+    keepHand(r.state, (sn) => withLift(sn, key), "lifted");
+    setHold({ key, rotationDeg: isRamKey(key) ? 180 : 90, offsetMm: isRamKey(key) ? [6, 0] : [5, -4] });
+  }
+  const turn = (deg: number) => setHold((h) => (h ? { ...h, rotationDeg: (((h.rotationDeg + deg) % 360) + 360) % 360 } : h));
+  const nudge = (dx: number, dz: number) => setHold((h) => (h ? { ...h, offsetMm: [Math.round((h.offsetMm[0] + dx) * 10) / 10, isRamKey(h.key) ? 0 : Math.round((h.offsetMm[1] + dz) * 10) / 10] } : h));
 
   /** Replaces the CPU or cooler that is in with its alternative. */
   function swap(from: SimplePartKey, to: SimplePartKey) {
@@ -333,12 +401,24 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (!selection) return;
     const [role, place] = [id.slice(0, id.indexOf(":")), id.slice(id.indexOf(":") + 1)];
     if (role === "target") {
+      if (selection.kind === "part" && simpleRetention(state, selection.key)) { primaryHand(selection.key); return; }
       if (selection.kind === "part") install(selection.key);
       else connect(selection.key);
       return;
     }
     if (selection.kind === "part") react({ type: "wrongPlace", key: selection.key, place });
     else react({ type: "wrongPort", key: selection.key, portOf: cableOfPort(place, state) });
+  }
+
+  /** What a tap on a keyed part's place does now: open its mechanism, lower the held part, or close the plate. */
+  function primaryHand(key: SimplePartKey) {
+    const ret = simpleRetention(state, key);
+    const at = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
+    if (!ret) return;
+    if (!at && !ret.open) { handMechanism(key, "open"); return; }
+    if (!at) { handLower(key); return; }
+    if (at.seating !== "seated") { handSeat(key); return; }
+    if (ret.open && ret.kind !== "dimm_latch") handMechanism(key, "closed");
   }
 
   function onScenePart(instanceId: string) {
@@ -502,6 +582,71 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const swapBlocked = selectedPart && rival ? simpleSwapBlock(state, selectedPart) : null;
   const blockHint = (reason: string) => t(reason === "turnOffFirst" ? "turnOffToSwap" : reason);
   const canUndo = Boolean(lastSimpleStep(saved));
+  const keyed = selectedPart ? simpleRetention(state, selectedPart) : null;
+  const heldNow = selectedPart && keyed && hold?.key === selectedPart && !(state.parts.find((p) => p.instanceId === partSpec(selectedPart).id)?.attachments.length)
+    ? { instanceId: partSpec(selectedPart).id, target: simpleTarget(state, selectedPart), rotationDeg: hold.rotationDeg, offsetMm: hold.offsetMm, liftMm: isRamKey(selectedPart) ? 30 : 22 }
+    : null;
+
+  /** The CPU's or module's own mechanism, alignment and lowering, one honest step at a time. */
+  function HandsPanel() {
+    const key = selectedPart!;
+    const ret = keyed!;
+    const cpu = ret.kind !== "dimm_latch";
+    const at = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
+    const host = state.parts.find((p) => p.instanceId === ret.hostInstanceId);
+    const coverOn = cpu && host?.mechanisms?.[`${ret.id}:cover`] !== "open";
+    const rival = cpu ? simpleSlotPart(state, "cpu") : null;
+    const otherIn = rival && rival !== key ? rival : null;
+    const off = hold ? Math.hypot(hold.offsetMm[0], hold.offsetMm[1]) : 0;
+    const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved));
+    const onKeys = (e: React.KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      const map: Record<string, () => void> = { q: () => turn(cpu ? -90 : 180), e: () => turn(cpu ? 90 : 180), arrowleft: () => nudge(-1, 0), arrowright: () => nudge(1, 0), arrowup: () => nudge(0, -1), arrowdown: () => nudge(0, 1), enter: () => handLower(key) };
+      if (map[k]) { e.preventDefault(); e.stopPropagation(); map[k](); }
+    };
+    return (
+      <div className={styles.hands}>
+        <div className={styles.handsHead}>
+          <p className={styles.handsState}>{t(cpu ? "hands.plate" : "hands.latch", { state: t(ret.open ? "hands.open" : "hands.closed") })}{coverOn ? ` · ${t("hands.cover")}` : ""}</p>
+          <button type="button" className={styles.closeup} onClick={() => focusOn(ret.hostInstanceId, ret.mountPointId)}>{t("hands.closeup")}</button>
+        </div>
+        {otherIn ? <p className={styles.hint}>{t("hands.takeOther")}</p> : <>
+          {!at && <>
+            {!ret.open && <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handMechanism(key, "open")}>{t(cpu ? "hands.openPlate" : "hands.openLatch")}</button>}
+            {hold && <div className={styles.holdControls} role="group" aria-label={t("hands.title")} tabIndex={0} onKeyDown={onKeys}>
+              <p className={styles.alignState} aria-live="polite">{t("hands.turned", { deg: hold.rotationDeg })} · {off < 0.05 ? t("hands.aligned") : t("hands.off", { mm: Math.round(off * 10) / 10 })}</p>
+              <div className={styles.holdRow}>
+                {cpu ? <>
+                  <button type="button" onClick={() => turn(-90)} aria-label={t("hands.rotateLeft")}>⟲</button>
+                  <button type="button" onClick={() => turn(90)} aria-label={t("hands.rotateRight")}>⟳</button>
+                </> : <button type="button" onClick={() => turn(180)}>{t("hands.flip")}</button>}
+                <button type="button" onClick={() => nudge(-1, 0)} aria-label={t("hands.nudgeLeft")}>←</button>
+                <button type="button" onClick={() => nudge(1, 0)} aria-label={t("hands.nudgeRight")}>→</button>
+                {cpu && <>
+                  <button type="button" onClick={() => nudge(0, -1)} aria-label={t("hands.nudgeUp")}>↑</button>
+                  <button type="button" onClick={() => nudge(0, 1)} aria-label={t("hands.nudgeDown")}>↓</button>
+                </>}
+              </div>
+              <p className={styles.cablesNote}>{t("hands.keys")}</p>
+              <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handLower(key)}>{t(cpu ? "hands.lowerIn" : "hands.pressIn")}</button>
+            </div>}
+          </>}
+          {at && at.seating !== "seated" && <>
+            <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handSeat(key)}>{t("hands.pressIn")}</button>
+            <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handLift(key)}>{t("hands.liftOut")}</button>
+          </>}
+          {at && at.seating === "seated" && cpu && ret.open && <>
+            <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handMechanism(key, "closed")}>{t("hands.closePlate")}</button>
+            <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handLift(key)}>{t("hands.liftOut")}</button>
+          </>}
+          {at && at.seating === "seated" && !ret.open && <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handMechanism(key, "open")}>{t(cpu ? "hands.openPlate" : "hands.openLatch")}</button>}
+        </>}
+        <p className={styles.hint}>{t(cpu ? "hands.markCpu" : "hands.markRam")}</p>
+        {!cpu && <p className={styles.cablesNote}>{t("hands.unverified")}</p>}
+        <p className={styles.cablesNote}>{t("hands.note")}</p>
+      </div>
+    );
+  }
 
   return (
     <section className={styles.lab} aria-labelledby="simple-pc-title" onKeyDown={onKeyDown}>
@@ -543,6 +688,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
                   guide={guide}
                   guideAnimate={view.guideMotion}
                   rgb={view.rgb}
+                  held={heldNow}
                   benchOrder={bench.benchOrder}
                   beside={bench.beside}
                   onContextLost={() => setWebgl(false)}
@@ -595,7 +741,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
               <div className={styles.install}>
                 {selectedPart ? <>
                   <div className={styles.selection}><strong>{label(selectedPart)}</strong><span>{partInstalled ? t("installed") : placeName(selectedPart)}</span></div>
-                  {partInstalled && removable
+                  {keyed ? HandsPanel() : partInstalled && removable
                     ? <button className={styles.installButton} type="button" onClick={() => remove(selectedPart)} disabled={!ready || Boolean(removeBlocked)}>{t("remove")}</button>
                     : rival
                       ? <button className={styles.installButton} type="button" onClick={() => swap(rival, selectedPart)} disabled={!ready || Boolean(swapBlocked)}>{t("swap", { other: label(rival) })}</button>

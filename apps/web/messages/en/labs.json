@@ -1163,7 +1163,25 @@
       },
       "alreadySwap": "The {part} is fitted. To change it, press “Take it out” or select the other cooler and press Swap.",
       "removed": "I took the {part} out. Its alternative can go in now.",
-      "swapped": "Done: the {other} is out and the {part} is in."
+      "swapped": "Done: the {other} is out and the {part} is in.",
+      "hands": {
+        "cpuOpen": "Plate open. Now turn the CPU so its triangle meets the socket's mark.",
+        "cpuOpenFirst": "Lift the socket lever first, then the CPU can go in.",
+        "cpuTurn": "Turn the CPU until its triangle matches the socket's mark.",
+        "cpuCentre": "The CPU is a little off. Centre it over the socket before lowering it.",
+        "cpuLowered": "It dropped in flat. Now close the plate and lock the lever.",
+        "cpuLowerFirst": "Lower the CPU fully before closing the plate.",
+        "cpuClosed": "Locked in. The cover popped off: keep it for later.",
+        "coolerOver": "The cooler is on top. Take the cooler off first.",
+        "ramOpen": "Latch open. Line the notch up with the slot's key.",
+        "ramOpenFirst": "Open the slot latch first.",
+        "ramTurn": "Turn the stick round: the notch must meet the slot's key.",
+        "ramCentre": "The stick isn't over the slot yet. Move it until it lines up.",
+        "ramIn": "Click! It's home and the latch closed.",
+        "ramReleased": "Latch open: the stick lifted. Press it in again or lift it out.",
+        "lifted": "Out and back on the bench.",
+        "cpuReleased": "Plate open. You can lift the CPU out now."
+      }
     },
     "partNotes": {
       "cpu": "i5-14600K · air or liquid cooler",
@@ -1455,6 +1473,37 @@
       "title": "Steps",
       "tickAll": "Tick each step, then fit the part.",
       "done": "Done"
+    },
+    "hands": {
+      "title": "Hands-on",
+      "openPlate": "Lift the lever and open the plate",
+      "closePlate": "Close the plate and lock the lever",
+      "openLatch": "Open the slot latch",
+      "pressIn": "Press it in until it clicks",
+      "lowerIn": "Lower it straight down",
+      "liftOut": "Lift it out",
+      "rotateLeft": "Turn left",
+      "rotateRight": "Turn right",
+      "flip": "Turn it round",
+      "nudgeUp": "Move away",
+      "nudgeDown": "Move closer",
+      "nudgeLeft": "Move left",
+      "nudgeRight": "Move right",
+      "turned": "Turned {deg}°",
+      "off": "{mm} mm off centre",
+      "aligned": "Lined up",
+      "plate": "Socket plate: {state}",
+      "latch": "Latch: {state}",
+      "cover": "Socket cover on",
+      "open": "open",
+      "closed": "closed",
+      "keys": "Keys: Q/E turn · arrows move · Enter lowers",
+      "markCpu": "Match the CPU's gold corner triangle with the socket's mark. The CPU has flat pads; the pins are in the socket, so never touch or slide over them.",
+      "markRam": "The notch is off centre: it meets the slot's key only one way round.",
+      "takeOther": "The other CPU is in the socket. Open the plate and lift it out first.",
+      "unverified": "The latch arrangement on this board is not shown in its manual; one latch is drawn.",
+      "note": "Educational simulation: it does not reproduce insertion force.",
+      "closeup": "Close-up"
     }
   },
   "learning": {
@@ -1537,6 +1586,10 @@
     "undo": "Undo the last replacement",
     "privacy": "Code runs in an isolated learning environment. Only asking the helper sends the current file and error to a configured AI provider. AI suggestions are untested until you run them.",
     "footer": "Try it. Understand it. Make it work.",
-    "previewReady": "Your page is live. Edit the code and run again to refresh it."
+    "previewReady": "Your page is live. Edit the code and run again to refresh it.",
+    "pcCardTitle": "Plan and build a PC",
+    "pcCardText": "Choose what the computer is for, pick compatible parts, then assemble them hands-on: open the socket, line up the CPU's triangle, press memory home, connect the leads and start it.",
+    "pcCardOpen": "Open the PC builder",
+    "pcCardPractice": "Older practice build (optional)"
   }
 }

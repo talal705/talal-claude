@@ -19,6 +19,7 @@ import { pcStore, usePC } from "../pc-client";
 import type { AssemblyCandidate } from "@/lib/interaction/assembly";
 import type { Frame, PartGeometry, Quat, Solid, Vec3 } from "./geometry";
 import { add, boxCorners, compose, inverse, placeCableEnds, placeParts, rotate, scale, workbenchArea, type PlacedCableEnd, type PlacedPart } from "./placement";
+import { heldFrame, withMechanisms } from "./mechanisms";
 import { PIXEL_RATIO_CAP, sceneStore, selectCableEnd, selectPart, useScene, type CameraCommand, type SceneQuality } from "./scene-store";
 import { fitDistance } from "./camera-fit";
 import { clickBox, fastenerMarkers, settingHotspots, type FastenerMarker, type Hotspot } from "./controls3d";
@@ -1712,11 +1713,35 @@ function SceneEnvironment({ enabled }: { enabled: boolean }) {
   return null;
 }
 
-function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false, viewId, onSelectPart, simpleCableIds, selectedSimpleCableId, onSelectSimpleCable, simpleTargets, onSimpleTarget, benchOrder, beside, quality, guide, guideAnimate = true, rgb = false }: PcSceneProps & { quality: SceneQuality }) {
+function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false, viewId, onSelectPart, simpleCableIds, selectedSimpleCableId, onSelectSimpleCable, simpleTargets, onSimpleTarget, benchOrder, beside, quality, guide, guideAnimate = true, rgb = false, held }: PcSceneProps & { quality: SceneQuality }) {
   const projectId = usePC((store) => store.projectId);
   const { geometry, ready } = useGeometry(useMemo(() => state.parts.map((part) => part.catalogId), [state.parts]));
   const benchSlots = useMemo(() => new Map<string, { at: Vec3; size: Vec3 }>(), [state, geometry, benchOrder, beside]);
-  const placed = useMemo(() => placeParts({ state, geometry, fallbackSize, isAside, standsFirst, benchRowMm: BENCH_ROW_MM, benchOrder, beside, slotsOut: benchOrder ? benchSlots : undefined }), [state, geometry, benchOrder, beside, benchSlots]);
+  const basePlaced = useMemo(() => placeParts({ state, geometry, fallbackSize, isAside, standsFirst, benchRowMm: BENCH_ROW_MM, benchOrder, beside, slotsOut: benchOrder ? benchSlots : undefined }), [state, geometry, benchOrder, beside, benchSlots]);
+  // A part the learner holds over its place: where it would be once placed, then turned, shifted and lifted as held.
+  const placed = useMemo(() => {
+    if (!held) return basePlaced;
+    const ghostState = { ...state, parts: state.parts.map((p) => (p.instanceId === held.instanceId ? { ...p, attachments: [{ role: "main", target: held.target, seating: "placed" as const, fastenersSecured: 0 }] } : p)) };
+    const ghost = placeParts({ state: ghostState, geometry, fallbackSize, isAside, standsFirst, benchRowMm: BENCH_ROW_MM, benchOrder, beside }).get(held.instanceId);
+    if (!ghost) return basePlaced;
+    const next = new Map(basePlaced);
+    next.set(held.instanceId, heldFrame(ghost, geometry.get(state.parts.find((p) => p.instanceId === held.instanceId)?.catalogId ?? ""), held));
+    return next;
+  }, [basePlaced, held, state, geometry, benchOrder, beside]);
+  const mechGeometry = useMemo(() => new Map(state.parts.map((p) => [p.instanceId, withMechanisms(geometry.get(p.catalogId), p)])), [state.parts, geometry]);
+  // A close-up only when the learner asks for one (the "close-up" button), never as a side effect.
+  const focus = useScene((store) => store.focus);
+  useEffect(() => {
+    if (!focus) return;
+    const host = placed.get(focus.hostInstanceId);
+    const catalogId = state.parts.find((p) => p.instanceId === focus.hostInstanceId)?.catalogId;
+    const mount = catalogId ? geometry.get(catalogId)?.mounts[focus.mountPointId] : undefined;
+    if (!host || !mount) return;
+    const world = compose(host.frame, { at: mount.at, quat: mount.quat });
+    return glideCamera(world.at, rotate(host.frame.quat, [0, 1, 0]), 170, reducedMotion);
+    // Only a new request moves the camera.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.seq]);
   lastPlaced = placed;
   const rich = quality !== "low";
   const cableEnds = useMemo(() => placeCableEnds(state, placed, geometry), [state, placed, geometry]);
@@ -1821,7 +1846,7 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
             key={part.instanceId}
             part={part}
             placed={item}
-            geometry={geometry.get(part.catalogId)}
+            geometry={mechGeometry.get(part.instanceId)}
             selected={selectedId === part.instanceId}
             lit={lit.get(part.instanceId) ?? null}
             spinning={spinning.has(part.instanceId)}
@@ -1920,6 +1945,8 @@ export interface PcSceneProps {
   /** A fixed workbench (see `placeParts`). */
   benchOrder?: readonly string[];
   beside?: Readonly<Record<string, string>>;
+  /** A part the learner is holding over its place (rotation and offset as held; nothing is fitted yet). */
+  held?: { instanceId: string; target: { hostInstanceId: string; mountPointId: string }; rotationDeg: number; offsetMm: [number, number]; liftMm: number } | null;
 }
 
 /** The main light, from the front and above; it casts the shadows at medium and high quality. */

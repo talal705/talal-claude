@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { TargetLink } from "../TargetLink";
-import { SimplePcLab } from "../pc/SimplePcLab";
+import Link from "next/link";
 import { ProgrammingLab } from "./ProgrammingLab";
 import styles from "./learning.module.css";
 
-export function LearningHome({ aiConfigured = false, runnerConfigured = false }: { aiConfigured?: boolean; runnerConfigured?: boolean }) {
+export function LearningHome({ aiConfigured: _aiConfigured = false, runnerConfigured = false }: { aiConfigured?: boolean; runnerConfigured?: boolean }) {
   const t = useTranslations("learning");
   const [guided, setGuided] = useState(true);
   const [started, setStarted] = useState(false);
@@ -35,7 +35,15 @@ export function LearningHome({ aiConfigured = false, runnerConfigured = false }:
     <ProgrammingLab guided={guided} onGuidedChange={setGuided} runnerConfigured={runnerConfigured} />
     <section id="pc-builder" className={styles.pcSection} aria-label={t("pcNav")}>
       <div className={styles.sectionLabel}><span>02 /</span> {t("pcSection")}</div>
-      <SimplePcLab embedded aiConfigured={aiConfigured} />
+      {/* The PC builder lives at /pc: plan, compatibility and hands-on assembly in one place. */}
+      <div className={styles.pcCard}>
+        <h2>{t("pcCardTitle")}</h2>
+        <p>{t("pcCardText")}</p>
+        <div className={styles.links}>
+          <Link href="/pc" className={styles.primary}>{t("pcCardOpen")}</Link>
+          <Link href="/pc?practice=1" className={styles.secondary}>{t("pcCardPractice")}</Link>
+        </div>
+      </div>
     </section>
     <footer className={styles.footer}>{t("footer")}</footer>
   </div>;

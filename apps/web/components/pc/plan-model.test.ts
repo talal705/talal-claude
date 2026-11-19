@@ -135,6 +135,21 @@ describe("assembly of a planned build", () => {
     expect(snapshot.history.filter((s) => !next.history.includes(s))).toEqual([]);
   });
 
+  it("keeps hands-on CPU steps (lever, lowering) when an unrelated part changes", () => {
+    const before = planModel(build(gaming));
+    activateSimpleModel(before);
+    const history = ["mech:cpu-socket-plate:open", "lower:cpu", "mech:cpu-socket-plate:closed", "mech:dimm-a2-latch:open", "lower:ram"];
+    const kept = snapshotFromHistory(history);
+    expect(kept.history).toEqual(history);
+    const after = planModel(build({ ...gaming, gpu: "asus-dual-rtx4060-o8g" }));
+    const r = rebaseProgress(kept, before, after);
+    activateSimpleModel(after);
+    expect(snapshotFromHistory(r.history).history).toEqual(history);
+    // A different board takes its levers and latches with it.
+    const board = planModel(build({ ...gaming, motherboard: "asus-tuf-gaming-z790-plus-wifi-d4", ram: { id: "corsair-vengeance-lpx-ddr4-3600-16gb-kit", modules: 2 } }));
+    expect(rebaseProgress(kept, before, board).history).toEqual([]);
+  });
+
   it("parses a saved plan and drops unknown part IDs", () => {
     const p = parsePlannedBuild({ version: 1, purpose: "creator", workload: "video4k", parts: { ...gaming, gpu: "not-a-part", fans: ["arctic-p12-pwm-pst", 7] } });
     expect(p?.parts.gpu).toBeNull();

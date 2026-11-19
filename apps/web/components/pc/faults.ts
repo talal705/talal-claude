@@ -4,7 +4,7 @@
 import type { PCAction, PCBuildState } from "@ytl/contracts";
 import { pc } from "@ytl/simulation";
 import { pcCatalog } from "./catalog";
-import { connectSimpleCable, createSimpleBuild, installSimplePart, SIMPLE_PARTS, simplePartOrder, simpleCablesFor } from "./simple-model";
+import { connectSimpleCable, createSimpleBuild, installSimplePart, setSimpleMechanism, SIMPLE_PARTS, simplePartOrder, simpleCablesFor, simpleRetention } from "./simple-model";
 
 export type FaultKind = "ramUnseated" | "cpuPowerMissing" | "coolerLeadMissing" | "frontPanelWrong" | "biosTooOld";
 export const FAULT_KINDS: readonly FaultKind[] = ["ramUnseated", "cpuPowerMissing", "coolerLeadMissing", "frontPanelWrong", "biosTooOld"];
@@ -55,8 +55,12 @@ export function withFault(kind: FaultKind): PCBuildState | null {
   const lead = (key: string) => leads.find((c) => c.key === key);
   switch (kind) {
     case "ramUnseated": {
+      // The latch is open and the module has lifted out of its contacts, as when it was never pushed home.
       const ram = SIMPLE_PARTS.find((p) => /^ram\d*$/.test(p.key));
-      return ram ? apply(state, [{ type: "set_seating", instanceId: ram.id, seating: "partial" }]) : null;
+      const ret = ram ? simpleRetention(state, ram.key) : null;
+      if (!ram || !ret) return null;
+      const r = setSimpleMechanism(state, ret.id, "open");
+      return r.ok ? r.state : null;
     }
     case "cpuPowerMissing": {
       const c = lead("cpuPower");

@@ -8,8 +8,9 @@ export function substepsFor(key: SimplePartKey): string[] {
   const entry = pcCatalog.entries.find((e) => e.id === spec?.catalogId);
   const role = roleOf(key);
   switch (role) {
-    case "cpu": return ["cpuLever", "cpuAlign", "cpuLower", "cpuClose"];
-    case "ram": return ["ramLatches", "ramNotch", "ramPress"];
+    // The CPU and memory are fitted with their real mechanisms in the scene (see SimplePcLab), not a list.
+    case "cpu": return [];
+    case "ram": return [];
     case "storage":
       if (entry?.category === "storage" && entry.spec.formFactor.startsWith("m2_")) return ["m2Latch", "m2Angle", "m2Secure"];
       return ["driveTray", "driveScrews"];

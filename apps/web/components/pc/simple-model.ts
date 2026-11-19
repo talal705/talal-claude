@@ -207,8 +207,16 @@ export const roleOf = (key: SimplePartKey): SimpleRole => {
 };
 const isCoolerKey = (key: SimplePartKey) => slotOf(key) === "cooler";
 
-/** One learner step, in the order it was taken: `part:cpu`, `cable:atx`. */
-export type SimpleStep = `part:${string}` | `cable:${string}`;
+/**
+ * One learner step, in the order it was taken.
+ * - `mech:<retentionId>:open|closed`: the learner moved a lever, plate or latch.
+ * - `lower:<key>`: the part, aligned by the learner, was lowered into its open place (a module pressed home).
+ * - `seat:<key>` / `lift:<key>`: a released part pushed home again / taken out of its open place.
+ * - `part:<key>`: the whole fitting as one step. Only saves from before the detailed mechanics use it for
+ *   a CPU or a module; replaying it opens and closes their mechanisms (the explicit migration of those saves).
+ * - `cable:<key>`: a lead connected.
+ */
+export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}` | `lower:${string}` | `seat:${string}` | `lift:${string}`;
 /**
  * Saved progress. `placed` and `connected` say what is fitted; `history` is the same steps in the
  * order they were taken, so the latest one can be undone without breaking what depends on it.
@@ -217,7 +225,7 @@ export type SimpleStep = `part:${string}` | `cable:${string}`;
 export type SimpleSnapshot =
   | { version: 3; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean }
   | { version: 4; plan: unknown; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean };
-export type SimpleBlock = "cpuFirst" | "boardFirst" | "prepareBoard" | "cannotFit" | "socketTaken" | "coolerTaken";
+export type SimpleBlock = "cpuFirst" | "boardFirst" | "prepareBoard" | "cannotFit" | "socketTaken" | "coolerTaken" | "openFirst" | "turnPart" | "centrePart" | "closeBlocked" | "alreadyIn";
 export type SimpleCableBlock = "fitCableParts" | "turnOffFirst" | "cannotConnect";
 export type SimpleRemoveBlock = "turnOffFirst" | "removeCoolerFirst" | "unplugCoolerFirst" | "notSwappable" | "boardFirst";
 /**
@@ -243,7 +251,74 @@ function run(state: PCBuildState, actions: readonly PCAction[]): PCBuildState {
 }
 
 export function createSimpleBuild(): PCBuildState {
-  return run(pc.createBuild(pcCatalog), active.createActions());
+  return run(pc.createBuild(pcCatalog), [{ type: "set_mechanics", mode: "detailed" }, ...active.createActions()]);
+}
+
+// ---------- Mechanisms (CPU load plate, memory latches) ----------
+
+/** The retention of the place a part goes, with the host that carries it; null for parts held by screws only. */
+export function simpleRetention(state: PCBuildState, key: SimplePartKey): { hostInstanceId: string; id: string; kind: string; open: boolean; mountPointId: string } | null {
+  const target = simpleTarget(state, key);
+  const host = state.parts.find((p) => p.instanceId === target.hostInstanceId);
+  const mount = pcCatalog.entries.find((e) => e.id === host?.catalogId)?.mountPoints.find((m) => m.id === target.mountPointId);
+  if (!host || !mount?.retention) return null;
+  return { hostInstanceId: host.instanceId, id: mount.retention.id, kind: mount.retention.kind, open: host.mechanisms?.[mount.retention.id] === "open", mountPointId: mount.id };
+}
+/** The keying the learner must match at a part's place (CPU triangle, DIMM notch), if any. */
+export function simpleKeying(state: PCBuildState, key: SimplePartKey) {
+  const target = simpleTarget(state, key);
+  const host = state.parts.find((p) => p.instanceId === target.hostInstanceId);
+  return pcCatalog.entries.find((e) => e.id === host?.catalogId)?.mountPoints.find((m) => m.id === target.mountPointId)?.keying ?? null;
+}
+const hostOfRetention = (state: PCBuildState, retentionId: string) =>
+  state.parts.find((p) => pcCatalog.entries.find((e) => e.id === p.catalogId)?.mountPoints.some((m) => m.retention?.id === retentionId));
+
+/** Moves a lever, plate or latch. The engine refuses what cannot happen (a plate over a cooler, a latch over a half-in module). */
+export function setSimpleMechanism(state: PCBuildState, retentionId: string, desired: "open" | "closed"): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleBlock; message?: { en: string; ar: string } } {
+  if (state.power.pressed) return { ok: false, reason: "cannotFit" };
+  const host = hostOfRetention(state, retentionId);
+  if (!host) return { ok: false, reason: "cannotFit" };
+  const r = pc.applyAction(state, { type: "set_mechanism", instanceId: host.instanceId, mechanismId: retentionId, state: desired }, pcCatalog);
+  return r.ok ? { ok: true, state: r.state } : { ok: false, reason: "closeBlocked", message: r.rejection.message };
+}
+
+/** How the learner holds a part over its place. */
+export interface SimpleAlignment { rotationDeg: number; offsetMm: [number, number] }
+export const ALIGNED: SimpleAlignment = { rotationDeg: 0, offsetMm: [0, 0] };
+
+/**
+ * Lowers a part the learner has aligned into its place (its mechanism must be open). A module is
+ * pressed home, which closes its latch; a CPU rests seated until the learner closes the plate.
+ */
+export function lowerSimplePart(state: PCBuildState, key: SimplePartKey, alignment: SimpleAlignment): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleBlock; message?: { en: string; ar: string } } {
+  const blocked = simpleBlock(state, key);
+  if (blocked) return { ok: false, reason: blocked };
+  const spec = partSpec(key);
+  if (state.parts.find((p) => p.instanceId === spec.id)?.attachments.length) return { ok: false, reason: "alreadyIn" };
+  const r = pc.applyAction(state, { type: "mount_part", instanceId: spec.id, target: simpleTarget(state, key), alignment }, pcCatalog);
+  if (!r.ok) {
+    const code = r.rejection.code;
+    const reason: SimpleBlock = code === "retention_closed" ? "openFirst" : code === "keying_wrong" ? "turnPart" : code === "alignment_off" ? "centrePart" : "cannotFit";
+    return { ok: false, reason, message: r.rejection.message };
+  }
+  const seated = pc.applyAction(r.state, { type: "set_seating", instanceId: spec.id, seating: "seated" }, pcCatalog);
+  return seated.ok ? { ok: true, state: seated.state } : { ok: false, reason: "cannotFit" };
+}
+
+/** Pushes a released part home again (a module whose latch was opened, or one left half in). */
+export function reseatSimplePart(state: PCBuildState, key: SimplePartKey): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleBlock } {
+  const spec = partSpec(key);
+  const part = state.parts.find((p) => p.instanceId === spec.id);
+  if (!part?.attachments.length) return { ok: false, reason: "cannotFit" };
+  const r = pc.applyAction(state, { type: "set_seating", instanceId: spec.id, seating: "seated" }, pcCatalog);
+  return r.ok ? { ok: true, state: r.state } : { ok: false, reason: "openFirst" };
+}
+
+/** Takes a part out of its open place back to the bench. */
+export function liftSimplePart(state: PCBuildState, key: SimplePartKey): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleBlock; message?: { en: string; ar: string } } {
+  const spec = partSpec(key);
+  const r = pc.applyAction(state, { type: "unmount_part", instanceId: spec.id }, pcCatalog);
+  return r.ok ? { ok: true, state: r.state } : { ok: false, reason: "openFirst", message: r.rejection.message };
 }
 
 /** The slot or place a part is fitted to. A RAM stick takes A2 when it is first in, B2 when the other stick holds A2. */
@@ -307,6 +382,14 @@ export function installSimplePart(state: PCBuildState, key: SimplePartKey): { ok
   const target = simpleTarget(state, key);
   // Already in its place but not pushed home (a fault to find): pushing it in is the whole step.
   const resting = state.parts.find((p) => p.instanceId === spec.id)?.attachments.some((a) => a.target.hostInstanceId === target.hostInstanceId && a.target.mountPointId === target.mountPointId);
+  if (resting && !spec.radiator && simpleRetention(state, key)) {
+    const r = reseatSimplePart(state, key);
+    if (!r.ok) return r;
+    const ret = simpleRetention(r.state, key)!;
+    if (ret.kind !== "dimm_latch" && !ret.open) return r;
+    if (ret.kind !== "dimm_latch") { const c = setSimpleMechanism(r.state, ret.id, "closed"); return c.ok ? { ok: true, state: c.state } : { ok: false, reason: "cannotFit" }; }
+    return r;
+  }
   if (resting && !spec.radiator) {
     try {
       return { ok: true, state: run(state, [
@@ -314,6 +397,17 @@ export function installSimplePart(state: PCBuildState, key: SimplePartKey): { ok
         ...(spec.screws ? [{ type: "set_fasteners", instanceId: spec.id, secured: spec.screws } as PCAction] : []),
       ]) };
     } catch { return { ok: false, reason: "cannotFit" }; }
+  }
+  // A part behind a mechanism, in one step (older saves, tests): open, lower aligned, close the plate.
+  const retention = simpleRetention(state, key);
+  if (retention && !spec.radiator) {
+    let next = state;
+    if (!retention.open) { const o = setSimpleMechanism(next, retention.id, "open"); if (!o.ok) return { ok: false, reason: "cannotFit" }; next = o.state; }
+    const l = lowerSimplePart(next, key, ALIGNED);
+    if (!l.ok) return { ok: false, reason: l.reason };
+    next = l.state;
+    if (retention.kind !== "dimm_latch") { const c = setSimpleMechanism(next, retention.id, "closed"); if (!c.ok) return { ok: false, reason: "cannotFit" }; next = c.state; }
+    return { ok: true, state: next };
   }
   try {
     return { ok: true, state: run(state, [
@@ -453,36 +547,66 @@ export function simpleAssemblyComplete(state: PCBuildState): boolean {
   return simpleAllPartsIn(state) && simpleCablesFor(state).every((c) => simpleCableConnected(state, c.key));
 }
 
+/** Applies one recorded step; throws when it cannot be taken (an invalid save). */
+export function applySimpleStep(state: PCBuildState, step: SimpleStep): PCBuildState {
+  const colon = step.indexOf(":");
+  const kind = step.slice(0, colon);
+  const rest = step.slice(colon + 1);
+  const result = kind === "part" ? installSimplePart(state, rest)
+    : kind === "cable" ? connectSimpleCable(state, rest)
+    : kind === "lower" ? lowerSimplePart(state, rest, ALIGNED)
+    : kind === "seat" ? reseatSimplePart(state, rest)
+    : kind === "lift" ? liftSimplePart(state, rest)
+    : kind === "mech" ? setSimpleMechanism(state, rest.slice(0, rest.lastIndexOf(":")), rest.slice(rest.lastIndexOf(":") + 1) as "open" | "closed")
+    : null;
+  if (!result?.ok) throw new Error(`Invalid simple step ${step}`);
+  return result.state;
+}
+
 export function simpleBuildFromSnapshot(snapshot: SimpleSnapshot): PCBuildState {
   let state = createSimpleBuild();
-  // Parts in the order they were fitted (the RAM slot follows it), then leads.
-  for (const key of snapshot.placed) {
-    const step = installSimplePart(state, key);
-    if (!step.ok) throw new Error("Invalid simple assembly order");
-    state = step.state;
-  }
-  for (const key of snapshot.connected) {
-    const step = connectSimpleCable(state, key);
-    if (!step.ok) throw new Error("Invalid simple cable connection");
-    state = step.state;
-  }
+  for (const step of snapshot.history) state = applySimpleStep(state, step);
   return snapshot.powered ? startSimplePC(state).state : state;
 }
 
+/** Parts in and leads connected, from the steps (a lifted part is out again). */
+export function deriveSimpleLists(history: readonly SimpleStep[]): { placed: SimplePartKey[]; connected: SimpleCableKey[] } {
+  const placed: SimplePartKey[] = [];
+  const connected: SimpleCableKey[] = [];
+  for (const step of history) {
+    const [kind, key] = [step.slice(0, step.indexOf(":")), step.slice(step.indexOf(":") + 1)];
+    if ((kind === "part" || kind === "lower") && !placed.includes(key)) placed.push(key);
+    if (kind === "lift") placed.splice(placed.indexOf(key), 1);
+    if (kind === "cable" && !connected.includes(key)) connected.push(key);
+  }
+  return { placed, connected };
+}
+const withStep = (snapshot: SimpleSnapshot, step: SimpleStep): SimpleSnapshot => {
+  const history = [...snapshot.history, step];
+  return { ...snapshot, history, ...deriveSimpleLists(history) };
+};
+export const withMechanism = (snapshot: SimpleSnapshot, retentionId: string, state: "open" | "closed") => withStep(snapshot, `mech:${retentionId}:${state}`);
+export const withLower = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `lower:${key}`);
+export const withSeat = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `seat:${key}`);
+export const withLift = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `lift:${key}`);
+
 // ---------- Learner steps on a snapshot ----------
 
+/** The whole fitting as one step (parts without a mechanism; tests and older saves for the others). */
 export const withPart = (snapshot: SimpleSnapshot, key: SimplePartKey): SimpleSnapshot =>
-  snapshot.placed.includes(key) ? snapshot : { ...snapshot, placed: [...snapshot.placed, key], history: [...snapshot.history, `part:${key}`] };
+  snapshot.placed.includes(key) ? snapshot : withStep(snapshot, `part:${key}`);
 
 export const withCable = (snapshot: SimpleSnapshot, key: SimpleCableKey): SimpleSnapshot =>
-  snapshot.connected.includes(key) ? snapshot : { ...snapshot, connected: [...snapshot.connected, key], history: [...snapshot.history, `cable:${key}`] };
+  snapshot.connected.includes(key) ? snapshot : withStep(snapshot, `cable:${key}`);
+
+const withHistory = (snapshot: SimpleSnapshot, history: SimpleStep[]): SimpleSnapshot => ({ ...snapshot, history, ...deriveSimpleLists(history) });
 
 export const withoutCable = (snapshot: SimpleSnapshot, key: SimpleCableKey): SimpleSnapshot =>
-  ({ ...snapshot, connected: snapshot.connected.filter((k) => k !== key), history: snapshot.history.filter((step) => step !== `cable:${key}`) });
+  withHistory(snapshot, snapshot.history.filter((step) => step !== `cable:${key}`));
 
 /** Takes a cooler back out (`simpleRemoveBlock` must allow it): its step leaves the history. */
 export const withoutPart = (snapshot: SimpleSnapshot, key: SimplePartKey): SimpleSnapshot =>
-  ({ ...snapshot, placed: snapshot.placed.filter((k) => k !== key), history: snapshot.history.filter((step) => step !== `part:${key}`) });
+  withHistory(snapshot, snapshot.history.filter((step) => step !== `part:${key}`));
 
 /**
  * Puts `to` in place of `from`, the part of the same slot (`simpleSwapBlock` must allow it). A CPU
@@ -491,8 +615,8 @@ export const withoutPart = (snapshot: SimpleSnapshot, key: SimplePartKey): Simpl
  */
 export function withSwap(snapshot: SimpleSnapshot, from: SimplePartKey, to: SimplePartKey): SimpleSnapshot {
   if (slotOf(from) !== "cpu") return withPart(withoutPart(snapshot, from), to);
-  const swap = <T extends string>(item: T) => (item === `part:${from}` ? `part:${to}` : item === from ? to : item) as T;
-  return { ...snapshot, placed: snapshot.placed.map(swap), history: snapshot.history.map(swap) };
+  const swap = (item: SimpleStep) => (item === `part:${from}` ? `part:${to}` : item === `lower:${from}` ? `lower:${to}` : item) as SimpleStep;
+  return withHistory(snapshot, snapshot.history.map(swap));
 }
 
 /** The step `undoSimpleStep` would take back, or null when there is none (or the PC is on). */
@@ -508,19 +632,23 @@ export function lastSimpleStep(snapshot: SimpleSnapshot): SimpleStep | null {
 export function undoSimpleStep(snapshot: SimpleSnapshot): SimpleSnapshot | null {
   const last = lastSimpleStep(snapshot);
   if (!last) return null;
-  const [kind, key] = last.split(":") as ["part" | "cable", string];
-  return {
-    ...snapshot,
-    placed: kind === "part" ? snapshot.placed.filter((k) => k !== key) : snapshot.placed,
-    connected: kind === "cable" ? snapshot.connected.filter((k) => k !== key) : snapshot.connected,
-    history: snapshot.history.slice(0, -1),
-  };
+  const history = snapshot.history.slice(0, -1);
+  return { ...snapshot, history, ...deriveSimpleLists(history) };
 }
 
 // ---------- Saved progress ----------
 
 const isPartKey = (k: unknown): k is SimplePartKey => ALL_SIMPLE_PARTS.some((p) => p.key === k);
 const isCableKey = (k: unknown): k is SimpleCableKey => ALL_SIMPLE_CABLES.some((c) => c.key === k);
+const isStep = (step: unknown): step is SimpleStep => {
+  if (typeof step !== "string") return false;
+  const colon = step.indexOf(":");
+  const kind = step.slice(0, colon);
+  const rest = step.slice(colon + 1);
+  if (kind === "cable") return isCableKey(rest);
+  if (kind === "part" || kind === "lower" || kind === "seat" || kind === "lift") return isPartKey(rest);
+  return kind === "mech" && /^[a-z0-9-]+:(open|closed)$/.test(rest);
+};
 
 export function parseSimpleSnapshot(value: unknown): SimpleSnapshot | null {
   if (!value || typeof value !== "object") return null;
@@ -537,16 +665,17 @@ export function parseSimpleSnapshot(value: unknown): SimpleSnapshot | null {
   if (data.version !== 3 && data.version !== 4 && placed.includes("ram") && !placed.includes("ram2")) placed.splice(placed.indexOf("ram") + 1, 0, "ram2");
   let history: SimpleStep[];
   if (data.version === 3 || data.version === 4) {
-    if (!Array.isArray(data.history)) return null;
+    if (!Array.isArray(data.history) || data.history.length > 400 || !data.history.every(isStep)) return null;
     history = [...data.history] as SimpleStep[];
-    const expected = new Set<string>([...placed.map((k) => `part:${k}`), ...(connected as string[]).map((k) => `cable:${k}`)]);
-    if (history.length !== expected.size || new Set(history).size !== history.length || !history.every((step) => expected.has(step))) return null;
-    // The order of fitting decides the RAM slots: take it from the history.
-    placed = history.filter((step) => step.startsWith("part:")).map((step) => step.slice(5) as SimplePartKey);
+    // The lists must say what the steps say.
+    const derived = deriveSimpleLists(history);
+    const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x));
+    if (!same(derived.placed, placed) || !same(derived.connected, connected as string[])) return null;
+    placed = derived.placed;
   } else {
     history = [...placed.map((k): SimpleStep => `part:${k}`), ...(connected as SimpleCableKey[]).map((k): SimpleStep => `cable:${k}`)];
   }
-  const cables = data.version === 3 || data.version === 4 ? history.filter((step) => step.startsWith("cable:")).map((step) => step.slice(6) as SimpleCableKey) : ([...connected] as SimpleCableKey[]);
+  const cables = data.version === 3 || data.version === 4 ? deriveSimpleLists(history).connected : ([...connected] as SimpleCableKey[]);
   const migrated: SimpleSnapshot = data.version === 4
     ? { version: 4, plan: active.plan, placed, connected: cables, history, powered: data.powered }
     : { version: 3, placed, connected: cables, history, powered: data.powered };
@@ -554,12 +683,8 @@ export function parseSimpleSnapshot(value: unknown): SimpleSnapshot | null {
     const state = simpleBuildFromSnapshot(migrated);
     if (migrated.powered && (pc.evaluateStartup(state, pcCatalog).outcome !== "operational" || simpleRuleBlock(state))) return null;
     // Every prefix of the history must have been a valid build, so undoing never meets an impossible state.
-    let replay: SimpleSnapshot = emptySimpleSnapshot();
-    for (const step of history) {
-      const [kind, key] = step.split(":") as ["part" | "cable", string];
-      replay = kind === "part" ? withPart(replay, key as SimplePartKey) : withCable(replay, key as SimpleCableKey);
-      simpleBuildFromSnapshot(replay);
-    }
+    let replay = createSimpleBuild();
+    for (const step of history) replay = applySimpleStep(replay, step);
     return migrated;
   } catch { return null; }
 }

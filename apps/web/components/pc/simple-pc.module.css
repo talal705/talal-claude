@@ -133,3 +133,13 @@
 .substeps button[aria-pressed="true"] span { background:#1d5b40; border-color:#2c8a5e; }
 .substeps button:disabled { opacity:.45; cursor:default; }
 .substeps button:focus-visible { outline:2px solid var(--accent-strong); outline-offset:1px; }
+.hands { display:grid; gap:8px; }
+.handsState { font-size:12px; color:#cfe3f0; }
+.holdControls { display:grid; gap:8px; padding:8px; border:1px dashed #3a5a6e; border-radius:10px; outline:none; }
+.holdControls:focus-visible { outline:2px solid var(--accent-strong); outline-offset:2px; }
+.holdRow { display:flex; flex-wrap:wrap; gap:6px; }
+.holdRow button { min-width:40px; min-height:40px; padding:4px 10px; border:1px solid var(--border); border-radius:9px; color:#e8f3fa; font-size:16px; cursor:pointer; background:#121821; }
+.holdRow button:focus-visible { outline:2px solid var(--accent-strong); outline-offset:1px; }
+.alignState { font-size:12.5px; color:#f5e6c8; }
+.handsHead { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.closeup { min-height:32px; padding:4px 10px; border:1px solid var(--accent); border-radius:8px; color:#dff6fb; font-size:12px; cursor:pointer; }
