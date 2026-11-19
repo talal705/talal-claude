@@ -5,7 +5,7 @@
 // version "unrecorded": the engine then treats the CPU as supported, and the planner reports the BIOS
 // question as unknown (conditional) instead of guessing a version.
 import type { CaseEntry, CoolingEntry, CpuEntry, FanEntry, GpuEntry, MotherboardEntry, MountPointSpec, RamEntry, StorageEntry } from "@ytl/contracts";
-import { FASTENER_NOTE, L, NO_ASSET, boardPorts, dimmSlots, fanLead, fanMounts, frontPanelLeads, port, sataDataCables, source, zone } from "./helpers";
+import { FASTENER_NOTE, L, NO_ASSET, boardPorts, dimmSlots, lgaSocketDetail, fanLead, fanMounts, frontPanelLeads, port, sataDataCables, source, zone } from "./helpers";
 
 const ON = "2026-11-18";
 /** BIOS history not read for this board; see the file comment. */
@@ -14,7 +14,8 @@ const BIOS_NOTE =
   "The BIOS version history and the first BIOS for each CPU were not read for this board. The engine treats the listed CPUs as supported; the planner reports 'BIOS support not confirmed' as a conditional finding.";
 
 const socket = (s: "lga1150" | "lga1700", name: string): MountPointSpec[] => [
-  { id: "cpu-socket", kind: "cpu_socket", socket: s, label: L(`CPU socket (${name})`, `مقبس المعالج (${name})`), fastener: { kind: "socket_lever", count: 1 } },
+  { id: "cpu-socket", kind: "cpu_socket", socket: s, label: L(`CPU socket (${name})`, `مقبس المعالج (${name})`), fastener: { kind: "socket_lever", count: 1 },
+    ...lgaSocketDetail(s === "lga1150" ? "LGA1150 load plate and lever as in the ASUS H81M-K manual E8601 (CPU installation section, not read page by page)." : "LGA1700 load plate and lever (Intel independent loading mechanism); this board's manual was not read for the steps.") },
   { id: "cooler-mount", kind: "cpu_cooler_mount", socket: s, label: L("CPU cooler mounting position", "مكان تثبيت مبرّد المعالج"), fastener: { kind: "cooler_bracket", count: 4 } },
 ];
 const x16 = (gen: number, label: string): MountPointSpec => ({

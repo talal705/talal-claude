@@ -203,7 +203,17 @@ export const dimmSlots = (generation: "ddr3" | "ddr4" | "ddr5", slots: readonly 
     generation,
     moduleType: "udimm" as const,
     label: L(`Memory slot DIMM_${s.toUpperCase()} (${generation.toUpperCase()})`, `فتحة الرام DIMM_${s.toUpperCase()} (${generation.toUpperCase()})`),
+    // The notch is off centre, so a module fits one way round. Which ends of the slot have latches is not
+    // shown in the manuals read; the model draws one latch and says so.
+    retention: { id: `dimm-${s}-latch`, kind: "dimm_latch" as const, latches: "unverified" as const, note: "Latch arrangement not confirmed in the manual read; one latch is modelled." },
+    keying: { rotationDeg: 0, toleranceMm: 4, mark: "notch" as const },
   }));
+
+/** The CPU socket's retention and keying: an LGA load plate with its lever, and the corner triangle. */
+export const lgaSocketDetail = (note: string) => ({
+  retention: { id: "cpu-socket-plate", kind: "lga_load_plate" as const, note },
+  keying: { rotationDeg: 0, toleranceMm: 3, mark: "triangle" as const },
+});
 
 // ---------- Case ----------
 

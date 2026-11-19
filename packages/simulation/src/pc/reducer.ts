@@ -2,6 +2,9 @@
 // Pure and deterministic: no clock, no randomness, input state is never mutated.
 import type {
   CableInstance,
+  CatalogEntry,
+  MechanismState,
+  RetentionSpec,
   InstalledPart,
   PCAction,
   PCActionResult,
@@ -33,6 +36,20 @@ export function createBuild(catalog: PCCatalog, rgbPreference: RgbPreference = "
     nextSerial: 1,
   };
 }
+
+/** Every retention mechanism of a new part starts closed; an LGA socket also has its cover on. */
+function initialMechanisms(entry: CatalogEntry): { mechanisms?: Record<string, MechanismState> } {
+  const out: Record<string, MechanismState> = {};
+  for (const m of entry.mountPoints) {
+    if (!m.retention) continue;
+    out[m.retention.id] = "closed";
+    if (m.retention.kind === "lga_load_plate") out[`${m.retention.id}:cover`] = "closed";
+  }
+  return Object.keys(out).length ? { mechanisms: out } : {};
+}
+
+const retentionName = (kind: RetentionSpec["kind"]) =>
+  kind === "dimm_latch" ? L("The slot's latch", "مشبك الفتحة") : kind === "zif_lever" ? L("The socket lever", "ذراع المقبس") : L("The socket's load plate and lever", "غطا المقبس وذراعه");
 
 export const DEFAULT_LIGHTING = { enabled: true, color: "#00e5ff", effect: "static" } as const;
 
@@ -66,6 +83,7 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
   });
   const withPart = (id: string, change: (p: InstalledPart) => InstalledPart) => state.parts.map((p) => (p.instanceId === id ? change(p) : p));
   const withCable = (id: string, change: (c: CableInstance) => CableInstance) => state.cables.map((c) => (c.id === id ? change(c) : c));
+  const detailed = state.mechanics === "detailed";
 
   if (state.power.pressed && !ALLOWED_WHILE_ON.includes(action.type)) return fail("power_is_on", pcTarget.setting("power-button"));
 
@@ -85,6 +103,7 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
         ...(entry.rgb ? { lighting: { ...DEFAULT_LIGHTING } } : {}),
         ...(entry.category === "motherboard" ? { biosVersion: entry.spec.factoryBiosVersion } : {}),
         ...(entry.category === "storage" ? { bootable: true } : {}),
+        ...(detailed ? initialMechanisms(entry) : {}),
       };
       const cables: CableInstance[] = entry.cables.flatMap((spec) =>
         Array.from({ length: spec.quantity }, (_, k) => ({
@@ -123,9 +142,66 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       });
     }
 
+    case "set_mechanics":
+      return ok({ mechanics: action.mode, parts: state.parts.map((p) => {
+        const entry = v.index.byId.get(p.catalogId);
+        return entry && !p.mechanisms ? { ...p, ...initialMechanisms(entry) } : p;
+      }) });
+
+    case "set_mechanism": {
+      const host = partById(v, action.instanceId);
+      const entry = host && entryOf(v, host);
+      if (!host || !entry) return unknown(action.instanceId, pcTarget.part(action.instanceId));
+      const mount = entry.mountPoints.find((m) => m.retention?.id === action.mechanismId);
+      if (!mount?.retention) return unknown(`${action.instanceId}/${action.mechanismId}`, pcTarget.part(action.instanceId));
+      const ret = mount.retention;
+      const at = { hostInstanceId: host.instanceId, mountPointId: mount.id };
+      const occupant = state.parts.find((p) => p.attachments.some((a) => a.target.hostInstanceId === at.hostInstanceId && a.target.mountPointId === at.mountPointId));
+      const occAttachment = occupant?.attachments.find((a) => a.target.hostInstanceId === at.hostInstanceId && a.target.mountPointId === at.mountPointId);
+      const current = host.mechanisms?.[ret.id] ?? "closed";
+      if (current === action.state) return ok({});
+      const blocked = (en: string, ar: string) => fail("retention_blocked", pcTarget.mount(at), { why: L(en, ar) });
+      const lever = mount.fastener?.count ?? 0;
+      const setOccupant = (change: { seating?: "placed" | "seated"; fastenersSecured?: number }) =>
+        occupant && occAttachment ? (p: InstalledPart) => (p.instanceId === occupant.instanceId ? { ...p, attachments: p.attachments.map((a) => (a === occAttachment ? { ...a, ...change } : a)) } : p) : (p: InstalledPart) => p;
+      const setHost = (states: Record<string, MechanismState>) => (p: InstalledPart) => (p.instanceId === host.instanceId ? { ...p, mechanisms: { ...(p.mechanisms ?? {}), ...states } } : p);
+      if (ret.kind === "lga_load_plate" || ret.kind === "zif_lever") {
+        if (action.state === "open") {
+          const cooler = state.parts.find((p) => p.attachments.some((a) => a.target.hostInstanceId === host.instanceId && entry.mountPoints.find((m) => m.id === a.target.mountPointId)?.kind === "cpu_cooler_mount"));
+          if (cooler) return blocked("The cooler sits over the socket. Take the cooler off first.", "المبرّد فوق المقبس. شيل المبرّد أول.");
+          return ok({ parts: state.parts.map(setHost({ [ret.id]: "open" })).map(setOccupant({ fastenersSecured: 0 })) });
+        }
+        if (occupant && occAttachment?.seating !== "seated") return blocked("Lower the CPU fully into the socket before closing the plate.", "نزّل المعالج في المقبس لين الآخر قبل ما تسكّر الغطا.");
+        // Closing over a seated CPU pops the socket cover off; it is kept for a later return or repair.
+        const cover = occupant ? { [`${ret.id}:cover`]: "open" as MechanismState } : {};
+        return ok({ parts: state.parts.map(setHost({ [ret.id]: "closed", ...cover })).map(setOccupant({ fastenersSecured: lever })) });
+      }
+      // A memory latch: closing holds a module that is fully in; opening lifts the module out of its contacts.
+      if (action.state === "closed" && occupant && occAttachment?.seating !== "seated") return blocked("Press the module fully in; the latch closes by itself when it is home.", "اضغط الشريحة لين الآخر؛ المشبك يتسكّر لحاله لما تدخل.");
+      return ok({ parts: state.parts.map(setHost({ [ret.id]: action.state })).map(action.state === "open" ? setOccupant({ seating: "placed", fastenersSecured: 0 }) : (p) => p) });
+    }
+
     case "mount_part": {
       const check = checkMount(v, action.instanceId, action.role, action.target);
       if (!check.ok) return rejected(check.rejection);
+      const hostPart = partById(v, action.target.hostInstanceId);
+      const hostEntry = hostPart && entryOf(v, hostPart);
+      const place = hostEntry?.mountPoints.find((m) => m.id === action.target.mountPointId);
+      if (detailed && place?.retention && (hostPart?.mechanisms?.[place.retention.id] ?? "closed") !== "open") {
+        return fail("retention_closed", pcTarget.mount(action.target), { mechanism: retentionName(place.retention.kind) });
+      }
+      if (detailed && place?.keying) {
+        const a = action.alignment;
+        if (!a) return fail("alignment_required", pcTarget.mount(action.target));
+        const turn = ((Math.round(a.rotationDeg) % 360) + 360) % 360;
+        const valid = [place.keying.rotationDeg, ...(place.keying.alsoValid ?? [])].map((r) => ((r % 360) + 360) % 360);
+        const placeName = place.kind === "cpu_socket" ? L("socket", "المقبس") : L("slot", "الفتحة");
+        if (!valid.includes(turn)) {
+          return fail("keying_wrong", pcTarget.mount(action.target), { mark: place.keying.mark === "triangle" ? L("triangle", "المثلث") : L("notch", "الشق"), place: placeName });
+        }
+        const distance = Math.hypot(a.offsetMm[0], a.offsetMm[1]);
+        if (distance > place.keying.toleranceMm) return fail("alignment_off", pcTarget.mount(action.target), { distance: Math.round(distance * 10) / 10, place: placeName });
+      }
       return ok({
         parts: withPart(action.instanceId, (p) => ({
           ...p,
@@ -147,14 +223,30 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
           : invalid(target, "This part is not installed there.", "هذي القطعة مو مركّبة هناك.");
       }
       const others = part.attachments.filter((a) => a !== attachment);
-      if (action.type === "unmount_part") return ok({ parts: withPart(part.instanceId, (p) => ({ ...p, attachments: others })) });
+      const hostOf = partById(v, attachment.target.hostInstanceId);
+      const placeSpec = mountSpec(v, attachment.target);
+      const held = detailed && placeSpec?.retention && (hostOf?.mechanisms?.[placeSpec.retention.id] ?? "closed") !== "open";
+      if (action.type === "unmount_part") {
+        if (held) return fail("retention_closed", pcTarget.mount(attachment.target), { mechanism: retentionName(placeSpec!.retention!.kind) });
+        return ok({ parts: withPart(part.instanceId, (p) => ({ ...p, attachments: others })) });
+      }
 
       const update = (change: Partial<typeof attachment>) =>
         ok({ parts: withPart(part.instanceId, (p) => ({ ...p, attachments: p.attachments.map((a) => (a === attachment ? { ...a, ...change } : a)) })) });
       if (action.type === "set_seating") {
-        // Taking a part out of its seat releases whatever was holding it.
-        return update({ seating: action.seating, ...(action.seating === "seated" ? {} : { fastenersSecured: 0 }) });
+        // Detailed builds: a CPU seats only while its plate is open; a module pressed home snaps its latch shut.
+        if (held && placeSpec?.retention?.kind !== "dimm_latch") return fail("retention_closed", pcTarget.mount(attachment.target), { mechanism: retentionName(placeSpec!.retention!.kind) });
+        const latch = detailed && placeSpec?.retention?.kind === "dimm_latch" && action.seating === "seated" ? placeSpec.retention.id : null;
+        const next = { seating: action.seating, ...(action.seating === "seated" ? {} : { fastenersSecured: 0 }) };
+        if (!latch) return update(next);
+        return ok({ parts: state.parts.map((p) => {
+          if (p.instanceId === part.instanceId) return { ...p, attachments: p.attachments.map((a) => (a === attachment ? { ...a, ...next } : a)) };
+          if (p.instanceId === attachment.target.hostInstanceId) return { ...p, mechanisms: { ...(p.mechanisms ?? {}), [latch]: "closed" } };
+          return p;
+        }) });
       }
+      // In detailed builds a lever is moved with set_mechanism, so the scene and the count never disagree.
+      if (detailed && placeSpec?.retention) return invalid(pcTarget.mount(attachment.target), "Use the lever or latch itself.", "استخدم الذراع أو المشبك نفسه.");
       const count = mountSpec(v, attachment.target)?.fastener?.count ?? 0;
       if (count === 0) return invalid(pcTarget.mount(attachment.target), "Nothing needs to be secured at this position.", "ما في شي يحتاج تقفيل في هذا المكان.");
       if (!Number.isInteger(action.secured) || action.secured < 0 || action.secured > count) {

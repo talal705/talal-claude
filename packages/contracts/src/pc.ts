@@ -265,9 +265,36 @@ export interface FastenerSpec {
   count: number;
 }
 
+/**
+ * What holds a part in this place and must be opened to fit or take it out (a CPU load plate and lever,
+ * a memory slot latch). Its state lives on the host part (`InstalledPart.mechanisms[id]`) and is enforced
+ * only in builds with `mechanics: "detailed"`.
+ */
+export interface RetentionSpec {
+  id: string;
+  kind: "lga_load_plate" | "zif_lever" | "dimm_latch";
+  /** DIMM latches: which ends move. "unverified" when the board's manual does not show it. */
+  latches?: "one_side" | "both" | "unverified";
+  /** Where the procedure is documented, and what is not. */
+  note?: string;
+}
+
+/** The documented orientation of a keyed part in this place, and how far off-centre it may be lowered. */
+export interface KeyingSpec {
+  /** Rotation (degrees about the vertical) at which the part's mark meets the place's mark. */
+  rotationDeg: number;
+  /** Rotations that are symmetric with the correct one (none for a CPU or a DIMM). */
+  alsoValid?: number[];
+  toleranceMm: number;
+  /** What the learner matches: "triangle" (CPU corner mark), "notch" (DIMM key). */
+  mark: "triangle" | "notch";
+}
+
 interface MountPointBase {
   id: string;
   label: Localized;
+  retention?: RetentionSpec;
+  keying?: KeyingSpec;
   /** What holds a part here once seated. Absent when nothing has to be secured. */
   fastener?: FastenerSpec;
   /** Other mount points on the same part that become unusable while this one is occupied. */
@@ -657,7 +684,11 @@ export interface InstalledPart {
   biosVersion?: string;
   /** Storage only: whether the drive carries an installed operating system. */
   bootable?: boolean;
+  /** Retention mechanisms on this part by `RetentionSpec.id`, and the CPU socket cover / lever protector. */
+  mechanisms?: Record<string, MechanismState>;
 }
+
+export type MechanismState = "open" | "closed";
 
 /** One end of a connection: a port on a part, or a receptacle end of another cable (adapter). */
 export type PortRef =
@@ -696,6 +727,11 @@ export interface PCBuildState {
   power: PowerState;
   /** Counter behind deterministic instance IDs; replaying the same actions yields the same IDs. */
   nextSerial: number;
+  /**
+   * "detailed": retention mechanisms must be opened before fitting or removing, and keyed parts must be
+   * lowered aligned. Absent in older builds and the detailed workspace, which keep their simpler rules.
+   */
+  mechanics?: "detailed";
 }
 
 /** `ProjectRecord<PCProjectData>.data` with `dataVersion = PC_PROJECT_DATA_VERSION`. */
@@ -717,7 +753,11 @@ export type PCAction =
   /** Removes the instance, anything mounted on it returns to the bench, and its cables are unplugged. */
   | { type: "remove_part"; instanceId: InstanceId }
   /** Aligns the part on a mount point (`placed`). Rejected with a reason when it cannot physically go there. */
-  | { type: "mount_part"; instanceId: InstanceId; role?: string; target: MountRef }
+  /** `alignment`: how the part is held over a keyed place (rotation, offset from centre); required there in detailed builds. */
+  | { type: "mount_part"; instanceId: InstanceId; role?: string; target: MountRef; alignment?: { rotationDeg: number; offsetMm: [number, number] } }
+  | { type: "set_mechanics"; mode: "detailed" }
+  /** Opens or closes a retention mechanism on a host part. */
+  | { type: "set_mechanism"; instanceId: InstanceId; mechanismId: string; state: MechanismState }
   | { type: "unmount_part"; instanceId: InstanceId; role?: string }
   | { type: "set_seating"; instanceId: InstanceId; role?: string; seating: SeatingState }
   | { type: "set_fasteners"; instanceId: InstanceId; role?: string; secured: number }
@@ -812,6 +852,11 @@ export type PCDiagnosticCode =
   | "modular_cable_mismatch"
   | "port_occupied"
   | "seating_blocked"
+  | "retention_closed"
+  | "retention_blocked"
+  | "keying_wrong"
+  | "alignment_off"
+  | "alignment_required"
   // Build diagnostics
   | "part_missing"
   | "part_not_mounted"

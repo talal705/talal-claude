@@ -173,6 +173,27 @@ const T: Record<PCDiagnosticCode, Entry> = {
     x: ["Screws, latches and levers hold a part that is already fully home. Securing a part that is only resting leaves it loose.", "البراغي والمشابك والأذرع تمسك قطعة دخلت مكانها لين الآخر. لو قفلت على قطعة محطوطة بس، تبقى رخوة."],
   },
 
+  retention_closed: {
+    m: ["{mechanism} is closed. Open it first.", "{mechanism} مسكّر. افتحه أول."],
+    x: ["A part goes in or comes out only while the mechanism that holds it is open.", "القطعة تدخل أو تطلع بس والقفل اللي يمسكها مفتوح."],
+  },
+  retention_blocked: {
+    m: ["{why}", "{why}"],
+    x: ["Mechanisms close over a part that is fully home, and open only when nothing above them is in the way.", "القفل يتسكّر على قطعة داخلة لين الآخر، وينفتح بس إذا ما فيه شي فوقه يعيق."],
+  },
+  keying_wrong: {
+    m: ["Turn the part until its {mark} meets the mark on the {place}.", "لفّ القطعة لين {mark} يطابق العلامة اللي في {place}."],
+    x: ["Keyed parts fit in one orientation only: the marks and notches show it. Never force a part that does not drop in.", "القطع المفتاحية تركب باتجاه واحد بس، والعلامات والشقوق تبيّنه. لا تضغط قطعة ما نزلت بسهولة."],
+  },
+  alignment_off: {
+    m: ["The part is {distance} mm off centre. Centre it over the {place} before lowering it.", "القطعة بعيدة {distance} مم عن الوسط. وسّطها فوق {place} قبل ما تنزّلها."],
+    x: ["A part is lowered straight down only when it is centred over its place; sliding it in damages the contacts.", "القطعة تنزل مستقيمة بس وهي في الوسط؛ سحبها على المكان يضرّ نقاط التلامس."],
+  },
+  alignment_required: {
+    m: ["Hold the part over its place first: turn and centre it, then lower it.", "امسك القطعة فوق مكانها أول: لفّها ووسّطها، وبعدين نزّلها."],
+    x: ["In this build every keyed part is aligned by the learner before it goes in.", "في هالتجميعة كل قطعة مفتاحية يحاذيها المتعلم قبل ما تدخل."],
+  },
+
   // ---------- Build diagnostics ----------
   part_missing: {
     o: ["{symptom}", "{symptom}"],

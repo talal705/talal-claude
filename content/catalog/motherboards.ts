@@ -1,5 +1,5 @@
 import type { MotherboardEntry, MountPointSpec } from "@ytl/contracts";
-import { FASTENER_NOTE, L, NO_ASSET, boardPorts, dimmSlots, sataDataCables, source, zone } from "./helpers";
+import { FASTENER_NOTE, L, NO_ASSET, boardPorts, dimmSlots, lgaSocketDetail, sataDataCables, source, zone } from "./helpers";
 
 const socketMounts = (socket: "lga1700" | "am4", name: string): MountPointSpec[] => [
   {
@@ -8,6 +8,10 @@ const socketMounts = (socket: "lga1700" | "am4", name: string): MountPointSpec[]
     socket,
     label: L(`CPU socket (${name})`, `مقبس المعالج (${name})`),
     fastener: { kind: "socket_lever", count: 1 },
+    // ASUS manuals: lift the load lever (hold it while releasing), the CPU fits one way only, keep the PnP cap.
+    ...(socket === "lga1700"
+      ? lgaSocketDetail("ASUS TUF GAMING Z790-PLUS WIFI manual E21279 pp. 1-4, 2-1, 2-2: hold the lever while releasing it; the CPU fits in one orientation; keep the PnP cap. The board's lever protector is not modelled.")
+      : { retention: { id: "cpu-socket-lever", kind: "zif_lever" as const, note: "AM4 lever not walked through in this lab." } }),
   },
   {
     id: "cooler-mount",
