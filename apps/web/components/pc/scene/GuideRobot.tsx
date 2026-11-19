@@ -112,7 +112,8 @@ export function hoverPoint(target: Vec3, eye: Vec3, obstacles: readonly Obstacle
     const score = c.distanceTo(t) - 0.35 * c.clone().sub(t).dot(camera.clone().sub(t).normalize()) + 0.2 * Math.abs(c.y - t.y - 140 * k);
     if (score < bestScore) { bestScore = score; best = c; }
   }
-  const chosen = best ?? t.clone().add(toEye.multiplyScalar(220 * k)).setY(Math.max(t.y + 160 * k, RADIUS + TABLE_CLEAR));
+  // Nothing clear: beside the target and above it, not toward the eye (that would cover the view).
+  const chosen = best ?? t.clone().add(side.multiplyScalar(160 * k)).setY(Math.max(t.y + 160 * k, RADIUS + TABLE_CLEAR * k));
   return [chosen.x, chosen.y, chosen.z];
 }
 
@@ -208,6 +209,9 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
     const node = root.current;
     if (!node) return;
     const dt = Math.min(delta, 0.05);
+    // The camera came much closer or went much farther (a close-up glide, a zoom): size and spot again,
+    // so close up it stays small beside what it points at instead of filling the view.
+    if (points[0] && Math.abs(nearScale(camera.position.distanceTo(new THREE.Vector3(...points[0]))) - near.current) > 0.08) choose();
     const time = frame.clock.elapsedTime;
     // Fade in and out by scale. Appearing, it starts where it is needed (it does not fly in from afar).
     const want = shown && !hop.current ? 1 : 0;

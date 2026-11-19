@@ -81,11 +81,12 @@ function contactTexture(holes: boolean): THREE.Texture {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = holes ? "#e9e4d6" : "#2a2a2a";
+  ctx.fillStyle = holes ? "#d9d4c6" : "#15171a";
   ctx.fillRect(0, 0, size, size);
-  ctx.fillStyle = holes ? "#3a3a3a" : "#d4a52a";
-  for (let y = 4; y < size; y += 8) for (let x = 4 + ((y / 8) % 2) * 4; x < size; x += 8) { ctx.beginPath(); ctx.arc(x, y, 1.8, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = holes ? "#2a2a2a" : "#e8b93a";
+  for (let y = 4; y < size; y += 8) for (let x = 4 + ((y / 8) % 2) * 4; x < size; x += 8) { ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill(); }
   const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(4, 4);
   return texture;
@@ -136,7 +137,7 @@ export function SocketMechanism({ layout, board, retentionId, cpuIn, reducedMoti
   const plate = useTurn(plateOpen ? PLATE_UP : 0, reducedMotion);
   const mats = useMemo(() => ({
     nickel: material("nickel"), nickelGlow: material("nickel", "#38c6ff"), black: material("black_plastic"), gold: material("gold"), goldGlow: material("gold", "#ffd34d"),
-    contacts: new THREE.MeshStandardMaterial({ map: contactTexture(!lga), metalness: 0.3, roughness: 0.5 }),
+    contacts: new THREE.MeshStandardMaterial({ map: contactTexture(!lga), metalness: 0.1, roughness: 0.7 }),
   }), [lga]);
   useEffect(() => () => { for (const m of Object.values(mats)) { m.dispose(); (m as THREE.MeshStandardMaterial).map?.dispose(); } }, [mats]);
 
