@@ -874,6 +874,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const ret = keyed!;
     const at = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
     const covered = caseCoversClosed(state);
+    // The covers matter once the board is in the case; before that the card has no case opening to meet.
+    const boardInCase = simplePartInstalled(state, "motherboard");
     const screwed = simpleFastened(state, key);
     const off = hold ? Math.hypot(hold.offsetMm[0], hold.offsetMm[1]) : 0;
     const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved));
@@ -886,7 +888,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     return (
       <div className={styles.hands}>
         <div className={styles.handsHead}>
-          <p className={styles.handsState}>{t("hands.pcieLatch", { state: st(ret.open) })} · {t("hands.covers", { state: t(covered ? "hands.coversIn" : "hands.coversOut") })}{at ? ` · ${t(screwed ? "hands.screwsIn" : "hands.screwsOut")}` : ""}</p>
+          <p className={styles.handsState}>{t("hands.pcieLatch", { state: st(ret.open) })} · {t("hands.covers", { state: t(!boardInCase ? "hands.coversLater" : covered ? "hands.coversIn" : "hands.coversOut") })}{at ? ` · ${t(screwed ? "hands.screwsIn" : "hands.screwsOut")}` : ""}</p>
           <button type="button" className={styles.closeup} onClick={() => focusOn(ret.hostInstanceId, ret.mountPointId)}>{t("hands.closeup")}</button>
         </div>
         {!at && <>
@@ -904,7 +906,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
             <p className={styles.cablesNote}>{t("hands.keys")}</p>
             <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handLower(key)}>{t("hands.pushCard")}</button>
           </div>}
-          {!covered && <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handCovers("closed")}>{t("hands.refitCovers")}</button>}
+          {boardInCase && !covered && <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handCovers("closed")}>{t("hands.refitCovers")}</button>}
+          {!boardInCase && <p className={styles.hint}>{t("hands.gpuBoardFirst")}</p>}
         </>}
         {at && !screwed && <>
           {at.seating === "seated" && <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handFasten(key)}>{t("hands.screwBracket")}</button>}

@@ -1613,7 +1613,9 @@
       "plugMatched": "Plug turned so its clip or key matches the socket",
       "turnPlug": "Turn the plug round",
       "plugIn": "Push it in until it clicks",
-      "plugNote": "Pick the socket by its label, match the clip to the latch (or the ridge to the guide), then push straight in. Only the planned socket is accepted; push force is not simulated."
+      "plugNote": "Pick the socket by its label, match the clip to the latch (or the ridge to the guide), then push straight in. Only the planned socket is accepted; push force is not simulated.",
+      "coversLater": "once the board is in the case",
+      "gpuBoardFirst": "The card goes in after the board is in the case: its bracket has to meet the case's rear opening."
     }
   },
   "learning": {
