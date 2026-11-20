@@ -1,0 +1,44 @@
+import { chromium } from "@playwright/test";
+const base = process.argv[2] ?? "http://127.0.0.1:3001"; const locale = process.argv[3] ?? "ar";
+const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+const ok = (n, c, x = "") => { console.log(`${c ? "PASS" : "FAIL"}  ${n} ${x}`); if (!c) process.exitCode = 1; };
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+await ctx.addCookies([{ name: "ytl_locale", value: locale, url: base }]);
+const page = await ctx.newPage(); const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
+await page.goto(base + "/pc"); await page.evaluate(() => localStorage.clear()); await page.reload();
+await page.waitForSelector("#planner-title", { timeout: 120000 });
+const click = async (l) => { await l.first().evaluate((el) => el.click()); await page.waitForTimeout(400); };
+await click(page.getByRole("radio", { name: /ألعاب/ })); await click(page.getByRole("button", { name: "ساعدني أختار" })); await click(page.getByRole("button", { name: "ابدأ التجميع" }));
+await page.waitForSelector("canvas", { timeout: 120000 }); await page.waitForTimeout(5000);
+const lab = page.locator("section[aria-labelledby='simple-pc-title']");
+const st = () => page.evaluate(() => window.__ytlSimplePc());
+const scr = () => page.evaluate(() => window.__ytlSocketScreen?.() ?? {});
+const bubble = async () => (await page.locator("[class*=bubble]").first().innerText()).replace(/\s+/g, " ").trim();
+const settle = () => page.waitForTimeout(2500);
+const seed = async (steps) => {
+  await page.evaluate((steps) => { const k = "ytl_pc_plan_progress_v1"; const v = JSON.parse(localStorage.getItem(k)); v.history = steps; v.placed = steps.filter((x) => x.startsWith("part:")).map((x) => x.slice(5)); delete v.held; localStorage.setItem(k, JSON.stringify(v)); }, steps);
+  await page.reload(); await page.waitForSelector("canvas", { timeout: 120000 }); await page.waitForTimeout(5000);
+};
+const cpuTile = () => lab.locator("[role=group] button:has(img)").filter({ hasText: /^المعالج/ });
+// 1. A mounted cooler blocks the socket.
+await seed(["part:cpu", "part:cooler"]);
+await click(cpuTile()); await click(lab.getByRole("button", { name: "تقريب" })); await page.waitForTimeout(4000);
+let p = await scr(); await page.mouse.click(...p.lever); await settle();
+let s = await st(); ok("cooler mounted: the lever will not move", s.history.join() === "part:cpu,part:cooler" && /المبرّد/.test(await bubble()), `${s.history.join()} ${await bubble()}`);
+// 2. Removal: release the lever, open the plate, lift the CPU out.
+await seed(["part:cpu"]);
+await click(cpuTile()); await click(lab.getByRole("button", { name: "تقريب" })); await page.waitForTimeout(4000);
+p = await scr(); await page.mouse.click(...p.plate); await settle();
+s = await st(); ok("plate will not open while the lever is locked", s.history.join() === "part:cpu", s.history.join());
+await click(lab.getByRole("button", { name: "طلّعها" })).catch(() => {});
+ok("no lift-out offered while locked", (await lab.getByRole("button", { name: "طلّعها" }).count()) === 0);
+await page.mouse.click(...p.lever); await settle();
+p = await scr(); await page.mouse.click(...p.plate); await settle();
+s = await st(); ok("lever released, then plate opened in the view", s.history.slice(-2).join() === "mech:cpu-socket-plate:lever:open,mech:cpu-socket-plate:open", s.history.join());
+await click(lab.getByRole("button", { name: "طلّعها" })); await settle();
+s = await st(); ok("CPU lifted straight out and back in hand", s.history.at(-1) === "lift:cpu" && !s.placed.includes("cpu"), s.history.join());
+const held = await page.evaluate(() => JSON.parse(localStorage.getItem("ytl_pc_plan_progress_v1")).held);
+ok("it is held (pose saved) after lifting", held?.key === "cpu", JSON.stringify(held));
+await page.screenshot({ path: "/tmp/cpu-6-lifted.png" });
+ok("no page errors", errors.length === 0, errors.join(" | "));
+await browser.close();
