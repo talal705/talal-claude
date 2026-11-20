@@ -1,4 +1,8 @@
-# Project handoff — Your Tech Lab (talal-claude), 2026-11-20
+# Project handoff — Virtual Training Environment (VTE), 2026-11-20
+
+Current site brand: **بيئة التدريب الافتراضية (VTE)** in Arabic and
+**Virtual Training Environment (VTE)** in English. Older references below use the former name.
+The repository and hosting identifiers remain `talal-claude`; saved-data keys are unchanged.
 
 ## Latest work: click-based assembly and top controls
 

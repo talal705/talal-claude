@@ -1,6 +1,6 @@
 {
   "site": {
-    "name": "Your Tech Lab",
+    "name": "Virtual Training Environment (VTE)",
     "tagline": "Build your PC and explore your network with an assistant that explains problems and helps you fix them."
   },
   "nav": {
@@ -12,7 +12,7 @@
     "primary": "Main navigation"
   },
   "hero": {
-    "heading": "Your Tech Lab",
+    "heading": "Virtual Training Environment (VTE)",
     "subheading": "Build your PC and explore your network with an assistant that explains problems and helps you fix them.",
     "startBuilding": "Build a PC",
     "exploreNetworks": "Explore Networks"
@@ -92,7 +92,7 @@
     "deleted": "Project deleted.",
     "archived": {
       "heading": "{count, plural, one {# archived programming project} other {# archived programming projects}}",
-      "body": "Code Studio is no longer part of Your Tech Lab. Projects you made there are kept on this device exactly as you saved them. They can't be opened here, but you can download one as a JSON file or delete it.",
+      "body": "Code Studio is no longer part of Virtual Training Environment (VTE). Projects you made there are kept on this device exactly as you saved them. They can't be opened here, but you can download one as a JSON file or delete it.",
       "kind": "Archived programming project",
       "export": "Export as JSON",
       "exportNamed": "Export as JSON: {title}",

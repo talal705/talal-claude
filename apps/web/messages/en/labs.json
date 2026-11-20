@@ -81,7 +81,7 @@
       },
       "archived": {
         "heading": "This is an archived programming project",
-        "body": "Code Studio is no longer part of Your Tech Lab, so this project can't be opened here. It is kept on this device as you saved it. In My Projects you can download it as a JSON file or delete it."
+        "body": "Code Studio is no longer part of Virtual Training Environment (VTE), so this project can't be opened here. It is kept on this device as you saved it. In My Projects you can download it as a JSON file or delete it."
       },
       "unavailable": {
         "heading": "This browser won't open local storage",
@@ -170,7 +170,7 @@
       "importProblems": {
         "file_too_large": "This file is too large to be a build export.",
         "not_json": "This file is not valid JSON.",
-        "wrong_format": "This file is not a build exported from Your Tech Lab.",
+        "wrong_format": "This file is not a build exported from Virtual Training Environment (VTE).",
         "unsupported_version": "This export was made by a newer version and can't be read here.",
         "invalid_title": "The build name in this file is missing or too long.",
         "invalid_log": "The steps in this file are missing or damaged.",
@@ -1714,7 +1714,7 @@
     }
   },
   "learning": {
-    "name": "Your Tech Lab",
+    "name": "Virtual Training Environment (VTE)",
     "eyebrow": "Learn by doing",
     "tagline": "Build your PC. Write your code. Find your way.",
     "intro": "A place to try, learn, and make things work—with a little helper when you need one.",

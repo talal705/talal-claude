@@ -1,4 +1,4 @@
-# Talal Claude — Your Tech Lab
+# Virtual Training Environment (VTE) — بيئة التدريب الافتراضية
 
 An English/Arabic learning website by Talal: build a PC in an interactive 3D scene and explore programming with a small helper.
 
