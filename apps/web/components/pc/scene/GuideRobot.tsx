@@ -83,7 +83,10 @@ function segmentDistance(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): 
  * part (and outside the case unless the target is the case's own button), above the table, and off
  * the line from the eye to the target so it never covers what it points at.
  */
-export function hoverPoint(target: Vec3, eye: Vec3, obstacles: readonly Obstacle[], caseBox: Obstacle | null, k = 1): Vec3 {
+export function hoverPoint(target: Vec3, eye: Vec3, obstacles: readonly Obstacle[], caseBox: Obstacle | null, k = 1, standoff = false): Vec3 {
+  // A small feature the learner must click (a memory clip): stay farther off, so neither the body nor the
+  // pointing arm covers it on screen.
+  const far = standoff ? 2 : 1;
   const t = new THREE.Vector3(...target);
   const camera = new THREE.Vector3(...eye);
   const RADIUS = BASE_RADIUS * k;
@@ -98,7 +101,7 @@ export function hoverPoint(target: Vec3, eye: Vec3, obstacles: readonly Obstacle
     }
   } else {
     for (const up of [150, 200, 120, 260, 40, -40]) for (const across of [160, -160, 100, -100, 230, -230]) for (const toward of [80, 0, 160, 240]) {
-      candidates.push(t.clone().add(side.clone().multiplyScalar(across * k)).add(toEye.clone().multiplyScalar(toward * k)).setY(t.y + up * k));
+      candidates.push(t.clone().add(side.clone().multiplyScalar(across * far * k)).add(toEye.clone().multiplyScalar(toward * k)).setY(t.y + up * far * k));
     }
   }
   let best: THREE.Vector3 | null = null;
@@ -111,15 +114,19 @@ export function hoverPoint(target: Vec3, eye: Vec3, obstacles: readonly Obstacle
     // Outside the case, it never hovers over it either: seen from above, it would look as if it were inside.
     if (!inCase && caseBox && c.x > caseBox.min[0] - RADIUS * 0.6 && c.x < caseBox.max[0] + RADIUS * 0.6 && c.z > caseBox.min[2] - RADIUS * 0.6 && c.z < caseBox.max[2] + RADIUS * 0.6) continue;
     const sight = segmentDistance(c, camera, t);
-    if (sight.t < 0.98 && sight.distance < RADIUS * 1.5) continue;
+    if (sight.t < 0.98 && sight.distance < RADIUS * 1.5 + (standoff ? 160 * k : 0)) continue;
     // Close to the target, toward the viewer, and not far off the screen's line to it.
     const score = c.distanceTo(t) - 0.35 * c.clone().sub(t).dot(camera.clone().sub(t).normalize()) + 0.2 * Math.abs(c.y - t.y - 140 * k);
     if (score < bestScore) { bestScore = score; best = c; }
   }
   // Nothing clear: beside the target and above it, not toward the eye (that would cover the view).
-  const chosen = best ?? t.clone().add(side.multiplyScalar(160 * k)).setY(Math.max(t.y + 160 * k, RADIUS + TABLE_CLEAR * k));
+  const chosen = best ?? t.clone().add(side.multiplyScalar(160 * far * k)).setY(Math.max(t.y + 160 * k, RADIUS + TABLE_CLEAR * k));
   return [chosen.x, chosen.y, chosen.z];
 }
+
+/** Memory clips and slots: small features the learner works on directly, so the robot keeps farther off. */
+const standoffFor = (target: GuideTarget | undefined) =>
+  target?.kind === "solid" || (target?.kind === "mount" && target.placeId.startsWith("dimm-"));
 
 // ---------- The robot ----------
 
@@ -189,7 +196,7 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
     const target = points[0];
     if (!target) { goal.current = null; return; }
     near.current = nearScale(camera.position.distanceTo(new THREE.Vector3(...target)));
-    let at: Vec3 = hoverPoint(target, camera.position.toArray() as unknown as Vec3, obstacles, caseBox, near.current);
+    let at: Vec3 = hoverPoint(target, camera.position.toArray() as unknown as Vec3, obstacles, caseBox, near.current, standoffFor(focus?.targets[0]));
     // Celebrating: beside the case, up high, where the whole build stays in view.
     if (focus?.reason === "celebrate" && caseBox) at = [caseBox.max[0] + 120, caseBox.max[1] - 40, (caseBox.min[2] + caseBox.max[2]) / 2 + 140];
     goal.current = new THREE.Vector3(...at);
