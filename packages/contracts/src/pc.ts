@@ -276,6 +276,11 @@ export interface RetentionSpec {
   kind: "lga_load_plate" | "zif_lever" | "dimm_latch" | "pcie_latch" | "slot_covers" | "m2_qlatch";
   /** DIMM latches: which ends move. "unverified" when the board's manual does not show it. */
   latches?: "one_side" | "both" | "unverified";
+  /**
+   * DIMM latches with one moving clip: the end it is at. `top` is the end nearer the board's top edge
+   * (the CPU-power side), `bottom` the end toward the expansion slots. The other end is fixed.
+   */
+  latchEnd?: "top" | "bottom";
   /** Where the procedure is documented, and what is not. */
   note?: string;
 }

@@ -118,3 +118,22 @@ describe("memory of the wrong generation", () => {
     if (!r.ok) { expect(r.rejection.message.en).toMatch(/DDR4/); expect(r.rejection.message.en).toMatch(/DDR5/); }
   });
 });
+
+describe("the clips each board's documents show", () => {
+  const geo = (id: string) => pc.visual.partGeometry(pcCatalog.entries.find((e) => e.id === id)!, pcCatalog.version);
+  const z = (id: string, solid: string) => geo(id).solids.find((s) => s.id === solid)?.at[2];
+  it("one moving clip at the slot's top end (ASUS Q-DIMM: E21279, E20581, E21693 and the official photos); the bottom end is fixed", () => {
+    for (const board of ["asus-tuf-gaming-z790-plus-wifi", "asus-tuf-gaming-z790-plus-wifi-d4", "asus-prime-b760m-a-wifi"]) {
+      const slot = z(board, "dimm-a2")!;
+      expect(z(board, "dimm-a2-latch")!, board).toBeLessThan(slot);
+      expect(z(board, "dimm-a2-latch-near"), board).toBeUndefined();
+      const ret = pcCatalog.entries.find((e) => e.id === board)!.mountPoints.find((m) => m.id === "dimm-a2")!.retention!;
+      expect(ret).toMatchObject({ latches: "one_side", latchEnd: "top" });
+    }
+  });
+  it("a clip at each end on the H81M-K (manual E8601 p. 1-9)", () => {
+    const slot = z("asus-h81m-k", "dimm-a1")!;
+    expect(z("asus-h81m-k", "dimm-a1-latch")!).toBeGreaterThan(slot);
+    expect(z("asus-h81m-k", "dimm-a1-latch-near")!).toBeLessThan(slot);
+  });
+});

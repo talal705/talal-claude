@@ -98,9 +98,11 @@ function drawMechanisms(geometry: PartGeometry, part: InstalledPart, socketDrawn
     if (ret.kind === "dimm_latch" && open && !socketDrawnApart) {
       const latch = solids.find((s) => s.id === `${mount.id}-latch`);
       if (latch) {
-        // The latch tips outward, away from the slot.
-        latch.at = [latch.at[0], latch.at[1] + 1.5, latch.at[2] + 3];
-        latch.rotation = aboutX((35 * Math.PI) / 180);
+        // The latch tips outward, away from the middle of its slot (at whichever end it is).
+        const slot = solids.find((s) => s.id === mount.id);
+        const out = slot && latch.at[2] < slot.at[2] ? -1 : 1;
+        latch.at = [latch.at[0], latch.at[1] + 1.5, latch.at[2] + 3 * out];
+        latch.rotation = aboutX((out * 35 * Math.PI) / 180);
       }
     }
   }

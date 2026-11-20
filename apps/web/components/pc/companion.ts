@@ -3,9 +3,10 @@
 // robot's speech bubble. Nothing here is a model's answer; free questions go to the AI tutor only
 // when the server has one configured.
 import type { PCBuildState } from "@ytl/contracts";
+import { pcCatalog } from "./catalog";
 import {
-  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, isRamKey, RAM_SLOTS, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
-  simpleCablesFor, simpleCableOrder, simplePartInstalled, simplePartOrder, simplePrerequisites, simpleRuleBlock, REMOVABLE, simpleSlotFilled, simpleSlotPart, simpleTarget, slotOf,
+  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, isRamKey, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
+  simpleCablesFor, simpleCableOrder, simplePartInstalled, simplePartOrder, simplePrerequisites, simpleRuleBlock, REMOVABLE, simpleRamRecommended, simpleSlotFilled, simpleSlotPart, simpleTarget, slotOf,
   type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,
 } from "./simple-model";
 
@@ -102,6 +103,21 @@ function pointFor(next: NextAction): CompanionSay["point"] {
   return next.kind === "part" ? "scene" : next.kind === "cable" ? "cables" : next.kind === "swapCooler" ? "parts" : next.kind === "power" || next.kind === "turnOff" ? "power" : undefined;
 }
 
+/** A memory line with the manual's recommendation, or its no-recommendation form when the manual gives none. */
+const ramLine = (state: PCBuildState, kind: "help" | "explain"): CompanionLine => {
+  const rec = ramRecommendation(state);
+  return rec ? { key: `${kind}.ram`, values: { rec } } : { key: `${kind}.ramNoRec` };
+};
+
+/** The board manual's recommended slots for two modules (the build's kit), by their printed labels. */
+export function ramRecommendation(state: PCBuildState): string {
+  const host = state.parts.find((p) => p.instanceId === ALL_SIMPLE_PARTS.find((x) => isRamKey(x.key))?.host);
+  const entry = host ? pcCatalog.entries.find((e) => e.id === host.catalogId) : undefined;
+  const ids = simpleRamRecommended(state, 2);
+  // The silkscreen name (DIMM_A2), the same in either language.
+  return ids.map((id) => entry?.mountPoints.find((m) => m.id === id)?.label.en.match(/DIMM_[A-Z0-9]+/)?.[0] ?? id).join(" + ");
+}
+
 /** The place a selected part goes, for the bubble: a mount ID the page names (`places.*`). */
 export function placeOf(state: PCBuildState, key: SimplePartKey): string {
   return simpleTarget(state, key).mountPointId;
@@ -130,10 +146,10 @@ const cableTopic = (key: SimpleCableKey) =>
 /** The message topic of a part key: a second drive or an added fan speaks like the first. */
 const partTopic = (key: SimplePartKey) => (isRamKey(key) ? "ram" : /^storage\d+$/.test(key) ? "storage" : /^fan\d+$/.test(key) ? "fan" : key);
 function explainLines(state: PCBuildState, powered: boolean, selection: Selection): CompanionLine[] {
-  if (selection?.kind === "part") return [{ key: `explain.${partTopic(selection.key)}` }];
+  if (selection?.kind === "part") return [isRamKey(selection.key) ? ramLine(state, "explain") : { key: `explain.${partTopic(selection.key)}` }];
   if (selection?.kind === "cable") return [{ key: `explain.${cableTopic(selection.key)}` }];
   const next = nextAction(state, powered);
-  if (next.kind === "part") return [{ key: `explain.${partTopic(next.key)}` }];
+  if (next.kind === "part") return [isRamKey(next.key) ? ramLine(state, "explain") : { key: `explain.${partTopic(next.key)}` }];
   if (next.kind === "cable") return [{ key: `explain.${cableTopic(next.key)}` }];
   if (next.kind === "swapCooler") return [{ key: "explain.liquidRule" }];
   return [{ key: next.kind === "done" ? "explain.done" : "explain.power" }];
@@ -145,6 +161,8 @@ function helpLines(state: PCBuildState, powered: boolean, selection: Selection):
     if (simplePartInstalled(state, selection.key)) return { lines: [{ key: "already", values: { part: partName(selection.key) } }, nextLine(state, powered)], mood: "idle" };
     const blocked = simpleBlock(state, selection.key);
     if (blocked) return { lines: [blockLine(state, selection.key, blocked)], mood: "thinking" };
+    // A memory module: no glowing default slot; how to choose one, and what the manual recommends.
+    if (isRamKey(selection.key)) return { lines: [ramLine(state, "help")], mood: "point", point: "scene" };
     return { lines: [{ key: "help.part", values: { part: partName(selection.key), place: { place: placeOf(state, selection.key) } } }], mood: "point", point: "scene" };
   }
   if (selection?.kind === "cable") {
@@ -250,7 +268,8 @@ export function companionSay(event: CompanionEvent, state: PCBuildState, powered
         const blocked = simpleBlock(state, key);
         if (blocked) return { lines: [blockLine(state, key, blocked)], mood: "concerned" };
         const place = placeOf(state, key);
-        if (isRamKey(key)) return { lines: [{ key: place === RAM_SLOTS[0] ? "selected.ramFirst" : "selected.ramSecond" }], mood: "point", point: "scene" };
+        // A module is placed by hand over the slot of the learner's choice: no slot is named for it here.
+        if (isRamKey(key)) return { lines: [{ key: "hands.ramPick" }], mood: "point", point: "scene" };
         return { lines: [{ key: "selected.part", values: { part: partName(key), place: { place } } }], mood: "point", point: "scene" };
       }
       const key = event.selection.key;

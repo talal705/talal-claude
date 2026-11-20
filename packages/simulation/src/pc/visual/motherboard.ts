@@ -94,8 +94,10 @@ export function motherboardGeometry(entry: MotherboardEntry, catalogVersion: str
       b.box(`${m.id}-groove`, "chip", [x + 2.5, PCB + 8.85, z + 4], [2, 0.3, 134], "schematic", { finish: "black_plastic" });
       b.box(`${m.id}-key`, "chip", [x + 1, PCB + 8.6, z + 142 - 4.5 - notchX - 0.9], [5, 0.9, 1.8], "schematic", { finish: "white_plastic" });
     }
-    // The clip at the slot's far end; slots with a clip at each end have a second one at the near end.
-    b.box(`${m.id}-latch`, "plate", [x - 0.5, PCB + 9, z + 142 - 6], [8, 3, 6], "schematic", { finish: "grey_plastic" });
+    // The moving clip: at the slot's top end (z) when the board's documents put the one clip there, else at
+    // its bottom end (z + 142); slots with a clip at each end have a second one at the top end.
+    const top = m.kind === "dimm_slot" && m.retention?.latches === "one_side" && m.retention.latchEnd === "top";
+    b.box(`${m.id}-latch`, "plate", [x - 0.5, PCB + 9, top ? z : z + 142 - 6], [8, 3, 6], "schematic", { finish: "grey_plastic" });
     if (m.kind === "dimm_slot" && m.retention?.latches === "both") b.box(`${m.id}-latch-near`, "plate", [x - 0.5, PCB + 9, z], [8, 3, 6], "schematic", { finish: "grey_plastic" });
   });
 

@@ -196,7 +196,7 @@ export const sataDataCables = (quantity: number): CableSpec =>
     quantity,
   );
 
-export interface DimmClips { latches: "one_side" | "both" | "unverified"; note: string }
+export interface DimmClips { latches: "one_side" | "both" | "unverified"; note: string; latchEnd?: "top" | "bottom" }
 const UNVERIFIED_CLIPS: DimmClips = { latches: "unverified", note: "Clip arrangement not confirmed for this board; one moving clip is modelled at the slot's far end." };
 /**
  * Memory slots. The notch is off centre, so a module fits one way round (ASUS FAQ 1047257: open the clip,
@@ -211,7 +211,7 @@ export const dimmSlots = (generation: "ddr3" | "ddr4" | "ddr5", slots: readonly 
     generation,
     moduleType: "udimm" as const,
     label: L(`Memory slot DIMM_${s.toUpperCase()} (${generation.toUpperCase()})`, `فتحة الرام DIMM_${s.toUpperCase()} (${generation.toUpperCase()})`),
-    retention: { id: `dimm-${s}-latch`, kind: "dimm_latch" as const, latches: clips.latches, note: clips.note },
+    retention: { id: `dimm-${s}-latch`, kind: "dimm_latch" as const, latches: clips.latches, note: clips.note, ...(clips.latchEnd ? { latchEnd: clips.latchEnd } : {}) },
     keying: { rotationDeg: 0, toleranceMm: 1.5, mark: "notch" as const },
   }));
 

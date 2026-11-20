@@ -27,8 +27,9 @@ describe("the guide robot's focus", () => {
     expect(guideFocus(createSimpleBuild(), { kind: "part", key: "cpu" }, false, false)).toEqual({
       targets: [{ kind: "mount", hostInstanceId: "motherboard-2", placeId: "cpu-socket" }], reason: "place", subject: { part: "cpu" },
     });
-    // The second RAM stick goes to B2 once A2 is taken.
-    expect(guideFocus(built(["ram"]), { kind: "part", key: "ram2" }, false, false)!.targets).toEqual([{ kind: "mount", hostInstanceId: "motherboard-2", placeId: "dimm-b2" }]);
+    // A memory module has no default slot: until it is in one, the robot looks at the module (the page
+    // points at the slot it is actually held over).
+    expect(guideFocus(built(["ram"]), { kind: "part", key: "ram2" }, false, false)!.targets).toEqual([{ kind: "part", instanceId: "ram-11" }]);
     // The liquid cooler: its block place and its radiator place.
     expect(guideFocus(built(["cpu2", "ram", "ram2", "storage", "motherboard"]), { kind: "part", key: "aio" }, false, false)!.targets).toEqual([
       { kind: "mount", hostInstanceId: "motherboard-2", placeId: "cooler-mount" },

@@ -94,6 +94,8 @@ export const motherboards: MotherboardEntry[] = [
         "TUF GAMING Z790-PLUS WIFI — CPU support list (JSON endpoint called by the support page; rows for i5-14600K and i9-14900K)",
         "https://www.asus.com/support/api/product.asmx/GetPDQVLCPU?website=global&model=tuf-gaming-z790-plus-wifi&pdhashedid=veuhgnndynlvz7er&pdid=21165&PageSize=20&PageIndex=1&keyword=14600",
       ),
+      source("ASUS", "TUF GAMING Z790-PLUS WIFI User's Manual E21279 — p. viii (Q-DIMM), p. 1-5 (DIMM slots, recommended memory configurations), p. 2-6 (DIMM installation and removal)", "https://dlcdnets.asus.com/pub/ASUS/mb/LGA1700/TUF_GAMING_Z790-PLUS_WIFI/E21279_TUF_GAMING_Z790-PLUS_WIFI_UM_WEB.pdf", "2026-11-20"),
+      source("ASUS", "TUF GAMING Z790-PLUS WIFI — official top-view product photo (memory slot clips at the top end)", "https://dlcdnwebimgs.asus.com/gain/391f8852-89ee-4429-bf08-48b3be125099", "2026-11-20"),
       source(
         "ASUS",
         "TUF GAMING Z790-PLUS WIFI — CPU support list (JSON endpoint called by the support page; row for i7-14700K, validated since BIOS 1205)",
@@ -136,7 +138,7 @@ export const motherboards: MotherboardEntry[] = [
     formFactor: "ATX",
     mountPoints: [
       ...socketMounts("lga1700", "LGA1700"),
-      ...dimmSlots("ddr5", undefined, { latches: "one_side", note: "Q-DIMM is in the board's ASUS Q-Design feature list (Newegg N82E16813119618 spec list): a clip at one end only. Which end moves is not confirmed from the manual; it is drawn at the far end." }),
+      ...dimmSlots("ddr5", undefined, { latches: "one_side", latchEnd: "top", note: "ASUS manual E21279 (English, First Edition Nov 2022): Q-DIMM in the ASUS Q-Design list (p. viii); p. 2-6 '2.1.3 DIMM installation' shows one moving clip, the other end fixed: open the clip, match the notch to the key, press the module down until the clip closes; to remove, press the clip open (A) and lift the module (B). ASUS's official top-view product photo shows the clip at each slot's top end and a fixed closed end toward the expansion slots." }),
       gpuSlot(5),
       {
         id: "m2-1",
@@ -270,6 +272,8 @@ export const motherboards: MotherboardEntry[] = [
         "https://www.asus.com/motherboards-components/motherboards/tuf-gaming/tuf-gaming-z790-plus-wifi-d4/techspec/",
         "2026-10-27",
       ),
+      source("ASUS", "TUF GAMING Z790-PLUS WIFI D4 User's Manual E20581 — p. 1-5 (DIMM slots, recommended memory configurations), p. 2-6 (DIMM installation and removal)", "https://dlcdnets.asus.com/pub/ASUS/mb/LGA1700/TUF%20GAMING%20Z790-PLUS%20WIFI%20D4/E20581_TUF_GAMING_Z790-PLUS_WIFI_D4_UM_WEB_082622.pdf", "2026-11-20"),
+      source("ASUS", "TUF GAMING Z790-PLUS WIFI D4 — official top-view product photo (memory slot clips at the top end)", "https://dlcdnwebimgs.asus.com/gain/88be6c4e-815d-4341-9c91-731d9dfabdb5", "2026-11-20"),
       source(
         "ASUS",
         "TUF GAMING Z790-PLUS WIFI D4 — CPU support list (rows I5-14600K and I7-14700K, validated since BIOS 1205)",
@@ -290,8 +294,6 @@ export const motherboards: MotherboardEntry[] = [
       "ports.eps4-1 requirement (the manual was not read; modelled as optional)",
       "ports.usb2-*, ports.panel-* (present per the spec page; pin layout not modelled)",
       "spec.memory.maxPerModuleGb (the spec page lists no module sizes)",
-      "spec.memory.recommendedPopulation (the manual was not read; no layout advice is given)",
-      "zones.memory-slots and mountPoints.dimm-* (slot names DIMM_A1 to DIMM_B2 and the two channels follow the DDR5 version; no D4 document was read for them)",
       "spec.biosVersions (the download page offers 'Show all'; the 25 versions it printed are used)",
       "rgb (no on-board lighting is listed on the spec page; modelled as none)",
     ],
@@ -305,7 +307,7 @@ export const motherboards: MotherboardEntry[] = [
     formFactor: "ATX",
     mountPoints: [
       ...socketMounts("lga1700", "LGA1700"),
-      ...dimmSlots("ddr4"),
+      ...dimmSlots("ddr4", undefined, { latches: "one_side", latchEnd: "top", note: "ASUS manual E20581 (English, First Edition Aug 2022): Q-DIMM in the ASUS Q-Design list; p. 1-5 DIMM_A1, DIMM_A2, DIMM_B1, DIMM_B2 and the recommended configurations; p. 2-6 '2.1.3 DIMM installation' shows one moving clip, the other end fixed (open the clip, match the notch, press down until it closes; remove: press the clip, lift). ASUS's official top-view photo of this board shows the clip at the top end of each slot." }),
       gpuSlot(5),
       {
         id: "m2-1",
@@ -361,7 +363,11 @@ export const motherboards: MotherboardEntry[] = [
         slots: 4,
         maxTotalGb: 128,
         maxPerModuleGb: null,
-        recommendedPopulation: [],
+        recommendedPopulation: [
+          { modules: 1, slotIds: ["dimm-a2"] },
+          { modules: 2, slotIds: ["dimm-a2", "dimm-b2"] },
+          { modules: 4, slotIds: ["dimm-a1", "dimm-a2", "dimm-b1", "dimm-b2"] },
+        ],
       },
       cpuSupport: [
         { cpuId: "intel-core-i5-14600k", sinceBios: "1205" },

@@ -75,9 +75,11 @@ export const legacyBoard: MotherboardEntry = {
   sources: [
     source("ASUS", "H81M-K — Tech Specs", "https://www.asus.com/Motherboards-Components/Motherboards/Business/H81MK/techspec", ON),
     source("ASUS", "H81M-K User's Manual E8601 (ASUS PDF, copy hosted by Newegg) — layout, connectors, memory configurations", "https://images10.newegg.com/UploadFilesForNewegg/itemintelligence/ASUS/E8601_H81M_K1401382880151.pdf", ON),
+    source("ASUS", "H81M-K User's Manual E8601 (ASUS download) — pp. 1-7–1-9 (system memory, installing and removing a DIMM)", "https://dlcdnets.asus.com/pub/ASUS/mb/LGA1150/H81M-K/E8601_H81M-K.pdf", "2026-11-20"),
   ],
   verification: "partially_verified",
   unverifiedFields: [
+    "spec.memory.recommendedPopulation (manual E8601 pp. 1-7–1-8 gives none for one or two modules; none is modelled)",
     "spec.biosVersions, spec.cpuSupport.sinceBios (not read)",
     "mountPoints.pcie-x16-1.pcieGeneration (the manual does not state it; modelled as 3.0)",
     "ports display outputs (the board has DVI-D and D-Sub, which this lab does not model)",
@@ -86,7 +88,7 @@ export const legacyBoard: MotherboardEntry = {
   teachingNotes: [FASTENER_NOTE, BIOS_NOTE, "The manual lists 1, 2, 4 and 8 GB modules, so maxPerModuleGb is 8.", "The two SATA 3 Gb/s ports are modelled as ordinary SATA ports."],
   dimensions: { lengthMm: 226, widthMm: 175, heightMm: null },
   formFactor: "micro-ATX",
-  mountPoints: [...socket("lga1150", "LGA1150"), ...dimmSlots("ddr3", ["a1", "b1"], { latches: "both", note: "ASUS H81M series manual (DIMM installation): the module is released by pressing the retaining clips (plural), so both ends move. Read from the H81M series manual pages for H81M-A/H81M-PLUS, not the H81M-K's own copy." }), x16(3, "PCIe")],
+  mountPoints: [...socket("lga1150", "LGA1150"), ...dimmSlots("ddr3", ["a1", "b1"], { latches: "both", note: "ASUS H81M-K manual E8601 (First Edition Aug 2013) pp. 1-8–1-9: 'Press the retaining clips outward to unlock a DIMM socket', align the notch with the slot key, insert 'until the retaining clips snap back in place'; to remove, 'Simultaneously press the retaining clips outward'. The p. 1-9 drawing shows an unlocked retaining clip at each end." }), x16(3, "PCIe")],
   mounting: [{ role: "main", kind: "motherboard_tray", label: L("Motherboard tray of the case", "صينية اللوحة الأم في الهيكل") }],
   zones: boardZones("Two DDR3 slots, one per channel (DIMM_A1, DIMM_B1). DDR4 and DDR5 modules have the notch elsewhere and do not go in.", "فتحتين DDR3، وحدة لكل قناة (DIMM_A1 و DIMM_B1). رام DDR4 و DDR5 شقّها في مكان ثاني وما تدخل."),
   ports: boardPorts({ eps8: 0, eps4: 1, epsRecommended: 0, chassisFans: 1, argb: 0, rgb: 0, sata: 4, usb2: 2, usbC: false, hdmi: 0, displayPort: 0, cpuOpt: false, pumpHeader: false, usb3: false }),
@@ -95,7 +97,7 @@ export const legacyBoard: MotherboardEntry = {
   asset: NO_ASSET,
   spec: {
     vendorPlatform: "intel", socket: "lga1150", chipset: "Intel H81", formFactor: "micro_atx",
-    memory: { generation: "ddr3", moduleType: "udimm", slots: 2, maxTotalGb: 16, maxPerModuleGb: 8, recommendedPopulation: [{ modules: 1, slotIds: ["dimm-a1"] }, { modules: 2, slotIds: ["dimm-a1", "dimm-b1"] }] },
+    memory: { generation: "ddr3", moduleType: "udimm", slots: 2, maxTotalGb: 16, maxPerModuleGb: 8, recommendedPopulation: [] },
     cpuSupport: [{ cpuId: "intel-core-i5-4590", sinceBios: UNRECORDED_BIOS }],
     biosVersions: [{ version: UNRECORDED_BIOS, releasedOn: null }],
     factoryBiosVersion: UNRECORDED_BIOS,
@@ -145,12 +147,15 @@ export const entryBoard: MotherboardEntry = {
     "A micro-ATX DDR5 board for the LGA1700 socket with two M.2 slots and four memory slots. It has no AIO_PUMP header: a liquid cooler's pump goes to CPU_OPT. Smaller than ATX, so it fits small cases; size says nothing about speed.",
     "لوحة micro-ATX لرام DDR5 ومقبس LGA1700، فيها فتحتين M.2 وأربع فتحات رام. ما فيها مدخل AIO_PUMP: مضخة التبريد المائي تروح لـ CPU_OPT. أصغر من ATX فتركب في الكيسات الصغيرة؛ والحجم ما له علاقة بالسرعة.",
   ),
-  sources: [source("ASUS", "PRIME B760M-A WIFI — Tech Specs", "https://www.asus.com/motherboards-components/motherboards/prime/prime-b760m-a-wifi/techspec/", ON)],
+  sources: [
+    source("ASUS", "PRIME B760M-A WIFI — Tech Specs", "https://www.asus.com/motherboards-components/motherboards/prime/prime-b760m-a-wifi/techspec/", ON),
+    source("ASUS", "PRIME B760M-A WIFI User's Manual E21693 — p. viii (Q-DIMM), p. 1-12 (system memory, recommended configurations), p. 1-13 (installing and removing a DIMM)", "https://dlcdnets.asus.com/pub/ASUS/mb/LGA1700/PRIME_B760M-A_WIFI/E21693_PRIME_B760M-A_WIFI_UM_WEB.pdf", "2026-11-20"),
+    source("ASUS", "PRIME B760M-A WIFI — official top-view product photo (memory slot clips at the top end)", "https://dlcdnwebimgs.asus.com/gain/63f59141-7212-4e98-ade8-f0dd1cd4a349", "2026-11-20"),
+  ],
   verification: "partially_verified",
   unverifiedFields: [
     "spec.biosVersions, spec.cpuSupport.sinceBios (not read)",
     "spec.memory.maxPerModuleGb (not stated on the spec page)",
-    "spec.memory.recommendedPopulation (manual not read; A2/B2 assumed as on other ASUS boards)",
     "ports: the spec page lists 2 x HDMI and 1 x DisplayPort on the back; one HDMI and the DisplayPort are modelled",
     "ports: the spec page lists 2 x USB 3.2 Gen 1 headers; one is modelled",
   ],
@@ -159,7 +164,7 @@ export const entryBoard: MotherboardEntry = {
   formFactor: "micro-ATX",
   mountPoints: [
     ...socket("lga1700", "LGA1700"),
-    ...dimmSlots("ddr5", undefined, { latches: "one_side", note: "Q-DIMM is listed for the PRIME B760M-A family (ASUS tech specs of B760M-A-CSM and B760M-A D4); not confirmed on the B760M-A WIFI's own page. Drawn at the far end." }),
+    ...dimmSlots("ddr5", undefined, { latches: "one_side", latchEnd: "top", note: "ASUS manual E21693 (English, First Edition Feb 2023): Q-DIMM in the ASUS Q-Design list (p. viii); p. 1-12 slots DIMM_A1–DIMM_B2 and the recommended configurations; p. 1-13 shows one moving clip, the other end fixed (open the clip, match the notch, press down until it closes; remove: press the clip, lift). ASUS's official top-view photo of this board shows the clip at the top end of each slot." }),
     x16(4, "PCIe 4.0"),
     { id: "m2-1", kind: "m2_slot", lengths: ["m2_2242", "m2_2260", "m2_2280"], interfaces: ["nvme"], pcieGeneration: 4, label: L("M.2_1 slot (PCIe 4.0 x4, CPU)", "فتحة M.2_1 (PCIe 4.0 x4، من المعالج)"), fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-1", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way.") },
     { id: "m2-2", kind: "m2_slot", lengths: ["m2_2242", "m2_2260", "m2_2280"], interfaces: ["nvme"], pcieGeneration: 4, label: L("M.2_2 slot (PCIe 4.0 x4, chipset)", "فتحة M.2_2 (PCIe 4.0 x4، من الشيبست)"), fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-2", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way.") },

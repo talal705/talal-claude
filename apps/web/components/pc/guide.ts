@@ -9,7 +9,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { nextAction, type Selection } from "./companion";
 import {
-  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
+  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, isRamKey, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
   simplePartInstalled, simplePrerequisites, simpleRadiatorTarget, simpleSlotFilled, simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf,
   type SimpleCableKey, type SimplePartKey,
 } from "./simple-model";
@@ -43,6 +43,9 @@ const portTarget = (key: SimpleCableKey): GuideTarget => ({ kind: "port", hostIn
 
 /** The places a part goes: its own, and a liquid cooler's radiator place in the case. */
 function placesOf(state: PCBuildState, key: SimplePartKey): GuideTarget[] {
+  // A memory module goes wherever the learner brings it: until it is in a slot, the place to look at is
+  // the module itself (the page points at the slot it is held over). No default slot is implied.
+  if (isRamKey(key) && !state.parts.find((p) => p.instanceId === partId(key))?.attachments.length) return [{ kind: "part", instanceId: partId(key) }];
   const target = simpleTarget(state, key);
   const radiator = simpleRadiatorTarget(key);
   return [

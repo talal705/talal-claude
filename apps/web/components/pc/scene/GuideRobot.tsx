@@ -83,10 +83,7 @@ function segmentDistance(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): 
  * part (and outside the case unless the target is the case's own button), above the table, and off
  * the line from the eye to the target so it never covers what it points at.
  */
-export function hoverPoint(target: Vec3, eye: Vec3, obstacles: readonly Obstacle[], caseBox: Obstacle | null, k = 1, standoff = false): Vec3 {
-  // A small feature the learner must click (a memory clip): stay farther off, so neither the body nor the
-  // pointing arm covers it on screen.
-  const far = standoff ? 2 : 1;
+export function hoverPoint(target: Vec3, eye: Vec3, obstacles: readonly Obstacle[], caseBox: Obstacle | null, k = 1): Vec3 {
   const t = new THREE.Vector3(...target);
   const camera = new THREE.Vector3(...eye);
   const RADIUS = BASE_RADIUS * k;
@@ -101,7 +98,7 @@ export function hoverPoint(target: Vec3, eye: Vec3, obstacles: readonly Obstacle
     }
   } else {
     for (const up of [150, 200, 120, 260, 40, -40]) for (const across of [160, -160, 100, -100, 230, -230]) for (const toward of [80, 0, 160, 240]) {
-      candidates.push(t.clone().add(side.clone().multiplyScalar(across * far * k)).add(toEye.clone().multiplyScalar(toward * k)).setY(t.y + up * far * k));
+      candidates.push(t.clone().add(side.clone().multiplyScalar(across * k)).add(toEye.clone().multiplyScalar(toward * k)).setY(t.y + up * k));
     }
   }
   let best: THREE.Vector3 | null = null;
@@ -114,19 +111,87 @@ export function hoverPoint(target: Vec3, eye: Vec3, obstacles: readonly Obstacle
     // Outside the case, it never hovers over it either: seen from above, it would look as if it were inside.
     if (!inCase && caseBox && c.x > caseBox.min[0] - RADIUS * 0.6 && c.x < caseBox.max[0] + RADIUS * 0.6 && c.z > caseBox.min[2] - RADIUS * 0.6 && c.z < caseBox.max[2] + RADIUS * 0.6) continue;
     const sight = segmentDistance(c, camera, t);
-    if (sight.t < 0.98 && sight.distance < RADIUS * 1.5 + (standoff ? 160 * k : 0)) continue;
+    if (sight.t < 0.98 && sight.distance < RADIUS * 1.5) continue;
     // Close to the target, toward the viewer, and not far off the screen's line to it.
     const score = c.distanceTo(t) - 0.35 * c.clone().sub(t).dot(camera.clone().sub(t).normalize()) + 0.2 * Math.abs(c.y - t.y - 140 * k);
     if (score < bestScore) { bestScore = score; best = c; }
   }
   // Nothing clear: beside the target and above it, not toward the eye (that would cover the view).
-  const chosen = best ?? t.clone().add(side.multiplyScalar(160 * far * k)).setY(Math.max(t.y + 160 * k, RADIUS + TABLE_CLEAR * k));
+  const chosen = best ?? t.clone().add(side.multiplyScalar(160 * k)).setY(Math.max(t.y + 160 * k, RADIUS + TABLE_CLEAR * k));
   return [chosen.x, chosen.y, chosen.z];
 }
 
-/** Memory clips and slots: small features the learner works on directly, so the robot keeps farther off. */
-const standoffFor = (target: GuideTarget | undefined) =>
-  target?.kind === "solid" || (target?.kind === "mount" && target.placeId.startsWith("dimm-"));
+/** Memory clips and slots, and a module in hand: small features worked on close up, placed on screen. */
+const standoffFor = (target: GuideTarget | undefined, placed: ReadonlyMap<string, PlacedPart>) =>
+  target?.kind === "solid" || (target?.kind === "mount" && target.placeId.startsWith("dimm-")) || (target?.kind === "part" && target.instanceId.startsWith("ram-") && placed.get(target.instanceId)?.onBench === false);
+
+/** Where a point is on screen, in normalised device coordinates (x right, y up, both −1…1 when in view). */
+const toScreen = (p: THREE.Vector3, camera: THREE.Camera) => p.clone().project(camera);
+/** A point just inside the view's edge in the direction of an out-of-view point (behind the eye: mirrored). */
+const edgeToward = (n: THREE.Vector3) => {
+  const d = new THREE.Vector2(n.z > 1 ? -n.x : n.x, n.z > 1 ? -n.y : n.y);
+  if (d.lengthSq() < 1e-6) d.set(1, 0);
+  const k = 0.9 / Math.max(Math.abs(d.x), Math.abs(d.y));
+  return new THREE.Vector3(d.x * k, d.y * k, 0.5);
+};
+/** True when a point is in front of the camera and inside the view (with a margin). */
+export const inView = (n: THREE.Vector3, margin = 0) => n.z > -1 && n.z < 1 && Math.abs(n.x) <= 1 - margin && Math.abs(n.y) <= 1 - margin;
+
+/**
+ * For close work on small features (memory clips, a slot's key, a module's notch): the robot is placed by
+ * where it will appear on screen, not by a fixed distance. It stays inside the view (with a margin), a
+ * clear distance from its target and from every other feature to work on, in front of nothing it should
+ * not cover, and hovers just above the board under that spot. The camera is never moved for it; when no
+ * such spot exists, `null` (the caller falls back to the usual placement).
+ */
+export function screenHoverPoint(target: Vec3, camera: THREE.Camera, avoid: readonly Vec3[], obstacles: readonly Obstacle[], k: number): Vec3 | null {
+  const t = new THREE.Vector3(...target);
+  const aspect = (camera as THREE.PerspectiveCamera).aspect || 1;
+  const raw = toScreen(t, camera);
+  // A target out of view: stay in view, at the edge on its side (it will not point until it can be seen).
+  const tN = inView(raw) ? raw : edgeToward(raw);
+  const RADIUS = BASE_RADIUS * k;
+  const avoidN = avoid.map((a) => toScreen(new THREE.Vector3(...a), camera));
+  const screenGap = (a: THREE.Vector3, b: THREE.Vector3) => Math.hypot((a.x - b.x) * aspect, a.y - b.y);
+  const ray = new THREE.Raycaster();
+  // Strict first (well inside the view, well clear of every feature); a little less strict when nothing fits,
+  // as in a small or narrow view.
+  for (const [gap, margin] of [[0.12, 0.18], [0.07, 0.12], [0.03, 0.06]] as const) {
+    const found = pick(gap, margin);
+    if (found) return found;
+  }
+  return null;
+  function pick(gap: number, margin: number): Vec3 | null {
+  let best: THREE.Vector3 | null = null;
+  let bestScore = Infinity;
+  for (const ring of [0.32, 0.42, 0.26, 0.55, 0.2, 0.7]) for (let i = 0; i < 16; i++) {
+    const angle = (i / 16) * Math.PI * 2;
+    const n = new THREE.Vector2(tN.x + (Math.cos(angle) * ring) / aspect, tN.y + Math.sin(angle) * ring);
+    if (Math.abs(n.x) > 1 - margin || Math.abs(n.y) > 1 - margin) continue;
+    ray.setFromCamera(n, camera);
+    // Hover a little above the target's height, under that point of the screen.
+    for (const lift of [45, 80, 130]) {
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(t.y + lift * k));
+      const c = ray.ray.intersectPlane(plane, new THREE.Vector3());
+      if (!c) continue;
+      if (obstacles.some((box) => inside(c, box, RADIUS))) continue;
+      const cN = toScreen(c, camera);
+      // Its own size on screen there (NDC, vertical), so the clearances below are measured from its edge.
+      const fov = ((camera as THREE.PerspectiveCamera).fov ?? 40) * (Math.PI / 180);
+      const r = RADIUS / Math.max(1, c.distanceTo(camera.position)) / Math.tan(fov / 2);
+      if (!inView(cN, margin + r)) continue;
+      // Never over its target or another feature the learner works on (its body or its pointing arm).
+      if (screenGap(cN, tN) < 1.3 * r + gap) continue;
+      if (avoidN.some((a) => inView(a) && screenGap(a, cN) < 1.3 * r + gap)) continue;
+      // Prefer beside the target (left or right) to above or below it, and as low as is clear.
+      const score = Math.abs(screenGap(cN, tN) - 0.34) + 0.15 * Math.abs(Math.sin(angle)) + lift / 1000;
+      if (score < bestScore) { bestScore = score; best = c; }
+      break;
+    }
+  }
+  return best ? [best.x, best.y, best.z] : null;
+  }
+}
 
 // ---------- The robot ----------
 
@@ -192,11 +257,53 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
   const shownScale = useRef(1);
   const placedFrom = useRef(new THREE.Vector3());
   const still = useRef(0);
+  // The features worked on close up (memory clips, slot keys, a module's notch): never covered by the robot.
+  const avoid = useMemo(() => {
+    const out: Vec3[] = [];
+    for (const [id, item] of placed) {
+      const own = geometry.get(state.parts.find((p) => p.instanceId === id)?.catalogId ?? "");
+      for (const solid of own?.solids ?? []) {
+        if (/^dimm-[a-z0-9]+-(latch|latch-near|key)$/.test(solid.id) || solid.id === "notch") out.push(compose(item.frame, { at: solid.at, quat: [0, 0, 0, 1] }).at);
+      }
+    }
+    return out;
+  }, [placed, geometry, state.parts]);
+  const scene = useThree((three) => three.scene);
+  const size = useThree((three) => three.size);
+  const occluded = useRef(false);
+  const blocker = useRef("");
+  const pointing = useRef(true);
+  /** True when something solid stands between the eye and the target (see-through and invisible parts aside). */
+  const sightAge = useRef(Infinity);
+  const blocked = (target: Vec3, own?: string, ownRadius = 0) => {
+    const t = new THREE.Vector3(...target);
+    const dir = t.clone().sub(camera.position);
+    const dist = dir.length();
+    const ray = new THREE.Raycaster(camera.position.clone(), dir.normalize(), 0, dist);
+    for (const hit of ray.intersectObjects(scene.children, true)) {
+      const o = hit.object as THREE.Mesh;
+      if (!o.visible || o.userData.heldHandle || o.userData.mechanismHandle) continue;
+      // A part pointed at as a whole is not hidden by its own surface.
+      if (own && o.userData.part === own) continue;
+      const m = (Array.isArray(o.material) ? o.material[0] : o.material) as THREE.Material | undefined;
+      // Pick boxes (drawn with colour off), see-through and invisible materials hide nothing.
+      if (!m || (m.transparent && m.opacity < 0.6) || !m.visible || m.colorWrite === false) continue;
+      let shown = true;
+      for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) { shown = false; break; }
+      if (!shown) continue;
+      if (hit.distance < dist - Math.max(6, ownRadius)) { blocker.current = `${o.type}:${o.name || ""}:${JSON.stringify(o.userData)}:${m.type}:${Math.round(dist - hit.distance)}`; return true; }
+      return false;
+    }
+    return false;
+  };
   const choose = () => {
     const target = points[0];
     if (!target) { goal.current = null; return; }
     near.current = nearScale(camera.position.distanceTo(new THREE.Vector3(...target)));
-    let at: Vec3 = hoverPoint(target, camera.position.toArray() as unknown as Vec3, obstacles, caseBox, near.current, standoffFor(focus?.targets[0]));
+    const close = standoffFor(focus?.targets[0], placed) ? screenHoverPoint(target, camera, avoid, obstacles, near.current) : null;
+    let at: Vec3 = close ?? hoverPoint(target, camera.position.toArray() as unknown as Vec3, obstacles, caseBox, near.current);
+    // The line of sight is checked again on the next frame (not here: one scene raycast at a time).
+    sightAge.current = Infinity;
     // Celebrating: beside the case, up high, where the whole build stays in view.
     if (focus?.reason === "celebrate" && caseBox) at = [caseBox.max[0] + 120, caseBox.max[1] - 40, (caseBox.min[2] + caseBox.max[2]) / 2 + 140];
     goal.current = new THREE.Vector3(...at);
@@ -204,7 +311,13 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
   };
   /** Set when the way to the new spot would pass through the case: it blinks out and in there instead. */
   const hop = useRef(false);
+  // The same target again (a re-render with an equal focus): nothing to do. Re-choosing here would restart a
+  // hop (fade out and in) on every render and could keep the robot from ever showing.
+  const lastChosen = useRef("");
   useEffect(() => {
+    const key = `${JSON.stringify(points.map((p) => p.map((v) => Math.round(v * 2) / 2)))}|${focus?.reason}|${animate}|${size.width}x${size.height}`;
+    if (key === lastChosen.current) return;
+    lastChosen.current = key;
     const from = root.current?.position.clone();
     choose();
     if (from && goal.current && caseBox && root.current?.visible && segmentCrosses(from, goal.current, caseBox)) hop.current = true;
@@ -212,10 +325,25 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
     if (!animate && goal.current && root.current) root.current.position.copy(goal.current);
     invalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [points, focus?.reason, animate]);
+  }, [points, focus?.reason, animate, size.width, size.height]);
 
   const visible = useRef(0);
   const shown = focus !== null && points.length > 0;
+  // For browser checks: where the robot and its target are on screen, its size there, and whether it points.
+  useEffect(() => {
+    const w = window as unknown as { __ytlRobot?: () => unknown };
+    w.__ytlRobot = () => {
+      const node = root.current;
+      if (!node || !node.visible) return { shown: false };
+      const px = (p: THREE.Vector3) => { const n = toScreen(p, camera); return [Math.round(((n.x + 1) / 2) * size.width), Math.round(((1 - n.y) / 2) * size.height)]; };
+      const at = node.getWorldPosition(new THREE.Vector3());
+      // Its radius measured across the screen (the camera's own up), whatever the view's angle.
+      const edge = at.clone().add(new THREE.Vector3(0, BASE_RADIUS * node.scale.y, 0).applyQuaternion(camera.quaternion));
+      const centre = px(at);
+      return { shown: true, centre, radiusPx: Math.abs(px(edge)[1] - centre[1]), target: points[0] ? px(new THREE.Vector3(...points[0])) : null, pointing: pointing.current, occluded: occluded.current, blocker: blocker.current, avoid: avoid.map((a) => px(new THREE.Vector3(...a))), size: [size.width, size.height] };
+    };
+    return () => { delete w.__ytlRobot; };
+  }, [camera, size, points, avoid]);
   useFrame((frame, delta) => {
     const node = root.current;
     if (!node) return;
@@ -252,6 +380,18 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
     }
     const target = points[0] ? new THREE.Vector3(...points[0]) : null;
     const celebrate = focus?.reason === "celebrate";
+    // Is the target hidden behind something? Checked at most twice a second (a raycast through the scene).
+    sightAge.current += dt;
+    if (target && sightAge.current > 0.5) {
+      sightAge.current = 0;
+      const first = focus?.targets[0];
+      const own = first?.kind === "part" ? placed.get(first.instanceId) : undefined;
+      // A part pointed at as a whole: its own body never hides it, and its middle is inside it.
+      occluded.current = blocked(points[0]!, first?.kind === "part" ? first.instanceId : undefined, own ? Math.hypot(...own.size) / 2 : 0);
+    }
+    // Points only at what the learner can see now: in view and not hidden (checked when it last chose a spot).
+    const canPoint = Boolean(target && inView(toScreen(target, camera)) && !occluded.current);
+    pointing.current = canPoint;
     // Face the viewer, turned slightly toward the target, so its face stays readable while it points.
     const toCamera = Math.atan2(camera.position.x - node.position.x, camera.position.z - node.position.z);
     const toTarget = target ? Math.atan2(target.x - node.position.x, target.z - node.position.z) : toCamera;
@@ -272,7 +412,12 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
     }
     if (pointer.current) {
       if (celebrate) pointer.current.rotation.set(0, 0, -Math.sign(pointer.current.position.x || -1) * (Math.PI * 0.85 + (animate ? Math.sin(time * 8) * 0.25 : 0)));
-      else if (target) {
+      else if (target && !canPoint) {
+        // The target is out of view or hidden behind something: no pointing at a spot that cannot be seen.
+        const rest = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -(Math.sign(pointer.current.position.x) || 1) * 0.18));
+        if (animate) pointer.current.quaternion.slerp(rest, 1 - Math.exp(-10 * dt));
+        else pointer.current.quaternion.copy(rest);
+      } else if (target) {
         const local = node.worldToLocal(target.clone()).sub(pointer.current.position).normalize();
         const pointing = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), local);
         if (animate) pointer.current.quaternion.slerp(pointing, 1 - Math.exp(-10 * dt));
@@ -286,7 +431,8 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
     if (eyes.current) eyes.current.scale.y = animate && time % 4.2 > 4.05 ? 0.15 : 1;
     if (flame.current) flame.current.scale.set(7, 11 + (animate ? Math.sin(time * 10) * 0.7 : 0), 7);
     // The dotted line from the fingertip to the target, when the target is not already glowing.
-    if (line.current && pointer.current && target) {
+    if (line.current) line.current.visible = canPoint;
+    if (line.current && pointer.current && target && canPoint) {
       const tip = pointer.current.localToWorld(new THREE.Vector3(0, -36, 0));
       const dots = line.current.children;
       dots.forEach((dot, i) => {

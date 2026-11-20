@@ -60,13 +60,16 @@ describe("the build companion", () => {
     expect(done.lines.map((l) => l.key)).toEqual(["complete.title", "complete.summary"]);
   });
 
-  it("says the second stick goes in B2 once A2 is taken, whichever stick came first", () => {
+  it("names no default slot for a module in hand, and counts the sticks that are in", () => {
     let state = createSimpleBuild();
     const first = installSimplePart(state, "ram2");
     if (!first.ok) throw new Error(first.reason);
     state = first.state;
     const say = companionSay({ type: "select", selection: { kind: "part", key: "ram" } }, state, false, { kind: "part", key: "ram" });
-    expect(say.lines[0].key).toBe("selected.ramSecond");
+    // The learner chooses the slot by where they hold the module: the line says how, not "A2"/"B2".
+    expect(say.lines[0].key).toBe("hands.ramPick");
+    const help = companionSay({ type: "ask", intent: "help" }, state, false, { kind: "part", key: "ram" });
+    expect(help.lines[0]).toEqual({ key: "help.ram", values: { rec: "DIMM_A2 + DIMM_B2" } });
     expect(companionSay({ type: "installed", key: "ram2" }, state, false, null).lines[0].key).toBe("installed.ramFirst");
     // The CPU still comes first; once it is in, the next step is the remaining stick.
     expect(companionSay({ type: "start" }, state, false, null).lines[1].key).toBe("next.cpu");

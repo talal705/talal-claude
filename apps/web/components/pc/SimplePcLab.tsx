@@ -79,7 +79,7 @@ function supportsWebgl(): boolean {
 declare global {
   interface Window {
     /** Read-only view of the guided build for browser automation: what is fitted, selected and said. */
-    __ytlSimplePc?: () => { placed: string[]; connected: string[]; history: string[]; powered: boolean; selection: Selection; complete: boolean; mood: string; lines: string[]; guide: ReturnType<typeof guideFocus>; view: SimpleView; mode?: string; fault?: string | null; faultSolved?: boolean };
+    __ytlSimplePc?: () => { ram?: unknown; placed: string[]; connected: string[]; history: string[]; powered: boolean; selection: Selection; complete: boolean; mood: string; lines: string[]; guide: ReturnType<typeof guideFocus>; view: SimpleView; mode?: string; fault?: string | null; faultSolved?: boolean };
   }
 }
 
@@ -223,8 +223,11 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     selectPart(selection?.kind === "part" ? partSpec(selection.key).id : null);
   }, [selection, sceneVersion]);
 
+  // For browser checks: the memory module's slot as each part of the page sees it (set while rendering).
+  const ramDebug = useRef<unknown>(null);
   useEffect(() => {
     window.__ytlSimplePc = () => ({
+      ram: ramDebug.current,
       placed: [...saved.placed], connected: [...saved.connected], history: [...saved.history], powered: saved.powered, selection, complete,
       mood: message.say.mood, lines: message.say.lines.map((line) => line.key), guide, view, mode, fault: fault?.kind ?? null, faultSolved: fault?.solved ?? false,
     });
@@ -387,7 +390,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const slotName = (id?: string) => { const sl = simpleRamSlots(state).find((x) => x.id === id); return sl ? (locale === "ar" ? sl.label.ar : sl.label.en).replace(/ \(.*\)$/, "") : ""; };
     if (!r.ok) {
       if (r.reason === "cannotFit" && r.message) { sayEngine(r.message, "ramCentre"); return; }
-      const line = r.reason === "noSlot" ? "ramNoSlot" : r.reason === "slotTaken" ? "ramSlotTaken" : r.reason === "openFirst" ? "ramOpenFirst" : r.reason === "turnPart" ? "ramTurn" : r.reason === "centrePart" ? "ramCentre" : null;
+      const line = r.reason === "noSlot" ? "ramNoSlot" : r.reason === "slotTaken" ? "ramSlotTaken" : r.reason === "openFirst" ? (simpleRamSlots(state).find((x) => x.id === r.slotId)?.nearId ? "ramOpenBoth" : "ramOpenFirst") : r.reason === "turnPart" ? "ramTurn" : r.reason === "centrePart" ? "ramCentre" : null;
       if (line) speak({ lines: [{ key: `hands.${line}`, values: { slot: slotName(r.slotId) } }], mood: "concerned", point: "scene" });
       else react({ type: "select", selection: { kind: "part", key } });
       return;
@@ -400,7 +403,9 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const count = ALL_SIMPLE_PARTS.filter((p) => isRamKey(p.key) && (r.state.parts.find((x) => x.instanceId === p.id)?.attachments.length ?? 0) > 0).length;
     const rec = simpleRamRecommended(r.state, count);
     const lines: { key: string; values?: Record<string, string> }[] = [{ key: "hands.ramResting", values: { slot: slotName(r.slotId) } }];
-    if (rec.length && !rec.includes(r.slotId)) lines.push({ key: "hands.ramNotRecommended", values: { n: String(count), rec: rec.map((id) => slotName(id)).join(locale === "ar" ? " و" : " and ") } });
+    // The whole layout counts: B1 then A2 is not the recommended A2 + B2 even though A2 itself is in it.
+    const used = simpleRamSlots(r.state).filter((x) => x.occupant).map((x) => x.id);
+    if (rec.length && !used.every((id) => rec.includes(id))) lines.push({ key: "hands.ramNotRecommended", values: { n: String(count), rec: rec.map((id) => slotName(id)).join(locale === "ar" ? " و" : " and ") } });
     speak({ lines, mood: "point", point: "scene" });
   }
   function handLower(key: SimplePartKey) {
@@ -435,7 +440,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const k = handKind(ret?.kind ?? "");
     const r = liftSimplePart(state, key);
     if (!r.ok) {
-      const line = r.reason === "unplugFirst" ? "gpuUnplug" : r.reason === "unscrewFirst" ? "gpuUnscrew" : k === "gpu" ? "gpuReleaseFirst" : `${k}OpenFirst`;
+      const line = r.reason === "unplugFirst" ? "gpuUnplug" : r.reason === "unscrewFirst" ? "gpuUnscrew" : k === "gpu" ? "gpuReleaseFirst" : k === "ram" && ret?.nearId ? "ramOpenBoth" : `${k}OpenFirst`;
       speak({ lines: [{ key: `hands.${line}` }], mood: "concerned", point: "scene" });
       return;
     }
@@ -803,10 +808,24 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const ruleText = planned ? t("planner.findingText.exercise_needs_liquid") : t("needsLiquid");
   const missingMessage = rule ? ruleText : progress < SIMPLE_PARTS.length ? t("missing") : firstMissingCable ? t("missingCable", { cable: cableName(firstMissingCable.key) }) : t("checkCables");
   const placeName = (key: SimplePartKey) => {
+    // A memory module: the slot it is in, else the slot it is held over, else none. Never a default slot.
+    if (isRamKey(key)) {
+      const ramIn = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
+      const over = !ramIn && hold?.key === key ? simpleRamTargetFor(state, hold.offsetMm) : null;
+      const id = ramIn?.target.mountPointId ?? over?.slotId;
+      if (!id) return t("hands.overNoSlot");
+      const name = ramSlotName(id);
+      return ramIn ? (ramIn.seating === "seated" ? name : t("hands.inSlot", { slot: name })) : t("hands.overSlot", { slot: name });
+    }
     const target = simpleTarget(state, key);
     if (!planned) return t(`companion.places.${target.mountPointId}`);
     const host = entryOf(state.parts.find((p) => p.instanceId === target.hostInstanceId)?.catalogId);
     return host?.mountPoints.find((m) => m.id === target.mountPointId)?.label[lang] ?? target.mountPointId;
+  };
+  /** A memory slot's name as printed on the board (DIMM_A2), from the catalog label. */
+  const ramSlotName = (id: string) => {
+    const sl = simpleRamSlots(state).find((x) => x.id === id);
+    return sl ? (lang === "ar" ? sl.label.ar : sl.label.en).replace(/ \(.*\)$/, "") : id;
   };
   /** A mount point's own label on the board or case of the planned build. */
   const placeLabelOf = (place: string) => {
@@ -857,6 +876,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const ramGuideTarget = ramKey && ramSlot ? (ramGlow ? { kind: "solid" as const, hostInstanceId: partSpec(ramKey).host, solidId: `${ramGlow.slotId}-latch${ramGlow.near ? "-near" : ""}` } : { kind: "mount" as const, hostInstanceId: partSpec(ramKey).host, placeId: ramSlot.id }) : null;
   const sceneGuide = guide && cpuKind && cpuStep && keyed ? { ...guide, targets: [{ kind: "socket" as const, hostInstanceId: keyed.hostInstanceId, placeId: keyed.mountPointId, what: cpuStep, socket: cpuKind }] }
     : guide && ramGuideTarget ? { ...guide, targets: [ramGuideTarget] } : guide;
+  ramDebug.current = ramKey ? { key: ramKey, target: ramTarget?.slotId ?? null, installedIn: ramAt?.target.mountPointId ?? null, seating: ramAt?.seating ?? null, glow: ramGlow, highlight: ramScene.targetSlot, guide: sceneGuide?.targets ?? null, heading: placeName(ramKey) } : null;
   const heldNow = selectedPart && keyed && hold?.key === selectedPart && !(state.parts.find((p) => p.instanceId === partSpec(selectedPart).id)?.attachments.length)
     ? { instanceId: partSpec(selectedPart).id, target: isRamKey(selectedPart) ? simpleRamReference(state) : simpleTarget(state, selectedPart), rotationDeg: hold.rotationDeg, offsetMm: hold.offsetMm, liftMm: keyed.kind === "pcie_latch" ? 40 : isRamKey(selectedPart) ? 12 : 22 }
     : null;
@@ -1079,20 +1099,25 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const slots = simpleRamSlots(state);
     const target = !at && hold?.key === key ? simpleRamTargetFor(state, hold.offsetMm) : null;
     const slot = slots.find((x) => x.id === (at ? at.target.mountPointId : target?.slotId));
-    const name = (id: string) => { const sl = slots.find((x) => x.id === id); return sl ? (locale === "ar" ? sl.label.ar : sl.label.en).replace(/ \(.*\)$/, "") : id; };
+    const name = ramSlotName;
     const count = slots.filter((x) => x.occupant && x.occupant !== key).length + 1;
     const rec = simpleRamRecommended(state, count);
     const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved));
     const btn = (label: string, onClick: () => void, primary = true) => <button className={primary ? styles.installButton : styles.cancel} type="button" disabled={disabled} onClick={onClick}>{label}</button>;
     const clipLine = (sl: typeof slot) => sl ? `${t(sl.clipOpen ? "hands.clipOpen" : "hands.clipClosed")}${sl.nearId ? ` · ${t(sl.nearOpen ? "hands.nearOpen" : "hands.nearClosed")}` : ""}` : "";
     const off = target ? Math.hypot(target.residual[0], target.residual[1]) : null;
+    // Not over any slot: a close-up frames the slot nearest the module (only the view; nothing is implied).
+    const offsets = simpleRamSlotOffsets(state);
+    const nearestSlot = [...offsets.entries()].sort((a, b) => Math.abs(a[1][1] - (hold?.offsetMm[1] ?? 0)) - Math.abs(b[1][1] - (hold?.offsetMm[1] ?? 0)))[0]?.[0] ?? simpleRamReference(state).mountPointId;
     const note = (pcCatalog.entries.find((e) => e.id === state.parts.find((p) => p.instanceId === partSpec(key).host)?.catalogId)?.mountPoints.find((m) => m.kind === "dimm_slot") as { retention?: { note?: string; latches?: string } } | undefined)?.retention;
     return (
       <div className={styles.hands}>
         <div className={styles.handsHead}>
-          <p className={styles.handsState} aria-live="polite">{slot ? `${t("hands.overSlot", { slot: name(slot.id) })}${rec.includes(slot.id) ? ` · ${t("hands.recommended")}` : ""} · ${clipLine(slot)}` : t("hands.overNoSlot")}</p>
-          <button type="button" className={styles.closeup} onClick={() => focusOn(partSpec(key).host, slot?.id ?? simpleRamReference(state).mountPointId)}>{t("hands.closeup")}</button>
+          <p className={styles.handsState} aria-live="polite">{slot ? `${placeName(key)} · ${clipLine(slot)}` : t("hands.overNoSlot")}</p>
+          <button type="button" className={styles.closeup} onClick={() => focusOn(partSpec(key).host, slot?.id ?? nearestSlot)}>{t("hands.closeup")}</button>
         </div>
+        {/* What the manual recommends is advice, shown apart from where the module actually is. */}
+        {rec.length > 0 && <p className={styles.cablesNote}>{t("hands.ramRecommendation", { n: count, rec: rec.map(name).join(" + ") })}{slot && (!slot.occupant || slot.occupant === key) && ![...slots.filter((x) => x.occupant && x.occupant !== key).map((x) => x.id), slot.id].every((id) => rec.includes(id)) ? ` ${t("hands.ramOffRecommendation")}` : ""}</p>}
         <p className={styles.cablesNote}>{t("hands.ramInScene")}</p>
         {slot && slot.occupant && slot.occupant !== key && !at && <p className={styles.hint}>{t("hands.slotTakenHint", { slot: name(slot.id) })}</p>}
         {slot && (!slot.occupant || slot.occupant === key) && <div className={styles.holdRow}>
@@ -1283,7 +1308,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
 
               <div className={styles.install}>
                 {selectedPart ? <>
-                  <div className={styles.selection}><strong>{label(selectedPart)}</strong><span>{partInstalled ? t("installed") : placeName(selectedPart)}</span></div>
+                  <div className={styles.selection}><strong>{label(selectedPart)}</strong><span>{partInstalled ? (isRamKey(selectedPart) ? `${t("installed")} · ${placeName(selectedPart)}` : t("installed")) : placeName(selectedPart)}</span></div>
                   {keyed ? HandsPanel() : !partInstalled && !rival && (simpleUsesScrews(selectedPart) || simpleIsLiquid(selectedPart)) ? PrepPanel() : partInstalled && removable
                     ? <button className={styles.installButton} type="button" onClick={() => remove(selectedPart)} disabled={!ready || Boolean(removeBlocked)}>{t("remove")}</button>
                     : rival

@@ -1,7 +1,8 @@
 "use client";
 // The memory slots' clips as moving parts the learner operates directly: each clip tips out about its
 // foot when opened and stands up when closed (a module pressed home closes it). Slots documented with a
-// clip at each end get two; others one, at the far end (the near end is fixed). What is drawn follows the
+// clip at each end get two; others one, at the end the board's documents show (the other end is fixed
+// and is not drawn as a clip). What is drawn follows the
 // board's `mechanisms` record; the engine decides what may move.
 import type { ThreeEvent } from "@react-three/fiber";
 import { useMemo } from "react";
@@ -11,7 +12,8 @@ import type { PartGeometry, Vec3 } from "./geometry";
 import { FINISHES } from "./palette";
 import { useTurn } from "./SocketMechanism";
 
-export interface DimmSlotLayout { slotId: string; clipId: string; nearId: string | null; far: { at: Vec3; size: Vec3 }; near: { at: Vec3; size: Vec3 } | null; slot: { at: Vec3; size: Vec3 } }
+/** `far`: the slot's (first) moving clip, wherever it is; `near`: the second clip of a two-clip slot. `out`: the way each tips open (+1 toward the slot's bottom end). */
+export interface DimmSlotLayout { slotId: string; clipId: string; nearId: string | null; far: { at: Vec3; size: Vec3; out: 1 | -1 }; near: { at: Vec3; size: Vec3; out: 1 | -1 } | null; slot: { at: Vec3; size: Vec3 } }
 
 /** The clips and slot boxes of a board's memory slots, in its own coordinates. */
 export function dimmLayout(geometry: PartGeometry | undefined, slots: { id: string; clipId: string; nearId: string | null }[]): DimmSlotLayout[] {
@@ -20,7 +22,9 @@ export function dimmLayout(geometry: PartGeometry | undefined, slots: { id: stri
   return slots.flatMap((slot) => {
     const box = solid(slot.id); const far = solid(`${slot.id}-latch`); const near = solid(`${slot.id}-latch-near`);
     if (!box?.size || !far?.size) return [];
-    return [{ slotId: slot.id, clipId: slot.clipId, nearId: slot.nearId, far: { at: far.at, size: far.size }, near: near?.size && slot.nearId ? { at: near.at, size: near.size } : null, slot: { at: box.at, size: box.size } }];
+    // A clip tips away from the middle of its slot, whichever end it is at.
+    const out = (at: Vec3): 1 | -1 => (at[2] >= box.at[2] ? 1 : -1);
+    return [{ slotId: slot.id, clipId: slot.clipId, nearId: slot.nearId, far: { at: far.at, size: far.size, out: out(far.at) }, near: near?.size && slot.nearId ? { at: near.at, size: near.size, out: out(near.at) } : null, slot: { at: box.at, size: box.size } }];
   });
 }
 /** Ids of the board's own static clip solids these replace. */
@@ -79,8 +83,8 @@ export function DimmClips({ layout, board, reducedMotion, onClip, glowClip, targ
         const nearOpen = l.nearId ? board.mechanisms?.[l.nearId] === "open" : false;
         return (
           <group key={l.slotId}>
-            <Clip at={l.far.at} size={l.far.size} open={farOpen} outward={1} glow={glowClip?.slotId === l.slotId && !glowClip.near} reducedMotion={reducedMotion} onClick={onClip ? () => onClip(l.slotId, false) : undefined} material={mats.clip} glowMaterial={mats.glow} />
-            {l.near && <Clip at={l.near.at} size={l.near.size} open={nearOpen} outward={-1} glow={glowClip?.slotId === l.slotId && glowClip.near} reducedMotion={reducedMotion} onClick={onClip ? () => onClip(l.slotId, true) : undefined} material={mats.clip} glowMaterial={mats.glow} />}
+            <Clip at={l.far.at} size={l.far.size} open={farOpen} outward={l.far.out} glow={glowClip?.slotId === l.slotId && !glowClip.near} reducedMotion={reducedMotion} onClick={onClip ? () => onClip(l.slotId, false) : undefined} material={mats.clip} glowMaterial={mats.glow} />
+            {l.near && <Clip at={l.near.at} size={l.near.size} open={nearOpen} outward={l.near.out} glow={glowClip?.slotId === l.slotId && glowClip.near} reducedMotion={reducedMotion} onClick={onClip ? () => onClip(l.slotId, true) : undefined} material={mats.clip} glowMaterial={mats.glow} />}
             {targetSlot === l.slotId && (
               // The slot the module is over: a thin band over its groove (green once it is lined up), not hiding the key.
               <mesh position={[l.slot.at[0], l.slot.at[1] + l.slot.size[1] / 2 + 0.6, l.slot.at[2]]} material={targetOk ? mats.targetOk : mats.target} raycast={() => null}>
