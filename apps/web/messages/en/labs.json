@@ -1022,6 +1022,10 @@
       "aiError": "I couldn't reach the AI tutor just now, so here's what I know.",
       "hello": "Hi! I'm your build helper. I'll guide you step by step.",
       "welcomeBack": "Welcome back! Your build is just as you left it.",
+      "resume": {
+        "ramOver": "You're holding the stick over {slot}.",
+        "ramReady": "It's lined up over {slot}. Lower it in gently."
+      },
       "next": {
         "cpu": "Let's start with the processor. Tap it to select it.",
         "ram": "Now the memory. Tap a RAM stick to select it.",

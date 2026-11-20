@@ -1,11 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import en from "../../messages/en/labs.json";
 import ar from "../../messages/ar/labs.json";
-import { buildContext, companionSay, intentOf, nextAction, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
+import { buildContext, companionSay, intentOf, nextAction, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
 import {
   connectSimpleCable, createSimpleBuild, installSimplePart, SIMPLE_CABLES, simpleBuildFromSnapshot, startSimplePC, undoSimpleStep, withCable, withPart,
   emptySimpleSnapshot, type SimplePartKey,
+  activateSimpleModel, LEGACY_MODEL, lowerSimpleRam, reseatSimplePart, setSimpleMechanism, simpleRamSlotOffsets, simpleRetention, type SimpleHeld,
 } from "./simple-model";
+import { planModel } from "./plan-model";
+import type { PCBuildState } from "@ytl/contracts";
 
 type Tree = Record<string, unknown>;
 const lookup = (tree: Tree, path: string) => path.split(".").reduce<unknown>((node, key) => (node && typeof node === "object" ? (node as Tree)[key] : undefined), tree);
@@ -220,5 +223,88 @@ describe("the build companion", () => {
     expect(topicOf("why does the i9 need liquid cooling?")).toBe("liquidRule");
     expect(topicOf("وش فايدة المضخة")).toBe("aioPump");
     expect(topicOf("what is the radiator for")).toBe("aio");
+  });
+});
+
+describe("the welcome back after a reload", () => {
+  afterEach(() => activateSimpleModel(LEGACY_MODEL));
+  const must = <T,>(r: { ok: true; state: T } | { ok: false }) => { if (!r.ok) throw new Error(JSON.stringify(r)); return r.state; };
+  const keys = (say: CompanionSay) => say.lines.map((l) => l.key);
+  /** The bubble after a reload with this saved part in hand (null: nothing in hand). */
+  const resume = (state: PCBuildState, held: SimpleHeld | null) => {
+    const say = companionSay({ type: "resume", held }, state, false, held ? { kind: "part", key: held.key } : null);
+    expectSpoken(say);
+    expect(say.mood).toBe("wave");
+    return say;
+  };
+  const ram = (offsetMm: [number, number], rotationDeg = 0): SimpleHeld => ({ key: "ram", rotationDeg, offsetMm });
+
+  it("speaks about the module in hand from its saved pose: the slot it is over and what that slot needs next", () => {
+    let s = createSimpleBuild();
+    const b1 = simpleRamSlotOffsets(s).get("dimm-b1")!;
+    // Over no slot: how to bring it over one; no slot is named.
+    const away = resume(s, ram([6, -30], 180));
+    expect(keys(away)).toEqual(["welcomeBack", "hands.ramPick"]);
+    expect(away.point).toBe("scene");
+    // Over B1 with its clip closed: B1 by name, then open the clip.
+    const closed = resume(s, ram(b1, 180));
+    expect(closed.lines.slice(1)).toEqual([{ key: "resume.ramOver", values: { slot: "DIMM_B1" } }, { key: "hands.ramOpenFirst" }]);
+    s = must(setSimpleMechanism(s, "dimm-b1-latch", "open"));
+    expect(keys(resume(s, ram(b1, 180))).slice(2)).toEqual(["hands.ramTurn"]);
+    expect(keys(resume(s, ram([b1[0] + 2, b1[1]]))).slice(2)).toEqual(["hands.ramCentre"]);
+    // Lined up (within the same 1.5 mm the slot accepts): lower it into B1.
+    expect(resume(s, ram([b1[0] + 1, b1[1] - 0.5])).lines.slice(1)).toEqual([{ key: "resume.ramReady", values: { slot: "DIMM_B1" } }]);
+    // Over a slot another module is in: that slot by name, choose a free one.
+    s = must(lowerSimpleRam(s, "ram2", { rotationDeg: 0, offsetMm: b1 }));
+    expect(resume(s, ram(b1)).lines.slice(1)).toEqual([{ key: "hands.ramSlotTaken", values: { slot: "DIMM_B1" } }]);
+  });
+
+  it("names both clips on a board with a clip at each end", () => {
+    activateSimpleModel(planModel({ version: 1, purpose: "study", workload: "", parts: { case: "fractal-pop-mini-air-rgb-black-tg", motherboard: "asus-h81m-k", cpu: "intel-core-i5-4590", cooler: "arctic-freezer-7-x", psu: "corsair-rm650e-2025", gpu: null, ram: { id: "corsair-vengeance-lp-ddr3-1600-16gb-kit", modules: 2 }, storage: ["samsung-870-evo-1tb"], fans: [] } }));
+    let s = createSimpleBuild();
+    const a1 = simpleRamSlotOffsets(s).get("dimm-a1")!;
+    expect(resume(s, ram(a1)).lines.slice(1)).toEqual([{ key: "resume.ramOver", values: { slot: "DIMM_A1" } }, { key: "hands.ramOpenBoth" }]);
+    // One end open is not enough.
+    s = must(setSimpleMechanism(s, "dimm-a1-latch", "open"));
+    expect(keys(resume(s, ram(a1))).slice(2)).toEqual(["hands.ramOpenBoth"]);
+    s = must(setSimpleMechanism(s, "dimm-a1-latch:near", "open"));
+    expect(keys(resume(s, ram(a1)))).toEqual(["welcomeBack", "resume.ramReady"]);
+  });
+
+  it("a module lowered but not pressed home: press it home in its slot, not the build's next step", () => {
+    let s = createSimpleBuild();
+    const b1 = simpleRamSlotOffsets(s).get("dimm-b1")!;
+    s = must(setSimpleMechanism(s, "dimm-b1-latch", "open"));
+    s = must(lowerSimpleRam(s, "ram", { rotationDeg: 0, offsetMm: b1 }));
+    expect(resume(s, null).lines.slice(1)).toEqual([{ key: "hands.ramResting", values: { slot: "DIMM_B1" } }]);
+    // Pressed home: installed; the next step comes from the build (the CPU is still out).
+    s = must(reseatSimplePart(s, "ram"));
+    expect(keys(resume(s, null))).toEqual(["welcomeBack", "next.cpu"]);
+  });
+
+  it("nothing in hand: the next step from the build's progress", () => {
+    let s = createSimpleBuild();
+    expect(keys(resume(s, null))).toEqual(["welcomeBack", "next.cpu"]);
+    s = must(installSimplePart(s, "cpu"));
+    expect(keys(resume(s, null))).toEqual(["welcomeBack", "next.ram"]);
+    s = must(installSimplePart(s, "ram"));
+    expect(keys(resume(s, null))).toEqual(["welcomeBack", "next.ramSecond"]);
+  });
+
+  it("a CPU in hand gets the same first step it got when it was picked up", () => {
+    let s = createSimpleBuild();
+    const cpu: SimpleHeld = { key: "cpu", rotationDeg: 90, offsetMm: [-32, -18] };
+    expect(pickupLine(s, "cpu")).toEqual({ key: "hands.cpuOpenFirst" });
+    expect(resume(s, cpu).lines.slice(1)).toEqual([pickupLine(s, "cpu")]);
+    const lever = simpleRetention(s, "cpu")!.leverId!;
+    s = must(setSimpleMechanism(s, lever, "open"));
+    expect(resume(s, cpu).lines.slice(1)).toEqual([{ key: "hands.cpuPlateNext" }]);
+    s = must(setSimpleMechanism(s, simpleRetention(s, "cpu")!.id, "open"));
+    expect(resume(s, cpu).lines.slice(1)).toEqual([{ key: "hands.cpuOpen" }]);
+  });
+
+  it("a saved hand that no longer matches the build (part already in) is not spoken about", () => {
+    const s = must(installSimplePart(createSimpleBuild(), "cpu"));
+    expect(keys(resume(s, { key: "cpu", rotationDeg: 0, offsetMm: [0, 0] }))).toEqual(["welcomeBack", "next.ram"]);
   });
 });

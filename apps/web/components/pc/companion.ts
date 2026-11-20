@@ -7,7 +7,8 @@ import { pcCatalog } from "./catalog";
 import {
   ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, isRamKey, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
   simpleCablesFor, simpleCableOrder, simplePartInstalled, simplePartOrder, simplePrerequisites, simpleRuleBlock, REMOVABLE, simpleRamRecommended, simpleSlotFilled, simpleSlotPart, simpleTarget, slotOf,
-  type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,
+  caseCoversClosed, simpleRamSlots, simpleRamTargetFor, simpleRetention,
+  type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimpleHeld, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,
 } from "./simple-model";
 
 export type Selection = { kind: "part"; key: SimplePartKey } | { kind: "cable"; key: SimpleCableKey } | null;
@@ -35,7 +36,8 @@ export type NextAction =
 
 export type CompanionEvent =
   | { type: "start" }
-  | { type: "resume" }
+  /** After a reload: `held` is the part saved in hand with its pose, if any. */
+  | { type: "resume"; held?: SimpleHeld | null }
   | { type: "select"; selection: Exclude<Selection, null> }
   | { type: "installed"; key: SimplePartKey }
   | { type: "connected"; key: SimpleCableKey }
@@ -250,6 +252,52 @@ export function topicOf(text: string): string | null {
   return topics.find(([, pattern]) => pattern.test(t))?.[0] ?? null;
 }
 
+/** A memory slot's silkscreen name (DIMM_B1), the same in either language. */
+function ramSlotName(state: PCBuildState, id: string): string {
+  return simpleRamSlots(state).find((x) => x.id === id)?.label.en.match(/DIMM_[A-Z0-9]+/)?.[0] ?? id;
+}
+
+/**
+ * The first physical step a keyed part needs when it is picked up (or found in hand after a reload):
+ * the socket's lever or plate, the card slot's covers or latch, or how to bring a module over a slot.
+ * Null for a part with no mechanism of its own, or one already in its place.
+ */
+export function pickupLine(state: PCBuildState, key: SimplePartKey): CompanionLine | null {
+  const ret = simpleRetention(state, key);
+  const inPlace = (state.parts.find((p) => p.instanceId === ALL_SIMPLE_PARTS.find((x) => x.key === key)?.id)?.attachments.length ?? 0) > 0;
+  if (!ret || inPlace || simplePartInstalled(state, key)) return null;
+  const k = ret.kind === "dimm_latch" ? "ram" : ret.kind === "pcie_latch" ? "gpu" : ret.kind === "m2_qlatch" ? "m2" : "cpu";
+  const line = k === "ram" ? "ramPick" : k === "gpu" ? (caseCoversClosed(state) ? "gpuCoversFirst" : ret.open ? "gpuOpen" : "gpuLatchFirst")
+    : ret.leverId && ret.leverOpen && !ret.open ? "cpuPlateNext" : ret.open ? `${k}Open` : `${k}OpenFirst`;
+  return { key: `hands.${line}` };
+}
+
+/**
+ * After a reload, what the learner left part-way, from the saved build and hand: the module in hand
+ * (the slot it is over and what that slot needs next), another keyed part in hand, or a module resting
+ * in a slot not yet pressed home. Null when nothing is part-way: the build's next step applies.
+ */
+function resumeLines(state: PCBuildState, held: SimpleHeld | null): CompanionLine[] | null {
+  const first = held ? pickupLine(state, held.key) : null;
+  if (held && first && isRamKey(held.key)) {
+    const target = simpleRamTargetFor(state, held.offsetMm);
+    const slot = target && simpleRamSlots(state).find((x) => x.id === target.slotId);
+    if (!target || !slot) return [first];
+    const name = ramSlotName(state, slot.id);
+    if (slot.occupant) return [{ key: "hands.ramSlotTaken", values: { slot: name } }];
+    const over: CompanionLine = { key: "resume.ramOver", values: { slot: name } };
+    if (!slot.clipOpen || (slot.nearId && !slot.nearOpen)) return [over, { key: slot.nearId ? "hands.ramOpenBoth" : "hands.ramOpenFirst" }];
+    if (held.rotationDeg !== 0) return [over, { key: "hands.ramTurn" }];
+    // The same tolerance the slot accepts when the module is lowered.
+    if (Math.hypot(target.residual[0], target.residual[1]) > 1.5) return [over, { key: "hands.ramCentre" }];
+    return [{ key: "resume.ramReady", values: { slot: name } }];
+  }
+  if (first) return [first];
+  const resting = ALL_SIMPLE_PARTS.find((p) => isRamKey(p.key) && state.parts.find((x) => x.instanceId === p.id)?.attachments.some((a) => a.seating !== "seated"));
+  const at = resting && state.parts.find((x) => x.instanceId === resting.id)?.attachments[0];
+  return at ? [{ key: "hands.ramResting", values: { slot: ramSlotName(state, at.target.mountPointId) } }] : null;
+}
+
 /** The bubble after an event. `state` is the build after the event; `selection` is what is in hand now. */
 export function companionSay(event: CompanionEvent, state: PCBuildState, powered: boolean, selection: Selection): CompanionSay {
   const next = nextAction(state, powered);
@@ -257,8 +305,12 @@ export function companionSay(event: CompanionEvent, state: PCBuildState, powered
   switch (event.type) {
     case "start":
       return { lines: [{ key: "hello" }, nextLine(state, powered)], mood: "wave", point: pointFor(next) };
-    case "resume":
+    case "resume": {
+      // What was saved mid-step comes first: the part in hand, or a module resting in its slot.
+      const unfinished = resumeLines(state, event.held ?? null);
+      if (unfinished) return { lines: [{ key: "welcomeBack" }, ...unfinished], mood: "wave", point: "scene" };
       return { lines: [{ key: "welcomeBack" }, nextLine(state, powered)], mood: "wave", point: pointFor(next) };
+    }
     case "select": {
       if (event.selection.kind === "part") {
         const key = event.selection.key;

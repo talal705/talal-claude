@@ -10,7 +10,7 @@ import { CheckIcon, CrossIcon } from "../icons";
 import { BuildCompanion, type CompanionMessage } from "./BuildCompanion";
 import { pcCatalog } from "./catalog";
 import { askCompanionAi, companionAskRequest, fetchTutorStatus, type AiStatus } from "./companion-ai";
-import { buildContext, companionSay, intentOf, nextLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
+import { buildContext, companionSay, intentOf, nextLine, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
 import { focusOn, moveCamera, selectPart } from "./scene/scene-store";
 import {
   ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, connectSimpleCable, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, isRamKey, lastSimpleStep,
@@ -189,7 +189,9 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
       setVerdict(restored.powered ? "success" : null);
       if (simpleAllPartsIn(simpleBuildFromSnapshot(restored))) setTab("cables");
     }
-    speak(companionSay(snapshot.history.length > 0 ? { type: "resume" } : { type: "start" }, simpleBuildFromSnapshot(snapshot), snapshot.powered, null));
+    // The welcome back speaks from what was saved: the part in hand and its pose, else the build's progress.
+    const held = restored?.held ?? null;
+    speak(companionSay(snapshot.history.length > 0 || held ? { type: "resume", held } : { type: "start" }, simpleBuildFromSnapshot(snapshot), snapshot.powered, held ? { kind: "part", key: held.key } : null));
     try { setView(parseSimpleView(JSON.parse(localStorage.getItem(SIMPLE_VIEW_KEY) ?? "null"))); } catch { /* Defaults. */ }
     setWebgl(supportsWebgl());
     setReady(true);
@@ -260,14 +262,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     setTab("parts");
     if (lockedOn) { speak({ lines: [{ key: "blocked.turnOff" }], mood: "concerned", point: "power" }); return; }
     // A keyed part: the robot names the first physical step it actually needs now.
-    const ret = simpleRetention(state, key);
-    if (ret && !simplePartInstalled(state, key) && !inPlace) {
-      const k = handKind(ret.kind);
-      const line = k === "ram" ? "ramPick" : k === "gpu" ? (caseCoversClosed(state) ? "gpuCoversFirst" : ret.open ? "gpuOpen" : "gpuLatchFirst")
-        : ret.leverId && ret.leverOpen && !ret.open ? "cpuPlateNext" : ret.open ? `${k}Open` : `${k}OpenFirst`;
-      speak({ lines: [{ key: `hands.${line}` }], mood: "point", point: "scene" });
-      return;
-    }
+    const first = pickupLine(state, key);
+    if (first) { speak({ lines: [first], mood: "point", point: "scene" }); return; }
     react({ type: "select", selection: next }, state, lockedOn, next);
   }
 
@@ -286,6 +282,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   function cancel() {
     if (!selection) return;
     setSelection(null);
+    // Put down: nothing is in hand, so a reload does not bring the part back into it.
+    if (selection.kind === "part") setHold(null);
     react({ type: "cancel" }, state, saved.powered, null);
   }
 
