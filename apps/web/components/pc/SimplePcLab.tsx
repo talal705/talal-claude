@@ -10,7 +10,8 @@ import { CheckIcon, CrossIcon } from "../icons";
 import { BuildCompanion, type CompanionMessage } from "./BuildCompanion";
 import { pcCatalog } from "./catalog";
 import { askCompanionAi, companionAskRequest, fetchTutorStatus, type AiStatus } from "./companion-ai";
-import { buildContext, companionSay, intentOf, nextLine, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
+import { buildContext, companionSay, heldLines, intentOf, nextLine, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
+import { aimHeld, aimTargets, nextHandStep, type HandStep } from "./click-assembly";
 import { focusOn, moveCamera, selectPart } from "./scene/scene-store";
 import {
   ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, connectSimpleCable, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, isRamKey, lastSimpleStep,
@@ -121,6 +122,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const [ready, setReady] = useState(false);
   const [webgl, setWebgl] = useState<boolean | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
+  const [optionsChoice, setOptionsChoice] = useState<{ key: string; open: boolean } | null>(null);
   const [tab, setTab] = useState<"parts" | "cables">("parts");
   const [verdict, setVerdict] = useState<"success" | "failure" | null>(null);
   /** The lab rule behind the last failed start, if one was: shown with its fix. */
@@ -367,7 +369,6 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (desired === "closed" && simplePartInstalled(r.state, key)) { setSelection(null); setHold(null); }
   }
   /** Clamps a dragged pose to the reach over the board (it never leaves the socket area or goes through parts). */
-  const dragHeld = (offsetMm: [number, number]) => setHold((h) => (h ? { ...h, offsetMm: clampHeld(h.key, offsetMm) } : h));
   /** A memory slot's clip, clicked in the view or with its button: opens it, or closes it over an empty slot. */
   function handClip(slotId: string, near: boolean) {
     if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
@@ -629,8 +630,14 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   function onTarget(id: string) {
     if (!selection) return;
     const [role, place] = [id.slice(0, id.indexOf(":")), id.slice(id.indexOf(":") + 1)];
+    // A keyed part's own place (any memory slot for a module): aim the part in hand at it, or take the next step there.
+    if ((role === "target" || role === "aim") && selection.kind === "part" && simpleRetention(state, selection.key)) {
+      const inPlace = (state.parts.find((p) => p.instanceId === partSpec(selection.key).id)?.attachments.length ?? 0) > 0;
+      if (hold?.key === selection.key && !inPlace) aimAt(selection.key, place);
+      else primaryHand(selection.key);
+      return;
+    }
     if (role === "target") {
-      if (selection.kind === "part" && simpleRetention(state, selection.key)) { primaryHand(selection.key); return; }
       if (selection.kind === "part") install(selection.key);
       else connect(selection.key);
       return;
@@ -639,31 +646,48 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     else react({ type: "wrongPort", key: selection.key, portOf: cableOfPort(place, state) });
   }
 
-  /** What a tap on a keyed part's place does now: open its mechanism, lower the held part, or close the plate. */
-  function primaryHand(key: SimplePartKey) {
-    const ret = simpleRetention(state, key);
-    const at = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
-    if (!ret) return;
-    const gpu = ret.kind === "pcie_latch";
-    if (isRamKey(key)) {
-      if (!at) {
-        const target = hold?.key === key ? simpleRamTargetFor(state, hold.offsetMm) : null;
-        const slot = target ? simpleRamSlots(state).find((x) => x.id === target.slotId) : null;
-        if (slot && !slot.occupant && !slot.clipOpen) { handClip(slot.id, false); return; }
-        if (slot && !slot.occupant && slot.nearId && !slot.nearOpen) { handClip(slot.id, true); return; }
-        handRamLower(key); return;
-      }
-      if (at.seating !== "seated") handSeat(key);
+  /**
+   * A click on a real place with a keyed part in hand: the part comes over that place exactly as the
+   * learner turned it (never turned for them). On the place it is already over, the click is the next step.
+   */
+  function aimAt(key: SimplePartKey, placeId: string) {
+    if (!hold || hold.key !== key) { primaryHand(key); return; }
+    if (handsOff()) { if (lockedOn) speak({ lines: [{ key: "blocked.turnOff" }], mood: "concerned", point: "power" }); return; }
+    const r = aimHeld(state, hold, placeId);
+    if (!r.ok) {
+      if (r.reason === "slotTaken") speak({ lines: [{ key: "hands.ramSlotTaken", values: { slot: ramSlotName(placeId) } }], mood: "concerned", point: "scene" });
+      else if (r.reason === "notItsPlace") speak({ lines: [{ key: "aim.notHere" }], mood: "concerned", point: "scene" });
+      else react({ type: "select", selection: { kind: "part", key } });
       return;
     }
-    if (!at && gpu && caseCoversClosed(state)) { handCovers("open"); return; }
-    if (ret.leverId && !ret.leverOpen && !ret.open) { handLever(key, "open"); return; }
-    if (!at && !ret.open) { handMechanism(key, "open"); return; }
-    if (!at) { handLower(key); return; }
-    if (at.seating !== "seated") { handSeat(key); return; }
-    if (gpu) { if (!simpleFastened(state, key)) handFasten(key); return; }
-    if (ret.open && ret.kind !== "dimm_latch") { handMechanism(key, "closed"); return; }
-    if (ret.leverId && ret.leverOpen) handLever(key, "closed");
+    if (r.held.offsetMm[0] === hold.offsetMm[0] && r.held.offsetMm[1] === hold.offsetMm[1]) { primaryHand(key); return; }
+    setHold(r.held);
+    speak({ lines: heldLines(state, r.held) ?? [{ key: "aim.ready" }], mood: "point", point: "scene" });
+  }
+
+  /** What a tap on a keyed part's place (or the action above the view) does now: exactly one checked step. */
+  function primaryHand(key: SimplePartKey) {
+    runStep(key, nextHandStep(state, key, hold));
+  }
+  function runStep(key: SimplePartKey, step: HandStep) {
+    if (!step || handsOff()) return;
+    switch (step.kind) {
+      case "aim": {
+        // One place only (socket, card slot, M.2 slot): the action can bring it there. Memory: the learner picks the slot.
+        const ret = simpleRetention(state, key);
+        if (!isRamKey(key) && ret && hold?.key === key) { aimAt(key, ret.mountPointId); return; }
+        speak({ lines: [{ key: isRamKey(key) ? "aim.ramFirst" : "aim.first" }], mood: "point", point: "scene" });
+        return;
+      }
+      case "slotTaken": speak({ lines: [{ key: "hands.ramSlotTaken", values: { slot: ramSlotName(step.slotId) } }], mood: "concerned", point: "scene" }); return;
+      case "clip": handClip(step.slotId, step.near); return;
+      case "lever": handLever(key, step.desired); return;
+      case "mechanism": handMechanism(key, step.desired); return;
+      case "covers": handCovers("open"); return;
+      case "lower": handLower(key); return;
+      case "seat": handSeat(key); return;
+      case "fasten": handFasten(key); return;
+    }
   }
 
   function onScenePart(instanceId: string) {
@@ -1210,6 +1234,70 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     );
   }
 
+  // ---------- The toolbar above the view: undo, turn, the one next step, and the view toggles ----------
+
+  /** The label of a keyed part's next step, as the panel below names the same step. */
+  function stepLabel(key: SimplePartKey, step: Exclude<HandStep, null>): string {
+    const ret = simpleRetention(state, key);
+    const k = handKind(ret?.kind ?? "");
+    const lga = Boolean(ret?.leverId);
+    switch (step.kind) {
+      case "aim": return isRamKey(key) ? t("toolbar.overSlot") : t("toolbar.aimHere");
+      case "slotTaken": return t("hands.ramLower");
+      case "clip": return t(step.near ? "hands.openNearClip" : "hands.openClip", { slot: ramSlotName(step.slotId) });
+      case "lever": return t(step.desired === "open" ? (lga ? "hands.releaseLever" : "hands.liftZif") : "hands.lockLever");
+      case "mechanism": {
+        const open = step.desired === "open";
+        if (k === "gpu") return t(open ? "hands.openPcie" : "hands.releasePcie");
+        if (k === "m2") return t(open ? "hands.openQLatch" : "hands.closeQLatch");
+        return t(lga ? (open ? "hands.openPlate" : "hands.closePlate") : (open ? "hands.liftZif" : "hands.lowerZif"));
+      }
+      case "covers": return t("hands.removeCovers");
+      case "lower": return t(k === "ram" ? "hands.ramLower" : k === "gpu" ? "hands.pushCard" : k === "m2" ? "hands.slideIn" : "hands.lowerIn");
+      case "seat": return t("hands.pressIn");
+      case "fasten": return t("hands.screwBracket");
+    }
+  }
+  /** The one action the toolbar offers now, or why there is none (shown and read out with the button). */
+  const nextAction: { label: string; run?: () => void; why?: string } = (() => {
+    if (!selection) return { label: t("install"), why: t("selectFirst") };
+    if (!ready || handsOff()) return { label: t("install"), why: t(lockedOn ? "turnOffFirst" : "toolbar.nothing") };
+    if (selection.kind === "cable") return { label: t("toolbar.moreCable"), run: openPartOptions };
+    const key = selection.key;
+    if (lockedOn) return { label: t("install"), why: t("turnOffFirst") };
+    if (keyed) {
+      const rivalIn = handKind(keyed.kind) === "cpu" ? simpleSlotPart(state, "cpu") : null;
+      if (rivalIn && rivalIn !== key) return { label: t("install"), why: t("hands.takeOther") };
+      const step = nextHandStep(state, key, hold);
+      if (!step) return { label: t(partInstalled ? "installed" : "install"), why: t("toolbar.nothing") };
+      if (step.kind === "slotTaken") return { label: t("hands.ramLower"), why: t("hands.slotTakenHint", { slot: ramSlotName(step.slotId) }) };
+      if (step.kind === "aim" && (isRamKey(key) || hold?.key !== key)) return { label: stepLabel(key, step), why: t(isRamKey(key) ? "companion.aim.ramFirst" : "companion.aim.first") };
+      return { label: stepLabel(key, step), run: () => runStep(key, step) };
+    }
+    if (partInstalled) return { label: t("installed"), why: t("toolbar.nothing") };
+    if (partBlocked) return { label: t("install"), why: t(partBlocked) };
+    if (rival || simpleUsesScrews(key) || simpleIsLiquid(key)) return { label: t("toolbar.more"), run: openPartOptions };
+    if (mode !== "fault" && ticked < substepsFor(key).length) return { label: t("toolbar.more"), run: openPartOptions };
+    return { label: t("install"), run: () => install(key) };
+  })();
+  /** The part in hand that can be turned now (held, not yet in its place), and how it is turned. */
+  const turnable = heldNow && selectedPart && keyed && !handsOff() ? { cpu: handKind(keyed.kind) === "cpu", key: selectedPart } : null;
+  const heldState = heldNow && hold && keyed ? (() => {
+    const k = handKind(keyed.kind);
+    if (k === "ram") return t(hold.rotationDeg === 0 ? "hands.notchMatched" : "hands.notchReversed");
+    if (k === "gpu") return t(hold.rotationDeg === 0 ? "hands.bracketToCase" : "hands.bracketAway");
+    return t("hands.turned", { deg: hold.rotationDeg });
+  })() : null;
+  // A module in hand: every real slot of the board, to hold it over by a click (a keyboard-reachable twin of clicking the slot).
+  const slotChoices = ramKey && heldNow ? simpleRamSlots(state) : [];
+  const optionsKey = selection ? `${selection.kind}:${selection.key}` : "";
+  const optionsOpen = optionsChoice?.key === optionsKey
+    ? optionsChoice.open
+    : Boolean(selectedCable || (selectedPart && (!keyed || rival)));
+  function openPartOptions() {
+    if (optionsKey) setOptionsChoice({ key: optionsKey, open: true });
+  }
+
   return (
     <section className={styles.lab} aria-labelledby="simple-pc-title" onKeyDown={onKeyDown}>
       <header className={styles.heading}>
@@ -1220,6 +1308,74 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
 
       <div className={styles.workspace}>
         <div className={styles.viewer}>
+          <div className={styles.toolbar} role="group" aria-label={t("toolbar.label")}>
+            <div className={styles.toolGroup}>
+              {mode !== "fault" && <button type="button" className={styles.tool} onClick={undo} disabled={!ready || !canUndo}>{t("undo")}</button>}
+              <div className={styles.toolGroup} role="group" aria-label={t("toolbar.rotate")}>
+                {turnable ? (turnable.cpu ? <>
+                  <button type="button" className={styles.tool} onClick={() => turn(-90)} aria-label={t("hands.rotateLeft")}>⟲</button>
+                  <button type="button" className={styles.tool} onClick={() => turn(90)} aria-label={t("hands.rotateRight")}>⟳</button>
+                </> : <button type="button" className={styles.tool} onClick={() => turn(180)}>{t("hands.flip")}</button>)
+                  : <button type="button" className={styles.tool} disabled aria-describedby="toolbar-rotate-why">{t("hands.flip")}</button>}
+                {!turnable && <span id="toolbar-rotate-why" className="visually-hidden">{t("toolbar.rotateNone")}</span>}
+              </div>
+              <button type="button" className={styles.toolPrimary} onClick={nextAction.run} disabled={!nextAction.run} aria-describedby={nextAction.run ? undefined : "toolbar-why"}>{nextAction.label}</button>
+            </div>
+            {slotChoices.length > 0 && <div className={styles.toolGroup} role="group" aria-label={t("toolbar.overSlot")}>
+              <span className={styles.toolLabel} aria-hidden="true">{t("toolbar.overSlot")}</span>
+              {slotChoices.map((slot) => {
+                const taken = Boolean(slot.occupant && slot.occupant !== ramKey);
+                const shortName = slot.label.en.match(/DIMM_[A-Z0-9]+/)?.[0] ?? ramSlotName(slot.id);
+                return <button key={slot.id} type="button" className={styles.tool} aria-label={ramSlotName(slot.id)} aria-pressed={ramTarget?.slotId === slot.id} disabled={taken || handsOff()} title={taken ? t("hands.slotTakenHint", { slot: ramSlotName(slot.id) }) : undefined} onClick={() => aimAt(ramKey!, slot.id)}><bdi>{shortName}</bdi>{taken && <span className="visually-hidden"> · {t("hands.slotTakenHint", { slot: ramSlotName(slot.id) })}</span>}</button>;
+              })}
+            </div>}
+            <div className={`${styles.toggles} ${styles.toolGroup}`} role="group" aria-label={t("view.label")}>
+              <button type="button" aria-pressed={view.guide} onClick={() => changeView({ guide: !view.guide })}>{t("view.guide")}</button>
+              <button type="button" aria-pressed={view.guideMotion && !reducedMotion} disabled={!view.guide || reducedMotion} onClick={() => changeView({ guideMotion: !view.guideMotion })} title={reducedMotion ? t("view.reduced") : undefined}>{t("view.motion")}</button>
+              <button type="button" aria-pressed={view.rgb} onClick={() => changeView({ rgb: !view.rgb })}>{t("view.rgb")}</button>
+            </div>
+            <p className={styles.toolStatus} aria-live="polite">
+              {heldState && <span>{heldState}</span>}
+              {nextAction.why && <span id="toolbar-why">{nextAction.why}</span>}
+            </p>
+          </div>
+          {/* Every control for the selected part or lead, above the view: prep, screws, swap, removal, substeps,
+              each end of a lead, and the reverse steps. Open by itself when the toolbar cannot do the step. */}
+          {selection && <details key={optionsKey} className={styles.partOptions} open={optionsOpen} onToggle={(event) => { const open = event.currentTarget.open; if (open !== optionsOpen) setOptionsChoice({ key: optionsKey, open }); }}>
+            <summary>
+              <span className={styles.partOptionsTitle}>{t(selectedCable ? "toolbar.moreCable" : "toolbar.more")}</span>
+              {selectedPart
+                ? <span className={styles.selection}><strong>{label(selectedPart)}</strong><span>{partInstalled ? (isRamKey(selectedPart) ? `${t("installed")} · ${placeName(selectedPart)}` : t("installed")) : placeName(selectedPart)}</span></span>
+                : <span className={styles.selection}><strong>{cableName(selectedCable!)}</strong></span>}
+            </summary>
+            <div className={styles.partOptionsBody}>
+              {selectedPart ? <div className={styles.install}>
+                {keyed ? HandsPanel() : !partInstalled && !rival && (simpleUsesScrews(selectedPart) || simpleIsLiquid(selectedPart)) ? PrepPanel() : partInstalled && removable
+                  ? <button className={styles.installButton} type="button" onClick={() => remove(selectedPart)} disabled={!ready || Boolean(removeBlocked)}>{t("remove")}</button>
+                  : rival
+                    ? <button className={styles.installButton} type="button" onClick={() => swap(rival, selectedPart)} disabled={!ready || Boolean(swapBlocked)}>{t("swap", { other: label(rival) })}</button>
+                    : <button className={styles.installButton} type="button" onClick={() => install(selectedPart)} disabled={!ready || partInstalled || Boolean(partBlocked) || lockedOn || (mode !== "fault" && ticked < substepsFor(selectedPart).length)}>{partInstalled ? t("installed") : t("install")}</button>}
+                {mode !== "fault" && !partInstalled && !rival && !partBlocked && !simpleUsesScrews(selectedPart) && !simpleIsLiquid(selectedPart) && substepsFor(selectedPart).length > 0 && <ol className={styles.substeps} aria-label={t("substeps.title")}>
+                  {substepsFor(selectedPart).map((step, i) => <li key={step}><button type="button" aria-pressed={i < ticked} disabled={i > ticked} onClick={() => setTicked(i < ticked ? i : i + 1)}><span aria-hidden="true">{i < ticked ? "✓" : i + 1}</span>{t(`substeps.${step}`)}</button></li>)}
+                </ol>}
+                {partBlocked && !partInstalled && !rival && <p className={styles.hint}>{t(partBlocked)}</p>}
+                {rival && <p className={styles.hint}>{swapBlocked ? blockHint(swapBlocked) : t("swapHint", { other: label(rival) })}</p>}
+                {partInstalled && SWAPPABLE.includes(selectedPart) && !removable && <p className={styles.hint}>{t("swapCpuHint")}</p>}
+                {removeBlocked && removeBlocked !== "notSwappable" && <p className={styles.hint}>{blockHint(removeBlocked)}</p>}
+                <button className={styles.cancel} type="button" onClick={cancel}>{t("cancel")}</button>
+              </div> : selectedCable && <div className={styles.cableDetail}>
+                <p>{cableRoute(selectedCable)}</p>
+                <code dir="ltr">{t(`cables.${selectedCable}.connector`)}</code>
+                {cableDone
+                  ? <button className={styles.installButton} type="button" onClick={() => unplug(selectedCable)} disabled={!ready || lockedOn}>{t("disconnect")}</button>
+                  : CablePanel()}
+                {cableBlocked && !cableDone && <p className={styles.hint}>{cableBlocked === "turnOffFirst" ? t("turnOffFirst") : t("fitCableParts", { parts: simpleCableMissingParts(state, selectedCable).map((key) => label(key)).join(locale === "ar" ? "، " : ", ") })}</p>}
+                {lockedOn && cableDone && <p className={styles.hint}>{t("turnOffFirst")}</p>}
+                <button className={styles.cancel} type="button" onClick={cancel}>{t("cancel")}</button>
+              </div>}
+            </div>
+          </details>}
+          <div className={styles.stage}>
           <div className={styles.viewControls} role="group" aria-label={t("camera")}>
             <button type="button" onClick={() => moveCamera("fit")}>{t("center")}</button>
             <button type="button" aria-label={t("zoomIn")} onClick={() => moveCamera("in")}>+</button>
@@ -1245,14 +1401,14 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
                   simpleCableIds={cableIds}
                   selectedSimpleCableId={selectedCable ? cableSpec(selectedCable).id : null}
                   onSelectSimpleCable={onSceneCable}
-                  simpleTargets={cpuKind && keyed ? targets.filter((x) => !(x.hostInstanceId === keyed.hostInstanceId && x.placeId === keyed.mountPointId)) : ramKey ? targets.filter((x) => !x.placeId.startsWith("dimm-")) : targets}
+                  // CPU: the socket answers a click once open (aim, then lower). Memory: every real slot answers, none lit (no default slot).
+                  simpleTargets={cpuKind && keyed && selectedPart ? [...targets.filter((x) => !(x.hostInstanceId === keyed.hostInstanceId && x.placeId === keyed.mountPointId)), ...aimTargets(state, selectedPart, hold)] : ramKey ? [...targets.filter((x) => !x.placeId.startsWith("dimm-")), ...aimTargets(state, ramKey, hold)] : targets}
                   onSimpleTarget={onTarget}
                   onSimpleMiss={() => { if (selection) react({ type: "missedTarget" }); }}
                   guide={sceneGuide}
                   guideAnimate={view.guideMotion}
                   rgb={view.rgb}
                   held={heldNow}
-                  onHeldDrag={heldNow ? dragHeld : undefined}
                   socket={socketHands}
                   dimm={ramScene}
                   benchOrder={bench.benchOrder}
@@ -1262,14 +1418,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
               </SceneBoundary>
             )}
           </div>
-          <div className={styles.viewBar}>
-            <div className={styles.toggles} role="group" aria-label={t("view.label")}>
-              <button type="button" aria-pressed={view.guide} onClick={() => changeView({ guide: !view.guide })}>{t("view.guide")}</button>
-              <button type="button" aria-pressed={view.guideMotion && !reducedMotion} disabled={!view.guide || reducedMotion} onClick={() => changeView({ guideMotion: !view.guideMotion })} title={reducedMotion ? t("view.reduced") : undefined}>{t("view.motion")}</button>
-              <button type="button" aria-pressed={view.rgb} onClick={() => changeView({ rgb: !view.rgb })}>{t("view.rgb")}</button>
-            </div>
-            <p className={styles.cameraHint}>{t("cameraHint")}</p>
           </div>
+          <p className={styles.cameraHint}>{t("cameraHint")}</p>
         </div>
 
         <div className={styles.side}>
@@ -1304,24 +1454,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
                 })}
               </div>
 
-              <div className={styles.install}>
-                {selectedPart ? <>
-                  <div className={styles.selection}><strong>{label(selectedPart)}</strong><span>{partInstalled ? (isRamKey(selectedPart) ? `${t("installed")} · ${placeName(selectedPart)}` : t("installed")) : placeName(selectedPart)}</span></div>
-                  {keyed ? HandsPanel() : !partInstalled && !rival && (simpleUsesScrews(selectedPart) || simpleIsLiquid(selectedPart)) ? PrepPanel() : partInstalled && removable
-                    ? <button className={styles.installButton} type="button" onClick={() => remove(selectedPart)} disabled={!ready || Boolean(removeBlocked)}>{t("remove")}</button>
-                    : rival
-                      ? <button className={styles.installButton} type="button" onClick={() => swap(rival, selectedPart)} disabled={!ready || Boolean(swapBlocked)}>{t("swap", { other: label(rival) })}</button>
-                      : <button className={styles.installButton} type="button" onClick={() => install(selectedPart)} disabled={!ready || partInstalled || Boolean(partBlocked) || lockedOn || (mode !== "fault" && ticked < substepsFor(selectedPart).length)}>{partInstalled ? t("installed") : t("install")}</button>}
-                  {mode !== "fault" && !partInstalled && !rival && !partBlocked && !simpleUsesScrews(selectedPart) && !simpleIsLiquid(selectedPart) && substepsFor(selectedPart).length > 0 && <ol className={styles.substeps} aria-label={t("substeps.title")}>
-                    {substepsFor(selectedPart).map((step, i) => <li key={step}><button type="button" aria-pressed={i < ticked} disabled={i > ticked} onClick={() => setTicked(i < ticked ? i : i + 1)}><span aria-hidden="true">{i < ticked ? "✓" : i + 1}</span>{t(`substeps.${step}`)}</button></li>)}
-                  </ol>}
-                  {partBlocked && !partInstalled && !rival && <p className={styles.hint}>{t(partBlocked)}</p>}
-                  {rival && <p className={styles.hint}>{swapBlocked ? blockHint(swapBlocked) : t("swapHint", { other: label(rival) })}</p>}
-                  {partInstalled && SWAPPABLE.includes(selectedPart) && !removable && <p className={styles.hint}>{t("swapCpuHint")}</p>}
-                  {removeBlocked && removeBlocked !== "notSwappable" && <p className={styles.hint}>{blockHint(removeBlocked)}</p>}
-                  <button className={styles.cancel} type="button" onClick={cancel}>{t("cancel")}</button>
-                </> : <p className={styles.hint}>{t("selectFirst")}</p>}
-              </div>
+              {/* What to do with the selected part is above the view (toolbar and part controls); here it is chosen. */}
+              {!selectedPart && <p className={styles.hint}>{t("selectFirst")}</p>}
             </div>
 
             <div ref={cablesTarget} hidden={tab !== "cables"}>
@@ -1337,17 +1471,6 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
                   </button>;
                 })}
               </div>
-              {selectedCable && <div className={styles.cableDetail}>
-                <strong>{cableName(selectedCable)}</strong>
-                <p>{cableRoute(selectedCable)}</p>
-                <code dir="ltr">{t(`cables.${selectedCable}.connector`)}</code>
-                {cableDone
-                  ? <button className={styles.installButton} type="button" onClick={() => unplug(selectedCable)} disabled={!ready || lockedOn}>{t("disconnect")}</button>
-                  : CablePanel()}
-                {cableBlocked && !cableDone && <p className={styles.hint}>{cableBlocked === "turnOffFirst" ? t("turnOffFirst") : t("fitCableParts", { parts: simpleCableMissingParts(state, selectedCable).map((key) => label(key)).join(locale === "ar" ? "، " : ", ") })}</p>}
-                {lockedOn && cableDone && <p className={styles.hint}>{t("turnOffFirst")}</p>}
-                <button className={styles.cancel} type="button" onClick={cancel}>{t("cancel")}</button>
-              </div>}
               {!leads.some((c) => c.key.startsWith("sata")) && <p className={styles.cablesNote}>{t("noStorageCable")}</p>}
             </div>
 
@@ -1368,7 +1491,6 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
                 ? <button className={styles.powerButton} type="button" onClick={fault?.solved ? newFault : power} disabled={!ready || !fault}><span aria-hidden="true">⏻</span>{fault?.solved ? t("fault.newFault") : t("power")}</button>
                 : <button className={styles.powerButton} type="button" onClick={power} disabled={!ready}><span aria-hidden="true">⏻</span>{t(saved.powered ? "powerOff" : "power")}</button>}
               <div className={styles.steps} hidden={mode === "fault"}>
-                <button type="button" onClick={undo} disabled={!ready || !canUndo}>{t("undo")}</button>
                 {!confirmRestart ? <button type="button" onClick={() => setConfirmRestart(true)} disabled={!ready}>{t("reset")}</button> : null}
               </div>
               {confirmRestart && <div className={styles.confirm} role="alertdialog" aria-label={t("restartAsk")}>

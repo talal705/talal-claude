@@ -1,5 +1,31 @@
 # Project handoff — Your Tech Lab (talal-claude), 2026-11-20
 
+## Latest work: click-based assembly and top controls
+
+The owner's latest instruction replaces mandatory part dragging with click/tap placement, and moves
+assembly controls, guide switches and RGB above the 3D scene. Current work is on
+`feat/click-assembly-toolbar`, based on `4096981` (the resume-message fix). The older status sections
+below describe the earlier Phase 2 handoff; this section records the subsequent UI change.
+
+- Select a keyed part, click its real mounting target (or a named RAM slot button), turn it if needed,
+  and perform the validated next action. Aiming preserves rotation; each action still advances only
+  one mechanical step. Occupied slots, closed mechanisms and incorrect orientation remain checked.
+- Part dragging is no longer enabled on the single-PC page. Camera dragging remains available;
+  camera drags do not count as part/target/mechanism clicks. Keyboard controls remain available.
+- Undo, rotation, next action, slot choices and guide/RGB switches are above the scene. Detailed part
+  and cable controls are in an above-scene disclosure, automatically open for preparation/cables;
+  selection lists remain beside the scene. There is no duplicate action panel below the lists.
+- Target selection no longer automatically focuses or restores the camera in the single-PC lab.
+  Explicit Centre, Zoom and Close-up remain available. Materials and 3D assets were not changed.
+- Final focused checks run by Codex: 57 tests passed across click assembly, tap discrimination,
+  companion, RAM and hands; TypeScript and message parity passed; production build passed.
+  The earlier implementation pass also ran the full suite (979 passed, 34 skipped), before the final
+  disclosure/layout review corrections. Skipped tests are not counted as passes.
+- Browser/visual acceptance of this UI change is pending: the supported computer-use tools were
+  unavailable. Do not describe the new click flow or responsive layout as browser-verified yet.
+- Keep existing saves and the old cloud conversation. Browser progress has not been exported.
+  Do not merge to main, deploy production, or begin a new hardware phase without owner approval.
+
 This file is the starting point for continuing the work in a local Claude Code session.
 Read it together with `docs/DECISIONS.md`, `docs/REQUIREMENTS.md`, `docs/PC_GUIDE.md`,
 `docs/PC_PLANNER.md` and `docs/CATALOG.md`. (`docs/HANDOFF.md` is older, from 2026-11-06.)

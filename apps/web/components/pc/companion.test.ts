@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import en from "../../messages/en/labs.json";
 import ar from "../../messages/ar/labs.json";
-import { buildContext, companionSay, intentOf, nextAction, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
+import { buildContext, companionSay, heldLines, intentOf, nextAction, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
 import {
   connectSimpleCable, createSimpleBuild, installSimplePart, SIMPLE_CABLES, simpleBuildFromSnapshot, startSimplePC, undoSimpleStep, withCable, withPart,
   emptySimpleSnapshot, type SimplePartKey,
@@ -306,5 +306,25 @@ describe("the welcome back after a reload", () => {
   it("a saved hand that no longer matches the build (part already in) is not spoken about", () => {
     const s = must(installSimplePart(createSimpleBuild(), "cpu"));
     expect(keys(resume(s, { key: "cpu", rotationDeg: 0, offsetMm: [0, 0] }))).toEqual(["welcomeBack", "next.ram"]);
+  });
+});
+
+describe("what the robot says about the part in hand after a click aims it", () => {
+  afterEach(() => activateSimpleModel(LEGACY_MODEL));
+  const must = <T,>(r: { ok: true; state: T } | { ok: false }) => { if (!r.ok) throw new Error(JSON.stringify(r)); return r.state; };
+  it("a module over a slot: that slot by name and what it needs; the same words as after a reload", () => {
+    const s = createSimpleBuild();
+    const held: SimpleHeld = { key: "ram", rotationDeg: 180, offsetMm: simpleRamSlotOffsets(s).get("dimm-b2")! };
+    expect(heldLines(s, held)).toEqual([{ key: "resume.ramOver", values: { slot: "DIMM_B2" } }, { key: "hands.ramOpenFirst" }]);
+  });
+  it("a CPU over its socket: open the socket first, then turn it if needed, else it is ready to lower", () => {
+    let s = createSimpleBuild();
+    const over: SimpleHeld = { key: "cpu", rotationDeg: 90, offsetMm: [0, 0] };
+    expect(heldLines(s, over)).toEqual([{ key: "hands.cpuOpenFirst" }]);
+    s = must(setSimpleMechanism(s, simpleRetention(s, "cpu")!.leverId!, "open"));
+    s = must(setSimpleMechanism(s, simpleRetention(s, "cpu")!.id, "open"));
+    expect(heldLines(s, over)).toEqual([{ key: "hands.cpuTurn" }]);
+    expect(heldLines(s, { ...over, rotationDeg: 0 })).toEqual([{ key: "aim.ready" }]);
+    for (const messages of [en, ar] as Tree[]) expect(lookup(messages, "simplePc.companion.aim.ready")).toBeTypeOf("string");
   });
 });

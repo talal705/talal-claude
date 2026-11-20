@@ -10,6 +10,7 @@ import * as THREE from "three";
 import type { InstalledPart } from "@ytl/contracts";
 import type { PartGeometry, Vec3 } from "./geometry";
 import { FINISHES } from "./palette";
+import { isTap } from "./tap";
 import { useTurn } from "./SocketMechanism";
 
 /** `far`: the slot's (first) moving clip, wherever it is; `near`: the second clip of a two-clip slot. `out`: the way each tips open (+1 toward the slot's bottom end). */
@@ -37,7 +38,8 @@ function Clip({ at, size, open, outward, glow, reducedMotion, onClick, material,
   // Pivot at the clip's foot on the slot side; opening tips its top outward (away from the module).
   const turn = useTurn(open ? outward * OPEN : 0, reducedMotion);
   const foot: Vec3 = [at[0], at[1] - size[1] / 2, at[2] - (outward * size[2]) / 2];
-  const click = onClick ? (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onClick(); } : undefined;
+  // Only a tap moves the clip: a camera drag that ends on it does not.
+  const click = onClick ? (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); if (isTap(e)) onClick(); } : undefined;
   return (
     <group position={foot}>
       <group ref={turn}>

@@ -1,0 +1,108 @@
+// Click-based assembly for parts that are held and keyed (CPU, memory, card, M.2 drive). A click on a
+// real place brings the part in hand over that place, exactly as the learner turned it (it is never
+// turned for them); each further click or the toolbar's action then takes ONE checked mechanical step:
+// a lever, a plate, a clip, lowering, pressing home. The engine still refuses what cannot happen.
+import type { PCBuildState } from "@ytl/contracts";
+import type { SimpleSceneTarget } from "./simple-scene";
+import {
+  ALL_SIMPLE_PARTS, caseCoversClosed, isRamKey, simpleBlock, simpleFastened, simpleKeying, simpleRamReference, simpleRamSlotOffsets, simpleRamSlots,
+  simpleRamTargetFor, simpleRetention, simplePartInstalled, type SimpleBlock, type SimpleHeld, type SimplePartKey,
+} from "./simple-model";
+
+/** The tolerance a held part's place accepts when the catalog gives none (the memory slots' 1.5 mm). */
+const DEFAULT_TOLERANCE_MM = 1.5;
+
+const attachmentOf = (state: PCBuildState, key: SimplePartKey) =>
+  state.parts.find((p) => p.instanceId === ALL_SIMPLE_PARTS.find((x) => x.key === key)?.id)?.attachments[0];
+
+export type AimResult =
+  | { ok: true; held: SimpleHeld; placeId: string }
+  | { ok: false; reason: SimpleBlock | "slotTaken" | "notItsPlace"; placeId: string };
+
+/**
+ * Brings the part in hand over the place the learner clicked: a memory module over that slot (any of
+ * the board's slots), any other keyed part over the centre of its own place. The turn is kept as held.
+ */
+export function aimHeld(state: PCBuildState, held: SimpleHeld, placeId: string): AimResult {
+  const blocked = simpleBlock(state, held.key);
+  if (blocked) return { ok: false, reason: blocked, placeId };
+  if (isRamKey(held.key)) {
+    const slot = simpleRamSlots(state).find((x) => x.id === placeId);
+    const offset = simpleRamSlotOffsets(state).get(placeId);
+    if (!slot || !offset) return { ok: false, reason: "notItsPlace", placeId };
+    if (slot.occupant && slot.occupant !== held.key) return { ok: false, reason: "slotTaken", placeId };
+    return { ok: true, held: { ...held, offsetMm: [...offset] as [number, number] }, placeId };
+  }
+  const ret = simpleRetention(state, held.key);
+  if (!ret || ret.mountPointId !== placeId) return { ok: false, reason: "notItsPlace", placeId };
+  return { ok: true, held: { ...held, offsetMm: [0, 0] }, placeId };
+}
+
+/**
+ * The places a click can aim the selected keyed part at. Memory: every slot, free or taken (a taken one
+ * says so), as invisible pick boxes so no slot is suggested; once resting in a slot, only that slot (to
+ * press it home). CPU: its socket, only while the socket is open and the CPU is not yet in it (before
+ * that, the lever and the plate are clicked themselves).
+ */
+export function aimTargets(state: PCBuildState, key: SimplePartKey, held: SimpleHeld | null): SimpleSceneTarget[] {
+  const at = attachmentOf(state, key);
+  if (isRamKey(key)) {
+    if (at?.seating === "seated") return [];
+    const host = simpleRamReference(state).hostInstanceId;
+    return simpleRamSlots(state)
+      .filter((slot) => !at || slot.id === at.target.mountPointId)
+      .map((slot): SimpleSceneTarget => ({ id: `aim:${slot.id}`, kind: "mount", hostInstanceId: host, placeId: slot.id, role: "decoy" }));
+  }
+  const ret = simpleRetention(state, key);
+  if (!ret || at || !ret.open || held?.key !== key) return [];
+  return [{ id: `aim:${ret.mountPointId}`, kind: "mount", hostInstanceId: ret.hostInstanceId, placeId: ret.mountPointId, role: "target" }];
+}
+
+/** The one mechanical step a click on the part's place (or the toolbar's action) takes next. */
+export type HandStep =
+  | { kind: "aim" }
+  | { kind: "slotTaken"; slotId: string }
+  | { kind: "clip"; slotId: string; near: boolean }
+  | { kind: "lever"; desired: "open" | "closed" }
+  | { kind: "mechanism"; desired: "open" | "closed" }
+  | { kind: "covers" }
+  | { kind: "lower" }
+  | { kind: "seat" }
+  | { kind: "fasten" }
+  | null;
+
+/**
+ * What comes next for a keyed part, from the build and the hand: null when there is nothing (the part is
+ * in, or it has no mechanism of its own). A part in hand that is not over its place needs aiming first;
+ * a part over its place is lowered as held, so a wrong turn is refused by the engine, not corrected.
+ */
+export function nextHandStep(state: PCBuildState, key: SimplePartKey, held: SimpleHeld | null): HandStep {
+  const ret = simpleRetention(state, key);
+  // In and done: taking it out again is its own choice in the panel, never the next click.
+  if (!ret || simplePartInstalled(state, key)) return null;
+  const at = attachmentOf(state, key);
+  const hand = held?.key === key ? held : null;
+  if (isRamKey(key)) {
+    if (at) return at.seating !== "seated" ? { kind: "seat" } : null;
+    const target = hand ? simpleRamTargetFor(state, hand.offsetMm) : null;
+    const slot = target && simpleRamSlots(state).find((x) => x.id === target.slotId);
+    if (!target || !slot) return { kind: "aim" };
+    if (slot.occupant && slot.occupant !== key) return { kind: "slotTaken", slotId: slot.id };
+    if (!slot.clipOpen) return { kind: "clip", slotId: slot.id, near: false };
+    if (slot.nearId && !slot.nearOpen) return { kind: "clip", slotId: slot.id, near: true };
+    return { kind: "lower" };
+  }
+  const gpu = ret.kind === "pcie_latch";
+  if (!at && gpu && caseCoversClosed(state)) return { kind: "covers" };
+  if (ret.leverId && !ret.leverOpen && !ret.open) return { kind: "lever", desired: "open" };
+  if (!at && !ret.open) return { kind: "mechanism", desired: "open" };
+  if (!at) {
+    const tolerance = simpleKeying(state, key)?.toleranceMm ?? DEFAULT_TOLERANCE_MM;
+    return hand && Math.hypot(hand.offsetMm[0], hand.offsetMm[1]) <= tolerance ? { kind: "lower" } : { kind: "aim" };
+  }
+  if (at.seating !== "seated") return { kind: "seat" };
+  if (gpu) return simpleFastened(state, key) ? null : { kind: "fasten" };
+  if (ret.open && ret.kind !== "dimm_latch") return { kind: "mechanism", desired: "closed" };
+  if (ret.leverId && ret.leverOpen) return { kind: "lever", desired: "closed" };
+  return null;
+}

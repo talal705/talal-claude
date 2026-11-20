@@ -10,6 +10,7 @@ import * as THREE from "three";
 import type { InstalledPart } from "@ytl/contracts";
 import type { PartGeometry, Vec3 } from "./geometry";
 import { FINISHES } from "./palette";
+import { isTap } from "./tap";
 import { WEDGE } from "./wedge";
 
 export interface SocketLayout {
@@ -146,7 +147,8 @@ export function SocketMechanism({ layout, board, retentionId, cpuIn, reducedMoti
   const [cx, cy, cz] = layout.centre;
   const [sx, sy, sz] = layout.size;
   const top = cy + sy / 2;
-  const click = (handler?: () => void) => handler ? (event: ThreeEvent<MouseEvent>) => { event.stopPropagation(); handler(); } : undefined;
+  // A drag of the camera that ends on the lever or plate does not move it: only a tap does.
+  const click = (handler?: () => void) => handler ? (event: ThreeEvent<MouseEvent>) => { event.stopPropagation(); if (isTap(event)) handler(); } : undefined;
   const hover = (on: boolean) => (handler?: () => void) => handler ? () => { document.body.style.cursor = on ? "pointer" : ""; } : undefined;
   const plateLength = sz - 4;
 

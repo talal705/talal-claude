@@ -273,13 +273,15 @@ export function pickupLine(state: PCBuildState, key: SimplePartKey): CompanionLi
 }
 
 /**
- * After a reload, what the learner left part-way, from the saved build and hand: the module in hand
- * (the slot it is over and what that slot needs next), another keyed part in hand, or a module resting
- * in a slot not yet pressed home. Null when nothing is part-way: the build's next step applies.
+ * What the part in hand needs next, from where it is held (after a click aims it, or after a reload): a
+ * module over a slot names that slot and what it needs (its clip or clips, a turn, lining up, lowering);
+ * a CPU, card or drive over its place says to turn it, or that it is ready to go in. Null when the part is
+ * not in hand any more (in its place, or with no mechanism of its own).
  */
-function resumeLines(state: PCBuildState, held: SimpleHeld | null): CompanionLine[] | null {
-  const first = held ? pickupLine(state, held.key) : null;
-  if (held && first && isRamKey(held.key)) {
+export function heldLines(state: PCBuildState, held: SimpleHeld): CompanionLine[] | null {
+  const first = pickupLine(state, held.key);
+  if (!first) return null;
+  if (isRamKey(held.key)) {
     const target = simpleRamTargetFor(state, held.offsetMm);
     const slot = target && simpleRamSlots(state).find((x) => x.id === target.slotId);
     if (!target || !slot) return [first];
@@ -292,7 +294,21 @@ function resumeLines(state: PCBuildState, held: SimpleHeld | null): CompanionLin
     if (Math.hypot(target.residual[0], target.residual[1]) > 1.5) return [over, { key: "hands.ramCentre" }];
     return [{ key: "resume.ramReady", values: { slot: name } }];
   }
-  if (first) return [first];
+  // Over its place only when a click put it there (exactly centred); a socket or latch still shut comes first.
+  const ret = simpleRetention(state, held.key);
+  if (!ret?.open || Math.hypot(held.offsetMm[0], held.offsetMm[1]) > 0.05) return [first];
+  const k = ret.kind === "pcie_latch" ? "gpu" : ret.kind === "m2_qlatch" ? "m2" : "cpu";
+  return [{ key: held.rotationDeg === 0 ? "aim.ready" : `hands.${k}Turn` }];
+}
+
+/**
+ * After a reload, what the learner left part-way, from the saved build and hand: the module in hand
+ * (the slot it is over and what that slot needs next), another keyed part in hand, or a module resting
+ * in a slot not yet pressed home. Null when nothing is part-way: the build's next step applies.
+ */
+function resumeLines(state: PCBuildState, held: SimpleHeld | null): CompanionLine[] | null {
+  const inHand = held ? heldLines(state, held) : null;
+  if (inHand) return inHand;
   const resting = ALL_SIMPLE_PARTS.find((p) => isRamKey(p.key) && state.parts.find((x) => x.instanceId === p.id)?.attachments.some((a) => a.seating !== "seated"));
   const at = resting && state.parts.find((x) => x.instanceId === resting.id)?.attachments[0];
   return at ? [{ key: "hands.ramResting", values: { slot: ramSlotName(state, at.target.mountPointId) } }] : null;

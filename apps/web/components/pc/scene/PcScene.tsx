@@ -28,6 +28,7 @@ import { useGeometry } from "./use-geometry";
 import { HOSE_ROUTES } from "./visual-details";
 import { GuideRobot } from "./GuideRobot";
 import { WEDGE } from "./wedge";
+import { isTap, pastSlop } from "./tap";
 import { DimmClips, dimmLayout, dimmReplaces } from "./DimmClips";
 import { SocketMechanism, socketLayout, socketMoved, socketPoint } from "./SocketMechanism";
 import type { GuideFocus } from "../guide";
@@ -441,7 +442,8 @@ function Part({
     if (onSelectPart) {
       // A place to install into, or a loose lead, wins over the body it lies on.
       if (event.intersections.some((hit) => hit.object.userData.simpleTarget || hit.object.userData.looseEnd || hit.object.userData.heldHandle || hit.object.userData.mechanismHandle)) return;
-      event.stopPropagation(); onSelectPart(part.instanceId); return;
+      // A camera drag that ends on a part does not pick it up.
+      event.stopPropagation(); if (isTap(event)) onSelectPart(part.instanceId); return;
     }
     // While places are offered, a click that also hits a place marker (a slot on a board, the tray
     // in a case) goes on to the marker: parts never swallow it. A click on a part with no marker
@@ -872,7 +874,7 @@ function Cable({ cableId, kind, ends, fixedSource, orientations, anchors, obstac
       {fixedSource && <mesh geometry={detailedBox(9, 8, 9)} material={CONNECTOR} position={fixedSource as [number, number, number]} raycast={noRaycast} castShadow />}
       {ends.map(([endId, end]) => (
         <group key={endId} ref={(node) => { if (node) plugs.current.set(endId, node); else plugs.current.delete(endId); }} onClick={(event) => {
-          if (simple) { event.stopPropagation(); onSelectSimpleCable?.(cableId); return; }
+          if (simple) { event.stopPropagation(); if (isTap(event)) onSelectSimpleCable?.(cableId); return; }
           if (assembly.phase !== "idle") return;
           event.stopPropagation(); selectCableEnd(`${cableId}/${endId}`);
           if (end.plugged) return;
@@ -1035,8 +1037,10 @@ const MIN_TAP_PX = 32;
  * The place the selected part or lead goes glows and breathes; other slots or headers of the same
  * kind are invisible but clickable, so a wrong choice gets an explanation instead of nothing.
  */
-function SimpleTargets({ targets, placed, geometry, state, reducedMotion, onTarget }: {
+function SimpleTargets({ targets, placed, geometry, state, reducedMotion, onTarget, autoFocus }: {
   targets: readonly SimpleSceneTarget[]; placed: ReadonlyMap<string, PlacedPart>; geometry: ReadonlyMap<string, PartGeometry>; state: PCBuildState; reducedMotion: boolean; onTarget?: (id: string) => void;
+  /** Whether offering a small place may glide the camera in to it (and back after). Off on the single-PC page (decision 14). */
+  autoFocus: boolean;
 }) {
   const pulse = useRef<THREE.Group>(null);
   // With look-alike slots or headers offered beside it, the glowing place keeps (about) its real size,
@@ -1085,10 +1089,12 @@ function SimpleTargets({ targets, placed, geometry, state, reducedMotion, onTarg
   };
   // Decided once per place: after the camera has come closer the place is no longer small, and must stay focused.
   const focused = useRef<string | null>(null);
-  if (glowing && focused.current !== glowing.target.id && (glowing.target.kind === "port" || tooSmall(glowing))) focused.current = glowing.target.id;
-  const focusKey = glowing && focused.current === glowing.target.id ? glowing.target.id : null;
+  // Never on the single-PC page: there the camera moves only when the learner moves it (Centre, zoom, Close-up).
+  if (autoFocus && glowing && focused.current !== glowing.target.id && (glowing.target.kind === "port" || tooSmall(glowing))) focused.current = glowing.target.id;
+  const focusKey = autoFocus && glowing && focused.current === glowing.target.id ? glowing.target.id : null;
   if (!glowing) focused.current = null;
   useEffect(() => {
+    if (!autoFocus) return;
     const marker = markers.find((item) => item.target.id === focusKey);
     if (!marker || !api) return;
     // Remember the learner's own view once, before the first glide in.
@@ -1097,15 +1103,15 @@ function SimpleTargets({ targets, placed, geometry, state, reducedMotion, onTarg
     return glideCamera(marker.frame.at, marker.facing, distance, reducedMotion);
     // Only a new port to aim at moves the camera; re-renders of the same one do not.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusKey]);
+  }, [autoFocus, focusKey]);
   // The lead is in (or put down): back to the view the learner had, so the next part is in sight.
   useEffect(() => {
-    if (focusKey || !savedView || !api) return;
+    if (!autoFocus || focusKey || !savedView || !api) return;
     const view = savedView;
     savedView = null;
     glideCameraTo(view.target, view.position, reducedMotion);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusKey]);
+  }, [autoFocus, focusKey]);
 
   useFrame((frame) => {
     if (!pulse.current || reducedMotion || markers.length === 0) return;
@@ -1126,7 +1132,12 @@ function SimpleTargets({ targets, placed, geometry, state, reducedMotion, onTarg
             renderOrder={30}
             userData={{ simpleTarget: target.id }}
             // The nearest place under the pointer answers; it stops the event, so one behind it does not.
-            onClick={(event) => { event.stopPropagation(); onTarget?.(target.id); }}
+            // A clip or lever in front of it gets the press instead; a camera drag ending here places nothing.
+            onClick={(event) => {
+              if (event.intersections.some((hit) => hit.object.userData.mechanismHandle)) return;
+              event.stopPropagation();
+              if (isTap(event)) onTarget?.(target.id);
+            }}
           />
           {target.role === "target" && (
             <group ref={pulse}>
@@ -1718,13 +1729,15 @@ function SceneEnvironment({ enabled }: { enabled: boolean }) {
 }
 
 /**
- * An invisible grip around the held part: press on it and drag, and the part slides over its place in
- * the plane it is held in (orbiting stops while dragging). It never lowers the part: that stays a
- * separate, checked step.
+ * An invisible grip around the held part, kept as an optional way to move it (clicking a place is the
+ * main one): press on it and drag, and the part slides over its place in the plane it is held in
+ * (orbiting stops while dragging). A tap never moves it: it starts moving only once the pointer leaves
+ * the tap radius, and a tap's click goes on to the place underneath. It never lowers the part: that
+ * stays a separate, checked step.
  */
 function HeldHandle({ item, offset, turnDeg, onDrag }: { item: PlacedPart; offset: [number, number]; turnDeg: number; onDrag: (offsetMm: [number, number]) => void }) {
   const { camera, gl } = useThree();
-  const drag = useRef<{ plane: THREE.Plane; start: THREE.Vector3; offset: [number, number]; quat: THREE.Quaternion } | null>(null);
+  const drag = useRef<{ plane: THREE.Plane; start: THREE.Vector3; offset: [number, number]; quat: THREE.Quaternion; from: [number, number]; moving: boolean } | null>(null);
   const centre = add(item.frame.at, rotate(item.frame.quat, scale(item.size, 0.5)));
   const pointOn = (clientX: number, clientY: number, plane: THREE.Plane) => {
     const rect = gl.domElement.getBoundingClientRect();
@@ -1736,6 +1749,8 @@ function HeldHandle({ item, offset, turnDeg, onDrag }: { item: PlacedPart; offse
     const move = (event: PointerEvent) => {
       const d = drag.current;
       if (!d) return;
+      if (!d.moving && !pastSlop(d.from, event.clientX, event.clientY)) return;
+      d.moving = true;
       const p = pointOn(event.clientX, event.clientY, d.plane);
       if (!p) return;
       const local = p.sub(d.start).applyQuaternion(d.quat.clone().invert());
@@ -1774,11 +1789,12 @@ function HeldHandle({ item, offset, turnDeg, onDrag }: { item: PlacedPart; offse
         const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, new THREE.Vector3(...centre));
         const start = pointOn(event.nativeEvent.clientX, event.nativeEvent.clientY, plane);
         if (!start) return;
-        drag.current = { plane, start, offset, quat };
+        drag.current = { plane, start, offset, quat, from: [event.nativeEvent.clientX, event.nativeEvent.clientY], moving: false };
         if (api) api.controls.enabled = false;
         document.body.style.cursor = "grabbing";
       }}
-      onClick={(event) => { if (!event.intersections.some((hit) => hit.object.userData.mechanismHandle)) event.stopPropagation(); }}
+      // A clip, a lever or a place under the grip answers the click (a slot the module is held near).
+      onClick={(event) => { if (!event.intersections.some((hit) => hit.object.userData.mechanismHandle || hit.object.userData.simpleTarget)) event.stopPropagation(); }}
       onPointerOver={() => { if (!drag.current) document.body.style.cursor = "grab"; }}
       onPointerOut={() => { if (!drag.current) document.body.style.cursor = ""; }}
     >
@@ -2061,7 +2077,7 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
       })}
       {/* Mounted for the whole guided page (also with nothing offered), so the camera can return after a lead is in. */}
       {simple && simpleTargets && (
-        <SimpleTargets targets={simpleTargets} placed={placed} geometry={geometry} state={state} reducedMotion={reducedMotion} onTarget={onSimpleTarget} />
+        <SimpleTargets targets={simpleTargets} placed={placed} geometry={geometry} state={state} reducedMotion={reducedMotion} onTarget={onSimpleTarget} autoFocus={!simple} />
       )}
       {rgb && <RgbDriver lit={rgbLit} reducedMotion={reducedMotion} />}
       {simple && guide !== undefined && (
