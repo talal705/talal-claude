@@ -141,6 +141,7 @@ export function BuildPlanner({ build, onChange, onStart, hasProgress, onContinue
                     <h3>{e.brand} {e.model}</h3>
                     <dl>{specsOf(e, t).slice(0, 4).map(([k, v]) => <div key={k}><dt>{k}</dt><dd dir="ltr">{v}</dd></div>)}</dl>
                     <div className={styles.cardActions}>
+                      {category === "storage" && inBuild && <button type="button" className={styles.inBuild} aria-label={`${t("remove")} ${nameOf(e.id)}`} onClick={() => set(withoutChoice(plan, "storage", ids.indexOf(e.id)))}><CheckIcon /> {t("inBuild")} · {t("remove")}</button>}
                       {inBuild && !multi
                         ? <button type="button" className={styles.inBuild} onClick={() => set(withoutChoice(plan, category))}><CheckIcon /> {t("inBuild")} · {t("remove")}</button>
                         : <button type="button" className={styles.primary} onClick={() => set(withChoice(plan, category, e.id))}>{single ? t("replace") : t("add")}</button>}
