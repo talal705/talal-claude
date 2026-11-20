@@ -18,7 +18,7 @@ import {
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
   simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap,
   activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
-  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simplePrepMissing, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, HELD_REACH_MM, type SimpleHeld, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
+  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simplePrepMissing, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
 } from "./simple-model";
 import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-scene";
 import { guideFocus } from "./guide";
@@ -239,7 +239,9 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const pickup = (key: SimplePartKey, retKind: string) => {
     const k = handKind(retKind);
     // A CPU comes up from the bench beside the socket, turned: bringing it over the socket is the learner's job.
-    return { key, rotationDeg: k === "cpu" ? 90 : 180, offsetMm: (k === "cpu" ? [-32, -18] : k === "ram" ? [6, 0] : k === "m2" ? [4, 0] : [4, 3]) as [number, number] };
+    // A memory module comes up beside the slots (over none of them), the wrong way round.
+    const ramStart: [number, number] = [6, Math.min(...[...simpleRamSlotOffsets(state).values()].map((o) => o[1]), 0) - 7];
+    return { key, rotationDeg: k === "cpu" ? 90 : 180, offsetMm: (k === "cpu" ? [-32, -18] : k === "ram" ? ramStart : k === "m2" ? [4, 0] : [4, 3]) as [number, number] };
   };
   function choosePart(key: SimplePartKey) {
     setConfirmRestart(false);
@@ -258,7 +260,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const ret = simpleRetention(state, key);
     if (ret && !simplePartInstalled(state, key) && !inPlace) {
       const k = handKind(ret.kind);
-      const line = k === "gpu" ? (caseCoversClosed(state) ? "gpuCoversFirst" : ret.open ? "gpuOpen" : "gpuLatchFirst")
+      const line = k === "ram" ? "ramPick" : k === "gpu" ? (caseCoversClosed(state) ? "gpuCoversFirst" : ret.open ? "gpuOpen" : "gpuLatchFirst")
         : ret.leverId && ret.leverOpen && !ret.open ? "cpuPlateNext" : ret.open ? `${k}Open` : `${k}OpenFirst`;
       speak({ lines: [{ key: `hands.${line}` }], mood: "point", point: "scene" });
       return;
@@ -365,7 +367,44 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   }
   /** Clamps a dragged pose to the reach over the board (it never leaves the socket area or goes through parts). */
   const dragHeld = (offsetMm: [number, number]) => setHold((h) => (h ? { ...h, offsetMm: clampHeld(h.key, offsetMm) } : h));
+  /** A memory slot's clip, clicked in the view or with its button: opens it, or closes it over an empty slot. */
+  function handClip(slotId: string, near: boolean) {
+    if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
+    const slot = simpleRamSlots(state).find((x) => x.id === slotId);
+    const id = slot ? (near ? slot.nearId : slot.clipId) : null;
+    if (!slot || !id) return;
+    const desired = (near ? slot.nearOpen : slot.clipOpen) ? "closed" : "open";
+    const r = setSimpleMechanism(state, id, desired);
+    if (!r.ok) { speak({ lines: [{ key: "hands.ramClipBlocked" }], mood: "concerned", point: "scene" }); return; }
+    const released = desired === "open" && slot.occupant !== null;
+    keepHand(r.state, (sn) => withMechanism(sn, id, desired), desired === "open" ? (released ? "ramReleased" : "ramClipOpen") : "ramClipClosed");
+    if (released && slot.occupant) setSelection({ kind: "part", key: slot.occupant });
+  }
+  /** Lowers the held module into the slot it is over: it rests there until pressed home. */
+  function handRamLower(key: SimplePartKey) {
+    if (lockedOn || !hold || hold.key !== key) return;
+    const r = lowerSimpleRam(state, key, hold);
+    const slotName = (id?: string) => { const sl = simpleRamSlots(state).find((x) => x.id === id); return sl ? (locale === "ar" ? sl.label.ar : sl.label.en).replace(/ \(.*\)$/, "") : ""; };
+    if (!r.ok) {
+      if (r.reason === "cannotFit" && r.message) { sayEngine(r.message, "ramCentre"); return; }
+      const line = r.reason === "noSlot" ? "ramNoSlot" : r.reason === "slotTaken" ? "ramSlotTaken" : r.reason === "openFirst" ? "ramOpenFirst" : r.reason === "turnPart" ? "ramTurn" : r.reason === "centrePart" ? "ramCentre" : null;
+      if (line) speak({ lines: [{ key: `hands.${line}`, values: { slot: slotName(r.slotId) } }], mood: "concerned", point: "scene" });
+      else react({ type: "select", selection: { kind: "part", key } });
+      return;
+    }
+    const pose = { rotationDeg: hold.rotationDeg, offsetMm: hold.offsetMm };
+    setHold(null);
+    if (mode === "fault") { if (fault) setFault({ ...fault, state: r.state }); } else setSaved((previous) => withLower(previous, key, pose));
+    setVerdict(null);
+    // A slot the manual does not recommend for this many modules still works: it is explained, not refused.
+    const count = ALL_SIMPLE_PARTS.filter((p) => isRamKey(p.key) && (r.state.parts.find((x) => x.instanceId === p.id)?.attachments.length ?? 0) > 0).length;
+    const rec = simpleRamRecommended(r.state, count);
+    const lines: { key: string; values?: Record<string, string> }[] = [{ key: "hands.ramResting", values: { slot: slotName(r.slotId) } }];
+    if (rec.length && !rec.includes(r.slotId)) lines.push({ key: "hands.ramNotRecommended", values: { n: String(count), rec: rec.map((id) => slotName(id)).join(locale === "ar" ? " و" : " and ") } });
+    speak({ lines, mood: "point", point: "scene" });
+  }
   function handLower(key: SimplePartKey) {
+    if (isRamKey(key)) { handRamLower(key); return; }
     if (lockedOn || !hold || hold.key !== key) return;
     const ret = simpleRetention(state, key);
     const k = handKind(ret?.kind ?? "");
@@ -388,6 +427,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (!r.ok) return;
     keepHand(r.state, (sn) => withSeat(sn, key), "ramIn", "happy");
     setSelection(null);
+    setHold(null);
   }
   function handLift(key: SimplePartKey) {
     if (lockedOn) return;
@@ -399,8 +439,11 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
       speak({ lines: [{ key: `hands.${line}` }], mood: "concerned", point: "scene" });
       return;
     }
-    keepHand(r.state, (sn) => withLift(sn, key), "lifted");
-    if (ret) setHold(pickup(key, ret.kind));
+    keepHand(r.state, (sn) => withLift(sn, key), isRamKey(key) ? "ramLifted" : "lifted");
+    // A module comes straight up out of its slot: held right above it, the way it was in.
+    const from = isRamKey(key) ? simpleRamSlotOffsets(state).get(ret?.mountPointId ?? "") : undefined;
+    if (from) setHold({ key, rotationDeg: 0, offsetMm: from });
+    else if (ret) setHold(pickup(key, ret.kind));
   }
   /** Says an engine refusal as the engine worded it, in the page's language. */
   const sayEngine = (message: { en: string; ar: string } | undefined, fallback: string) =>
@@ -503,12 +546,19 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const clampHeld = (key: SimplePartKey, offsetMm: [number, number]): [number, number] => {
     let [x, z] = offsetMm;
     if (handKind(simpleRetention(state, key)?.kind ?? "") === "cpu") { x = Math.min(x, 6); z = Math.min(z, 3); }
+    if (isRamKey(key)) {
+      // Over the memory slots only: a little past the end slots across, a little either way along.
+      const across = [...simpleRamSlotOffsets(state).values()].map((o) => o[1]);
+      if (across.length) { z = Math.max(Math.min(...across) - 8, Math.min(Math.max(...across) + 8, z)); }
+      x = Math.max(-12, Math.min(12, x));
+    }
     const d = Math.hypot(x, z);
     const k = d > HELD_REACH_MM ? HELD_REACH_MM / d : 1;
     return [Math.round(x * k * 2) / 2, Math.round(z * k * 2) / 2];
   };
   // A module or an M.2 drive only slides along its slot; a CPU or card can be off in both directions.
-  const alongOnly = (key: SimplePartKey) => { const k = simpleRetention(state, key)?.kind; return k === "dimm_latch" || k === "m2_qlatch"; };
+  // An M.2 drive only slides along its slot; a memory module also moves across the slots (that is how a slot is chosen).
+  const alongOnly = (key: SimplePartKey) => simpleRetention(state, key)?.kind === "m2_qlatch";
   const nudge = (dx: number, dz: number) => setHold((h) => (h ? { ...h, offsetMm: clampHeld(h.key, [Math.round((h.offsetMm[0] + dx) * 10) / 10, alongOnly(h.key) ? 0 : Math.round((h.offsetMm[1] + dz) * 10) / 10]) } : h));
 
   /** Replaces the CPU or cooler that is in with its alternative. */
@@ -592,6 +642,17 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const at = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
     if (!ret) return;
     const gpu = ret.kind === "pcie_latch";
+    if (isRamKey(key)) {
+      if (!at) {
+        const target = hold?.key === key ? simpleRamTargetFor(state, hold.offsetMm) : null;
+        const slot = target ? simpleRamSlots(state).find((x) => x.id === target.slotId) : null;
+        if (slot && !slot.occupant && !slot.clipOpen) { handClip(slot.id, false); return; }
+        if (slot && !slot.occupant && slot.nearId && !slot.nearOpen) { handClip(slot.id, true); return; }
+        handRamLower(key); return;
+      }
+      if (at.seating !== "seated") handSeat(key);
+      return;
+    }
     if (!at && gpu && caseCoversClosed(state)) { handCovers("open"); return; }
     if (ret.leverId && !ret.leverOpen && !ret.open) { handLever(key, "open"); return; }
     if (!at && !ret.open) { handMechanism(key, "open"); return; }
@@ -784,10 +845,20 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     onLever: () => (keyed.leverId ? handLever(selectedPart, keyed.leverOpen ? "closed" : "open") : handMechanism(selectedPart, keyed.open ? "closed" : "open")),
     onPlate: keyed.leverId ? () => handMechanism(selectedPart, keyed.open ? "closed" : "open") : undefined,
   } : null;
-  // The robot points at the exact piece of the socket the next step is about.
-  const sceneGuide = guide && cpuKind && cpuStep && keyed ? { ...guide, targets: [{ kind: "socket" as const, hostInstanceId: keyed.hostInstanceId, placeId: keyed.mountPointId, what: cpuStep, socket: cpuKind }] } : guide;
+  // Memory in hand: the slot it is over, the clip the next step is about, and clip clicks in the view.
+  const ramKey = selectedPart && isRamKey(selectedPart) ? selectedPart : null;
+  const ramAt = ramKey ? state.parts.find((p) => p.instanceId === partSpec(ramKey).id)?.attachments[0] : undefined;
+  const ramTarget = ramKey && !ramAt && hold?.key === ramKey ? simpleRamTargetFor(state, hold.offsetMm) : null;
+  const ramSlot = ramKey ? simpleRamSlots(state).find((x) => x.id === (ramAt ? ramAt.target.mountPointId : ramTarget?.slotId)) : undefined;
+  const ramGlow = ramSlot && (!ramSlot.occupant || ramSlot.occupant === ramKey) && !(ramAt && ramAt.seating !== "seated")
+    ? (!ramSlot.clipOpen && !(ramAt?.seating === "seated") ? { slotId: ramSlot.id, near: false } : ramSlot.nearId && !ramSlot.nearOpen && !(ramAt?.seating === "seated") ? { slotId: ramSlot.id, near: true } : null) : null;
+  const ramScene = { onClip: handClip, glowClip: ramGlow, targetSlot: ramTarget?.slotId ?? null, targetOk: Boolean(ramTarget && Math.hypot(ramTarget.residual[0], ramTarget.residual[1]) <= 1.5 && hold?.rotationDeg === 0) };
+  // The robot points at the exact piece the next step is about: a socket part, a memory clip, or the slot.
+  const ramGuideTarget = ramKey && ramSlot ? (ramGlow ? { kind: "solid" as const, hostInstanceId: partSpec(ramKey).host, solidId: `${ramGlow.slotId}-latch${ramGlow.near ? "-near" : ""}` } : { kind: "mount" as const, hostInstanceId: partSpec(ramKey).host, placeId: ramSlot.id }) : null;
+  const sceneGuide = guide && cpuKind && cpuStep && keyed ? { ...guide, targets: [{ kind: "socket" as const, hostInstanceId: keyed.hostInstanceId, placeId: keyed.mountPointId, what: cpuStep, socket: cpuKind }] }
+    : guide && ramGuideTarget ? { ...guide, targets: [ramGuideTarget] } : guide;
   const heldNow = selectedPart && keyed && hold?.key === selectedPart && !(state.parts.find((p) => p.instanceId === partSpec(selectedPart).id)?.attachments.length)
-    ? { instanceId: partSpec(selectedPart).id, target: simpleTarget(state, selectedPart), rotationDeg: hold.rotationDeg, offsetMm: hold.offsetMm, liftMm: keyed.kind === "pcie_latch" ? 40 : isRamKey(selectedPart) ? 30 : 22 }
+    ? { instanceId: partSpec(selectedPart).id, target: isRamKey(selectedPart) ? simpleRamReference(state) : simpleTarget(state, selectedPart), rotationDeg: hold.rotationDeg, offsetMm: hold.offsetMm, liftMm: keyed.kind === "pcie_latch" ? 40 : isRamKey(selectedPart) ? 12 : 22 }
     : null;
 
   /** The CPU's or module's own mechanism, alignment and lowering, one honest step at a time. */
@@ -797,6 +868,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const kind = handKind(ret.kind);
     if (kind === "gpu") return GpuHands();
     if (kind === "cpu") return CpuHands();
+    if (kind === "ram") return RamHands();
     // The CPU has its own panel (CpuHands); this one is memory and M.2.
     const cpu = (kind as string) === "cpu";
     const m2 = kind === "m2";
@@ -851,7 +923,6 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
           {at && at.seating === "seated" && !ret.open && <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handMechanism(key, "open")}>{name("hands.openPlate", "hands.openLatch", "hands.openQLatch")}</button>}
         </>}
         <p className={styles.hint}>{name("hands.markCpu", "hands.markRam", "hands.markM2")}</p>
-        {kind === "ram" && <p className={styles.cablesNote}>{t("hands.unverified")}</p>}
         {m2 && <p className={styles.cablesNote}>{t("hands.m2Source")}</p>}
         <p className={styles.cablesNote}>{t("hands.note")}</p>
       </div>
@@ -1001,11 +1072,64 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
       </div>
     );
   }
+  /** A memory module: the slot it is over, that slot's clip(s), the module turned and lined up, lowered, then pressed home. */
+  function RamHands() {
+    const key = selectedPart!;
+    const at = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
+    const slots = simpleRamSlots(state);
+    const target = !at && hold?.key === key ? simpleRamTargetFor(state, hold.offsetMm) : null;
+    const slot = slots.find((x) => x.id === (at ? at.target.mountPointId : target?.slotId));
+    const name = (id: string) => { const sl = slots.find((x) => x.id === id); return sl ? (locale === "ar" ? sl.label.ar : sl.label.en).replace(/ \(.*\)$/, "") : id; };
+    const count = slots.filter((x) => x.occupant && x.occupant !== key).length + 1;
+    const rec = simpleRamRecommended(state, count);
+    const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved));
+    const btn = (label: string, onClick: () => void, primary = true) => <button className={primary ? styles.installButton : styles.cancel} type="button" disabled={disabled} onClick={onClick}>{label}</button>;
+    const clipLine = (sl: typeof slot) => sl ? `${t(sl.clipOpen ? "hands.clipOpen" : "hands.clipClosed")}${sl.nearId ? ` · ${t(sl.nearOpen ? "hands.nearOpen" : "hands.nearClosed")}` : ""}` : "";
+    const off = target ? Math.hypot(target.residual[0], target.residual[1]) : null;
+    const note = (pcCatalog.entries.find((e) => e.id === state.parts.find((p) => p.instanceId === partSpec(key).host)?.catalogId)?.mountPoints.find((m) => m.kind === "dimm_slot") as { retention?: { note?: string; latches?: string } } | undefined)?.retention;
+    return (
+      <div className={styles.hands}>
+        <div className={styles.handsHead}>
+          <p className={styles.handsState} aria-live="polite">{slot ? `${t("hands.overSlot", { slot: name(slot.id) })}${rec.includes(slot.id) ? ` · ${t("hands.recommended")}` : ""} · ${clipLine(slot)}` : t("hands.overNoSlot")}</p>
+          <button type="button" className={styles.closeup} onClick={() => focusOn(partSpec(key).host, slot?.id ?? simpleRamReference(state).mountPointId)}>{t("hands.closeup")}</button>
+        </div>
+        <p className={styles.cablesNote}>{t("hands.ramInScene")}</p>
+        {slot && slot.occupant && slot.occupant !== key && !at && <p className={styles.hint}>{t("hands.slotTakenHint", { slot: name(slot.id) })}</p>}
+        {slot && (!slot.occupant || slot.occupant === key) && <div className={styles.holdRow}>
+          <button type="button" disabled={disabled} onClick={() => handClip(slot.id, false)}>{t(slot.clipOpen ? "hands.closeClip" : "hands.openClip", { slot: name(slot.id) })}</button>
+          {slot.nearId && <button type="button" disabled={disabled} onClick={() => handClip(slot.id, true)}>{t(slot.nearOpen ? "hands.closeNearClip" : "hands.openNearClip", { slot: name(slot.id) })}</button>}
+        </div>}
+        {!at && hold && <div className={styles.holdControls} role="group" aria-label={t("hands.title")} tabIndex={0} onKeyDown={(e) => holdKeys(e, key)}>
+          <p className={styles.alignState} aria-live="polite">{t(hold.rotationDeg === 0 ? "hands.notchMatched" : "hands.notchReversed")} · {off === null ? t("hands.overNoSlot") : off < 0.05 ? t("hands.aligned") : t("hands.off", { mm: Math.round(off * 10) / 10 })}</p>
+          <div className={styles.holdRow}>
+            <button type="button" onClick={() => turn(180)}>{t("hands.flip")}</button>
+            <button type="button" onClick={() => nudge(0, -1)} aria-label={t("hands.slotPrev")}>⇠</button>
+            <button type="button" onClick={() => nudge(0, 1)} aria-label={t("hands.slotNext")}>⇢</button>
+            <button type="button" onClick={() => nudge(-1, 0)} aria-label={t("hands.alongBack")}>↑</button>
+            <button type="button" onClick={() => nudge(1, 0)} aria-label={t("hands.alongFwd")}>↓</button>
+          </div>
+          <p className={styles.cablesNote}>{t("hands.ramKeys")}</p>
+          {btn(t("hands.ramLower"), () => handRamLower(key))}
+        </div>}
+        {at && at.seating !== "seated" && <>
+          {btn(t("hands.pressIn"), () => handSeat(key))}
+          {btn(t("hands.liftOut"), () => handLift(key), false)}
+          <p className={styles.hint}>{t("hands.ramPartial")}</p>
+        </>}
+        {at && at.seating === "seated" && <p className={styles.hint}>{t("hands.ramSeatedHint")}</p>}
+        <p className={styles.hint}>{t("hands.markRam")}</p>
+        {note?.note && <p className={styles.cablesNote}>{t(note.latches === "unverified" ? "hands.clipsUnverified" : "hands.clipsSource", { note: note.note })}</p>}
+      </div>
+    );
+  }
+
   /** Keyboard for a part in hand: Q/E turn, arrows move, Enter lowers. */
   function holdKeys(e: React.KeyboardEvent, key: SimplePartKey) {
     const k = e.key.toLowerCase();
     const cpu = handKind(simpleRetention(state, key)?.kind ?? "") === "cpu";
-    const map: Record<string, () => void> = { q: () => turn(cpu ? -90 : 180), e: () => turn(cpu ? 90 : 180), arrowleft: () => nudge(-1, 0), arrowright: () => nudge(1, 0), arrowup: () => nudge(0, -1), arrowdown: () => nudge(0, 1), enter: () => handLower(key) };
+    const ram = isRamKey(key);
+    // Memory: left/right move across the slots, up/down along them.
+    const map: Record<string, () => void> = { q: () => turn(cpu ? -90 : 180), e: () => turn(cpu ? 90 : 180), arrowleft: () => (ram ? nudge(0, -1) : nudge(-1, 0)), arrowright: () => (ram ? nudge(0, 1) : nudge(1, 0)), arrowup: () => (ram ? nudge(-1, 0) : nudge(0, -1)), arrowdown: () => (ram ? nudge(1, 0) : nudge(0, 1)), enter: () => handLower(key) };
     if (map[k]) { e.preventDefault(); e.stopPropagation(); map[k](); }
   }
 
@@ -1098,7 +1222,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
                   simpleCableIds={cableIds}
                   selectedSimpleCableId={selectedCable ? cableSpec(selectedCable).id : null}
                   onSelectSimpleCable={onSceneCable}
-                  simpleTargets={cpuKind && keyed ? targets.filter((x) => !(x.hostInstanceId === keyed.hostInstanceId && x.placeId === keyed.mountPointId)) : targets}
+                  simpleTargets={cpuKind && keyed ? targets.filter((x) => !(x.hostInstanceId === keyed.hostInstanceId && x.placeId === keyed.mountPointId)) : ramKey ? targets.filter((x) => !x.placeId.startsWith("dimm-")) : targets}
                   onSimpleTarget={onTarget}
                   onSimpleMiss={() => { if (selection) react({ type: "missedTarget" }); }}
                   guide={sceneGuide}
@@ -1107,6 +1231,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
                   held={heldNow}
                   onHeldDrag={heldNow ? dragHeld : undefined}
                   socket={socketHands}
+                  dimm={ramScene}
                   benchOrder={bench.benchOrder}
                   beside={bench.beside}
                   onContextLost={() => setWebgl(false)}

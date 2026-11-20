@@ -95,7 +95,7 @@ function contactTexture(holes: boolean): THREE.Texture {
 }
 
 /** Turns a group about its local x axis towards `target` radians, eased (or at once with reduced motion). */
-function useTurn(target: number, reducedMotion: boolean) {
+export function useTurn(target: number, reducedMotion: boolean) {
   const ref = useRef<THREE.Group>(null);
   const from = useRef<{ angle: number; start: number } | null>(null);
   const invalidate = useThree((three) => three.invalidate);

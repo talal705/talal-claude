@@ -56,15 +56,15 @@
     },
     {
       "id": "notch",
-      "shape": "box",
+      "shape": "gap",
       "at": [
         68,
-        1.5,
+        2,
         3.5
       ],
       "size": [
         2,
-        3,
+        4,
         2
       ],
       "role": "chip",
@@ -76,13 +76,64 @@
       "shape": "box",
       "at": [
         66.7,
-        20,
+        25,
         3.5
       ],
       "size": [
         133.4,
-        32,
+        22,
         1.6
+      ],
+      "role": "pcb",
+      "basis": "standard",
+      "finish": "pcb_green"
+    },
+    {
+      "id": "pcb-lower",
+      "shape": "box",
+      "at": [
+        66.7,
+        9,
+        3.5
+      ],
+      "size": [
+        127.4,
+        10,
+        1.6
+      ],
+      "role": "pcb",
+      "basis": "standard",
+      "finish": "pcb_green"
+    },
+    {
+      "id": "pcb-edge-left",
+      "shape": "box",
+      "at": [
+        34.3,
+        2,
+        3.5
+      ],
+      "size": [
+        65.5,
+        4,
+        1.2
+      ],
+      "role": "pcb",
+      "basis": "standard",
+      "finish": "pcb_green"
+    },
+    {
+      "id": "pcb-edge-right",
+      "shape": "box",
+      "at": [
+        100.4,
+        2,
+        3.5
+      ],
+      "size": [
+        62.8,
+        4,
+        1.2
       ],
       "role": "pcb",
       "basis": "standard",
@@ -466,37 +517,35 @@
     },
     {
       "id": "latch-end-left",
-      "shape": "box",
+      "shape": "gap",
       "at": [
-        1.3,
+        1.5,
         9,
         3.5
       ],
       "size": [
-        2.5,
+        3,
         10,
         3
       ],
       "role": "plate",
-      "basis": "schematic",
-      "finish": "black_plastic"
+      "basis": "schematic"
     },
     {
       "id": "latch-end-right",
-      "shape": "box",
+      "shape": "gap",
       "at": [
-        132.1,
+        131.9,
         9,
         3.5
       ],
       "size": [
-        2.5,
+        3,
         10,
         3
       ],
       "role": "plate",
-      "basis": "schematic",
-      "finish": "black_plastic"
+      "basis": "schematic"
     },
     {
       "id": "light-light-bar",

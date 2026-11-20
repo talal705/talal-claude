@@ -95,7 +95,7 @@ function drawMechanisms(geometry: PartGeometry, part: InstalledPart, socketDrawn
         latch.rotation = aboutZ((-35 * Math.PI) / 180);
       }
     }
-    if (ret.kind === "dimm_latch" && open) {
+    if (ret.kind === "dimm_latch" && open && !socketDrawnApart) {
       const latch = solids.find((s) => s.id === `${mount.id}-latch`);
       if (latch) {
         // The latch tips outward, away from the slot.
@@ -109,10 +109,12 @@ function drawMechanisms(geometry: PartGeometry, part: InstalledPart, socketDrawn
 
 /**
  * A part the learner holds over its place: the frame it would have when placed (not pushed home),
- * turned about its own vertical axis through its attachment point, shifted off centre and lifted.
+ * turned about its own vertical axis through the middle of its footprint (the way a hand turns it: a
+ * module flipped end for end stays over the same slot), shifted off centre and lifted.
  */
 export function heldFrame(placedAt: PlacedPart, geometry: PartGeometry | undefined, held: { rotationDeg: number; offsetMm: [number, number]; liftMm: number }): PlacedPart {
-  const attach = geometry?.attach.main?.at ?? [0, 0, 0];
+  const size = geometry?.bounds.size;
+  const attach: [number, number, number] = size ? [size[0] / 2, 0, size[2] / 2] : [0, 0, 0];
   const q = placedAt.frame.quat;
   const turn = aboutY((held.rotationDeg * Math.PI) / 180);
   const pivot = rotate(q, [attach[0] - rotate(turn, attach)[0], attach[1] - rotate(turn, attach)[1], attach[2] - rotate(turn, attach)[2]]);

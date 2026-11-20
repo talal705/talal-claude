@@ -46,6 +46,8 @@ function initialMechanisms(entry: CatalogEntry): { mechanisms?: Record<string, M
     if (!m.retention) continue;
     out[m.retention.id] = "closed";
     if (m.retention.kind === "lga_load_plate") { out[`${m.retention.id}:cover`] = "closed"; out[`${m.retention.id}:lever`] = "closed"; }
+    // A slot with a clip at each end: the near clip is its own mechanism.
+    if (m.retention.kind === "dimm_latch" && m.retention.latches === "both") out[`${m.retention.id}:near`] = "closed";
   }
   return Object.keys(out).length ? { mechanisms: out } : {};
 }
@@ -195,7 +197,9 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       if (!host || !entry) return unknown(action.instanceId, pcTarget.part(action.instanceId));
       // An Intel load plate has its lever as a second mechanism, `<plate>:lever` (released and up = "open").
       const leverOf = action.mechanismId.endsWith(":lever") ? action.mechanismId.slice(0, -":lever".length) : null;
-      const mount = entry.mountPoints.find((m) => m.retention?.id === (leverOf ?? action.mechanismId) && (!leverOf || m.retention.kind === "lga_load_plate"));
+      const nearOf = action.mechanismId.endsWith(":near") ? action.mechanismId.slice(0, -":near".length) : null;
+      const mount = entry.mountPoints.find((m) => m.retention?.id === (leverOf ?? nearOf ?? action.mechanismId)
+        && (!leverOf || m.retention.kind === "lga_load_plate") && (!nearOf || (m.retention.kind === "dimm_latch" && m.retention.latches === "both")));
       if (!mount?.retention) return unknown(`${action.instanceId}/${action.mechanismId}`, pcTarget.part(action.instanceId));
       const ret = mount.retention;
       const at = { hostInstanceId: host.instanceId, mountPointId: mount.id };
@@ -255,7 +259,7 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       if (action.state === "closed" && occupant && occAttachment?.seating !== "seated") return blocked("Press the module fully in; the latch closes by itself when it is home.", "اضغط الشريحة لين الآخر؛ المشبك يتسكّر لحاله لما تدخل.");
       // A card stays seated when its latch is released (it is lifted out by hand); a module pops up.
       const release = ret.kind === "dimm_latch" ? setOccupant({ seating: "placed", fastenersSecured: 0 }) : (p: InstalledPart) => p;
-      return ok({ parts: state.parts.map(setHost({ [ret.id]: action.state })).map(action.state === "open" ? release : (p) => p) });
+      return ok({ parts: state.parts.map(setHost({ [action.mechanismId]: action.state })).map(action.state === "open" ? release : (p) => p) });
     }
 
     case "set_prep": {
@@ -302,6 +306,9 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       if (detailed && place?.retention && place.retention.kind !== "slot_covers" && (hostPart?.mechanisms?.[place.retention.id] ?? "closed") !== "open") {
         return fail("retention_closed", pcTarget.mount(action.target), { mechanism: retentionName(place.retention.kind) });
       }
+      if (detailed && place?.retention?.kind === "dimm_latch" && place.retention.latches === "both" && (hostPart?.mechanisms?.[`${place.retention.id}:near`] ?? "closed") !== "open") {
+        return fail("retention_closed", pcTarget.mount(action.target), { mechanism: retentionName(place.retention.kind) });
+      }
       // A card's bracket needs the case's slot covers out once the board is in a case.
       if (detailed && place?.kind === "pcie_slot" && hostPart) {
         const caseAt = hostPart.attachments[0]?.target;
@@ -345,7 +352,8 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       const hostOf = partById(v, attachment.target.hostInstanceId);
       const placeSpec = mountSpec(v, attachment.target);
       const holder = placeSpec?.retention?.kind === "slot_covers" ? undefined : placeSpec?.retention;
-      const held = detailed && holder && (hostOf?.mechanisms?.[holder.id] ?? "closed") !== "open";
+      const nearHeld = holder?.kind === "dimm_latch" && holder.latches === "both" && (hostOf?.mechanisms?.[`${holder.id}:near`] ?? "closed") !== "open";
+      const held = detailed && holder && ((hostOf?.mechanisms?.[holder.id] ?? "closed") !== "open" || nearHeld);
       if (action.type === "unmount_part") {
         // A card comes out only with its power unplugged and its bracket unscrewed, then its latch released.
         if (detailed && placeSpec?.kind === "pcie_slot") {
@@ -368,7 +376,7 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
         if (!latch) return update(next);
         return ok({ parts: state.parts.map((p) => {
           if (p.instanceId === part.instanceId) return { ...p, attachments: p.attachments.map((a) => (a === attachment ? { ...a, ...next } : a)) };
-          if (p.instanceId === attachment.target.hostInstanceId) return { ...p, mechanisms: { ...(p.mechanisms ?? {}), [latch]: "closed" } };
+          if (p.instanceId === attachment.target.hostInstanceId) return { ...p, mechanisms: { ...(p.mechanisms ?? {}), [latch]: "closed", ...(placeSpec?.retention?.kind === "dimm_latch" && placeSpec.retention.latches === "both" ? { [`${latch}:near`]: "closed" } : {}) } };
           return p;
         }) });
       }

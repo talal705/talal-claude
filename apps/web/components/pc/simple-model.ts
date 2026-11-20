@@ -273,7 +273,7 @@ export function createSimpleBuild(): PCBuildState {
 // ---------- Mechanisms (CPU load plate, memory latches) ----------
 
 /** The retention of the place a part goes, with the host that carries it; null for parts held by screws only. */
-export function simpleRetention(state: PCBuildState, key: SimplePartKey): { hostInstanceId: string; id: string; kind: string; open: boolean; mountPointId: string; leverId: string | null; leverOpen: boolean } | null {
+export function simpleRetention(state: PCBuildState, key: SimplePartKey): { hostInstanceId: string; id: string; kind: string; open: boolean; mountPointId: string; leverId: string | null; leverOpen: boolean; nearId: string | null; nearOpen: boolean } | null {
   const target = simpleTarget(state, key);
   const host = state.parts.find((p) => p.instanceId === target.hostInstanceId);
   const mount = pcCatalog.entries.find((e) => e.id === host?.catalogId)?.mountPoints.find((m) => m.id === target.mountPointId);
@@ -281,7 +281,9 @@ export function simpleRetention(state: PCBuildState, key: SimplePartKey): { host
   if (!host || !mount?.retention || mount.retention.kind === "slot_covers") return null;
   // An Intel load plate has a separate lever (released and lifted before the plate opens).
   const leverId = mount.retention.kind === "lga_load_plate" ? `${mount.retention.id}:lever` : null;
-  return { hostInstanceId: host.instanceId, id: mount.retention.id, kind: mount.retention.kind, open: host.mechanisms?.[mount.retention.id] === "open", mountPointId: mount.id, leverId, leverOpen: leverId ? host.mechanisms?.[leverId] === "open" : false };
+  // A memory slot with a clip at each end: the near clip is its own mechanism.
+  const nearId = mount.retention.kind === "dimm_latch" && mount.retention.latches === "both" ? `${mount.retention.id}:near` : null;
+  return { hostInstanceId: host.instanceId, id: mount.retention.id, kind: mount.retention.kind, open: host.mechanisms?.[mount.retention.id] === "open", mountPointId: mount.id, leverId, leverOpen: leverId ? host.mechanisms?.[leverId] === "open" : false, nearId, nearOpen: nearId ? host.mechanisms?.[nearId] === "open" : true };
 }
 /** The keying the learner must match at a part's place (CPU triangle, DIMM notch), if any. */
 export function simpleKeying(state: PCBuildState, key: SimplePartKey) {
@@ -290,7 +292,7 @@ export function simpleKeying(state: PCBuildState, key: SimplePartKey) {
   return pcCatalog.entries.find((e) => e.id === host?.catalogId)?.mountPoints.find((m) => m.id === target.mountPointId)?.keying ?? null;
 }
 const hostOfRetention = (state: PCBuildState, retentionId: string) =>
-  state.parts.find((p) => pcCatalog.entries.find((e) => e.id === p.catalogId)?.mountPoints.some((m) => m.retention?.id === retentionId.replace(/:lever$/, "")));
+  state.parts.find((p) => pcCatalog.entries.find((e) => e.id === p.catalogId)?.mountPoints.some((m) => m.retention?.id === retentionId.replace(/:(lever|near)$/, "")));
 
 /** Moves a lever, plate or latch. The engine refuses what cannot happen (a plate over a cooler, a latch over a half-in module). */
 export function setSimpleMechanism(state: PCBuildState, retentionId: string, desired: "open" | "closed"): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleBlock; message?: { en: string; ar: string } } {
@@ -331,6 +333,94 @@ export function lowerSimplePart(state: PCBuildState, key: SimplePartKey, alignme
   }
   const seated = pc.applyAction(r.state, { type: "set_seating", instanceId: spec.id, seating: "seated" }, pcCatalog);
   return seated.ok ? { ok: true, state: seated.state } : { ok: false, reason: "cannotFit" };
+}
+
+// ---------- Memory: the slot is where the learner holds the module ----------
+
+/** The board's memory slots, in catalog order (A1, A2, B1, B2), with their labels and clips. */
+export function simpleRamSlots(state: PCBuildState): { id: string; label: { en: string; ar: string }; clipId: string; nearId: string | null; clipOpen: boolean; nearOpen: boolean; occupant: string | null }[] {
+  const hostId = partSpec(ALL_SIMPLE_PARTS.find((p) => isRamKey(p.key))?.key ?? "ram").host;
+  const host = state.parts.find((p) => p.instanceId === hostId);
+  const entry = pcCatalog.entries.find((e) => e.id === host?.catalogId);
+  return (entry?.mountPoints ?? []).filter((m) => m.kind === "dimm_slot" && m.retention).map((m) => {
+    const nearId = m.retention!.latches === "both" ? `${m.retention!.id}:near` : null;
+    const occupant = state.parts.find((p) => p.attachments.some((a) => a.target.hostInstanceId === hostId && a.target.mountPointId === m.id));
+    return { id: m.id, label: m.label, clipId: m.retention!.id, nearId, clipOpen: host?.mechanisms?.[m.retention!.id] === "open", nearOpen: nearId ? host?.mechanisms?.[nearId] === "open" : true, occupant: occupant ? (ALL_SIMPLE_PARTS.find((p) => p.id === occupant.instanceId)?.key ?? occupant.instanceId) : null };
+  });
+}
+/** The memory slots the board's manual recommends for `count` modules (empty when not recorded). */
+export function simpleRamRecommended(state: PCBuildState, count: number): string[] {
+  const hostId = partSpec(ALL_SIMPLE_PARTS.find((p) => isRamKey(p.key))?.key ?? "ram").host;
+  const entry = pcCatalog.entries.find((e) => e.id === state.parts.find((p) => p.instanceId === hostId)?.catalogId);
+  return entry?.category === "motherboard" ? [...(entry.spec.memory.recommendedPopulation.find((r) => r.modules === count)?.slotIds ?? [])] : [];
+}
+/** The slot a held module's pose is measured from: the one the manual recommends for a single module (else the first). */
+export function simpleRamReference(state: PCBuildState): { hostInstanceId: string; mountPointId: string } {
+  const spec = partSpec(ALL_SIMPLE_PARTS.find((p) => isRamKey(p.key))?.key ?? "ram");
+  const slots = simpleRamSlots(state);
+  const one = simpleRamRecommended(state, 1)[0];
+  return { hostInstanceId: spec.host, mountPointId: slots.find((s) => s.id === one)?.id ?? slots[0]?.id ?? spec.mount };
+}
+const geometryCache = new Map<string, ReturnType<typeof pc.visual.partGeometry>>();
+const inverseRotate = (q: readonly number[], v: readonly number[]): [number, number, number] => {
+  // Rotate by the conjugate quaternion.
+  const [x, y, z, w] = [-q[0]!, -q[1]!, -q[2]!, q[3]!];
+  const [vx, vy, vz] = v as [number, number, number];
+  const ix = w * vx + y * vz - z * vy, iy = w * vy + z * vx - x * vz, iz = w * vz + x * vy - y * vx, iw = -x * vx - y * vy - z * vz;
+  return [ix * w + iw * -x + iy * -z - iz * -y, iy * w + iw * -y + iz * -x - ix * -z, iz * w + iw * -z + ix * -y - iy * -x];
+};
+/**
+ * Where each memory slot is, as an offset from the reference slot along the held module's own axes
+ * (x along the module, z across the slots), from the same geometry the 3D view draws.
+ */
+export function simpleRamSlotOffsets(state: PCBuildState): Map<string, [number, number]> {
+  const ref = simpleRamReference(state);
+  const catalogId = state.parts.find((p) => p.instanceId === ref.hostInstanceId)?.catalogId ?? "";
+  const entry = pcCatalog.entries.find((e) => e.id === catalogId);
+  if (!entry) return new Map();
+  let g = geometryCache.get(catalogId);
+  if (!g) { g = pc.visual.partGeometry(entry, pcCatalog.version); geometryCache.set(catalogId, g); }
+  const base = g.mounts[ref.mountPointId];
+  const out = new Map<string, [number, number]>();
+  if (!base) return out;
+  for (const slot of simpleRamSlots(state)) {
+    const m = g.mounts[slot.id];
+    if (!m) continue;
+    const local = inverseRotate(base.quat, [m.at[0] - base.at[0], m.at[1] - base.at[1], m.at[2] - base.at[2]]);
+    out.set(slot.id, [Math.round(local[0] * 10) / 10, Math.round(local[2] * 10) / 10]);
+  }
+  return out;
+}
+/** The slot a held module is over (the nearest across the slots, if within half a slot's spacing) and how far off it is. */
+export function simpleRamTargetFor(state: PCBuildState, offsetMm: readonly [number, number]): { slotId: string; residual: [number, number] } | null {
+  let best: { slotId: string; residual: [number, number] } | null = null;
+  for (const [slotId, [sx, sz]] of simpleRamSlotOffsets(state)) {
+    const residual: [number, number] = [Math.round((offsetMm[0] - sx) * 10) / 10, Math.round((offsetMm[1] - sz) * 10) / 10];
+    if (Math.abs(residual[1]) > 4) continue;
+    if (!best || Math.abs(residual[1]) < Math.abs(best.residual[1])) best = { slotId, residual };
+  }
+  return best;
+}
+/**
+ * Lowers a held module into the slot it is over, as held: it rests in the slot (not yet pressed home,
+ * clips still open). The engine checks the clips, the notch, the alignment and the slot's generation.
+ */
+export function lowerSimpleRam(state: PCBuildState, key: SimplePartKey, pose: SimpleAlignment): { ok: true; state: PCBuildState; slotId: string } | { ok: false; reason: SimpleBlock | "noSlot" | "slotTaken"; message?: { en: string; ar: string }; slotId?: string } {
+  const blocked = simpleBlock(state, key);
+  if (blocked) return { ok: false, reason: blocked };
+  const spec = partSpec(key);
+  if (state.parts.find((p) => p.instanceId === spec.id)?.attachments.length) return { ok: false, reason: "alreadyIn" };
+  const target = simpleRamTargetFor(state, pose.offsetMm);
+  if (!target) return { ok: false, reason: "noSlot" };
+  const slot = simpleRamSlots(state).find((s) => s.id === target.slotId)!;
+  if (slot.occupant) return { ok: false, reason: "slotTaken", slotId: slot.id };
+  const r = pc.applyAction(state, { type: "mount_part", instanceId: spec.id, target: { hostInstanceId: spec.host, mountPointId: slot.id }, alignment: { rotationDeg: pose.rotationDeg, offsetMm: target.residual } }, pcCatalog);
+  if (!r.ok) {
+    const code = r.rejection.code;
+    const reason: SimpleBlock = code === "retention_closed" ? "openFirst" : code === "keying_wrong" ? "turnPart" : code === "alignment_off" ? "centrePart" : "cannotFit";
+    return { ok: false, reason, message: r.rejection.message, slotId: slot.id };
+  }
+  return { ok: true, state: r.state, slotId: slot.id };
 }
 
 /** Pushes a released part home again (a module whose latch was opened, or one left half in). */
@@ -391,7 +481,8 @@ export function simpleTarget(state: PCBuildState, key: SimplePartKey): { hostIns
 
 export function simplePartInstalled(state: PCBuildState, key: SimplePartKey): boolean {
   const spec = partSpec(key);
-  const mounts: readonly string[] = isRamKey(key) ? RAM_SLOTS : [spec.mount];
+  // A module counts in any memory slot of its board (the learner chooses the slot); the recommendation is advice.
+  const mounts: readonly string[] = isRamKey(key) ? simpleRamSlots(state).map((x) => x.id) : [spec.mount];
   const part = state.parts.find((p) => p.instanceId === spec.id);
   if (!part) return false;
   const fitted = (host: string, ids: readonly string[], screws: number) =>
@@ -551,6 +642,7 @@ export function installSimplePart(state: PCBuildState, key: SimplePartKey): { ok
     if (retention.kind === "pcie_latch" && caseCoversClosed(next)) { const c = setSimpleMechanism(next, SLOT_COVERS_ID, "open"); if (!c.ok) return { ok: false, reason: "cannotFit" }; next = c.state; }
     if (retention.leverId && !retention.leverOpen) { const o = setSimpleMechanism(next, retention.leverId, "open"); if (!o.ok) return { ok: false, reason: "cannotFit" }; next = o.state; }
     if (!retention.open) { const o = setSimpleMechanism(next, retention.id, "open"); if (!o.ok) return { ok: false, reason: "cannotFit" }; next = o.state; }
+    if (retention.nearId && !retention.nearOpen) { const o = setSimpleMechanism(next, retention.nearId, "open"); if (!o.ok) return { ok: false, reason: "cannotFit" }; next = o.state; }
     const l = lowerSimplePart(next, key, ALIGNED);
     if (!l.ok) return { ok: false, reason: l.reason };
     next = l.state;
@@ -772,7 +864,13 @@ export function applySimpleStep(state: PCBuildState, step: SimpleStep): PCBuildS
   const rest = step.slice(colon + 1);
   const result = kind === "part" ? installSimplePart(state, rest)
     : kind === "cable" ? connectSimpleCable(state, rest)
-    : kind === "lower" ? (() => { const pose = loweredPose(step); return lowerSimplePart(state, rest.split(":")[0]!, pose ? { rotationDeg: pose.rotationDeg, offsetMm: pose.offsetMm } : ALIGNED); })()
+    : kind === "lower" ? (() => {
+      const pose = loweredPose(step);
+      const key = rest.split(":")[0]!;
+      // A module lowered by hand rests in the slot it was held over; pressing it home is its own step.
+      if (pose && isRamKey(key)) return lowerSimpleRam(state, key, { rotationDeg: pose.rotationDeg, offsetMm: pose.offsetMm });
+      return lowerSimplePart(state, key, pose ? { rotationDeg: pose.rotationDeg, offsetMm: pose.offsetMm } : ALIGNED);
+    })()
     : kind === "seat" ? reseatSimplePart(state, rest)
     : kind === "lift" ? liftSimplePart(state, rest)
     : kind === "fasten" ? fastenSimplePart(state, rest)
@@ -893,7 +991,7 @@ const isStep = (step: unknown): step is SimpleStep => {
   if (kind === "plug") { const m = /^(.+):(\d)$/.exec(rest); return Boolean(m && isCableKey(m[1])); }
   if (kind === "prep") { const m = /^([a-z0-9]+):(paste|film|standoffs|io_shield|psu_fan|airflow):([a-z]*)$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
   if (kind === "screw") { const m = /^([a-z0-9]+):(\d{1,2})$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
-  return kind === "mech" && /^[a-z0-9-]+(:lever)?:(open|closed)$/.test(rest);
+  return kind === "mech" && /^[a-z0-9-]+(:lever|:near)?:(open|closed)$/.test(rest);
 };
 
 /**

@@ -377,12 +377,63 @@
       "label": "DIMM_A1"
     },
     {
+      "id": "dimm-a1-groove",
+      "shape": "box",
+      "at": [
+        119,
+        10.6,
+        82.3
+      ],
+      "size": [
+        2,
+        0.3,
+        134
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "dimm-a1-key",
+      "shape": "box",
+      "at": [
+        119,
+        10.6,
+        74.1
+      ],
+      "size": [
+        5,
+        0.9,
+        1.8
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "white_plastic"
+    },
+    {
       "id": "dimm-a1-latch",
       "shape": "box",
       "at": [
         119,
         12.1,
         150.3
+      ],
+      "size": [
+        8,
+        3,
+        6
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "grey_plastic"
+    },
+    {
+      "id": "dimm-a1-latch-near",
+      "shape": "box",
+      "at": [
+        119,
+        12.1,
+        14.3
       ],
       "size": [
         8,
@@ -412,12 +463,63 @@
       "label": "DIMM_B1"
     },
     {
+      "id": "dimm-b1-groove",
+      "shape": "box",
+      "at": [
+        128.5,
+        10.6,
+        82.3
+      ],
+      "size": [
+        2,
+        0.3,
+        134
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "dimm-b1-key",
+      "shape": "box",
+      "at": [
+        128.5,
+        10.6,
+        74.1
+      ],
+      "size": [
+        5,
+        0.9,
+        1.8
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "white_plastic"
+    },
+    {
       "id": "dimm-b1-latch",
       "shape": "box",
       "at": [
         128.5,
         12.1,
         150.3
+      ],
+      "size": [
+        8,
+        3,
+        6
+      ],
+      "role": "plate",
+      "basis": "schematic",
+      "finish": "grey_plastic"
+    },
+    {
+      "id": "dimm-b1-latch-near",
+      "shape": "box",
+      "at": [
+        128.5,
+        12.1,
+        14.3
       ],
       "size": [
         8,

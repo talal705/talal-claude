@@ -50,6 +50,10 @@ export function targetPoint(target: GuideTarget, placed: ReadonlyMap<string, Pla
   const host = placed.get(target.hostInstanceId);
   const own = geometry.get(catalogOf(target.hostInstanceId) ?? "");
   if (!host || !own) return null;
+  if (target.kind === "solid") {
+    const solid = own.solids.find((x) => x.id === target.solidId);
+    return solid ? compose(host.frame, { at: [solid.at[0], solid.at[1] + (solid.size?.[1] ?? 0) / 2 + 3, solid.at[2]], quat: [0, 0, 0, 1] }).at : null;
+  }
   if (target.kind === "socket") {
     const layout = socketLayout(own, target.placeId, target.socket);
     const board = state.parts.find((part) => part.instanceId === target.hostInstanceId);

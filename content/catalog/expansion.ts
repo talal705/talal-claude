@@ -86,7 +86,7 @@ export const legacyBoard: MotherboardEntry = {
   teachingNotes: [FASTENER_NOTE, BIOS_NOTE, "The manual lists 1, 2, 4 and 8 GB modules, so maxPerModuleGb is 8.", "The two SATA 3 Gb/s ports are modelled as ordinary SATA ports."],
   dimensions: { lengthMm: 226, widthMm: 175, heightMm: null },
   formFactor: "micro-ATX",
-  mountPoints: [...socket("lga1150", "LGA1150"), ...dimmSlots("ddr3", ["a1", "b1"]), x16(3, "PCIe")],
+  mountPoints: [...socket("lga1150", "LGA1150"), ...dimmSlots("ddr3", ["a1", "b1"], { latches: "both", note: "ASUS H81M series manual (DIMM installation): the module is released by pressing the retaining clips (plural), so both ends move. Read from the H81M series manual pages for H81M-A/H81M-PLUS, not the H81M-K's own copy." }), x16(3, "PCIe")],
   mounting: [{ role: "main", kind: "motherboard_tray", label: L("Motherboard tray of the case", "صينية اللوحة الأم في الهيكل") }],
   zones: boardZones("Two DDR3 slots, one per channel (DIMM_A1, DIMM_B1). DDR4 and DDR5 modules have the notch elsewhere and do not go in.", "فتحتين DDR3، وحدة لكل قناة (DIMM_A1 و DIMM_B1). رام DDR4 و DDR5 شقّها في مكان ثاني وما تدخل."),
   ports: boardPorts({ eps8: 0, eps4: 1, epsRecommended: 0, chassisFans: 1, argb: 0, rgb: 0, sata: 4, usb2: 2, usbC: false, hdmi: 0, displayPort: 0, cpuOpt: false, pumpHeader: false, usb3: false }),
@@ -159,7 +159,7 @@ export const entryBoard: MotherboardEntry = {
   formFactor: "micro-ATX",
   mountPoints: [
     ...socket("lga1700", "LGA1700"),
-    ...dimmSlots("ddr5"),
+    ...dimmSlots("ddr5", undefined, { latches: "one_side", note: "Q-DIMM is listed for the PRIME B760M-A family (ASUS tech specs of B760M-A-CSM and B760M-A D4); not confirmed on the B760M-A WIFI's own page. Drawn at the far end." }),
     x16(4, "PCIe 4.0"),
     { id: "m2-1", kind: "m2_slot", lengths: ["m2_2242", "m2_2260", "m2_2280"], interfaces: ["nvme"], pcieGeneration: 4, label: L("M.2_1 slot (PCIe 4.0 x4, CPU)", "فتحة M.2_1 (PCIe 4.0 x4، من المعالج)"), fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-1", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way.") },
     { id: "m2-2", kind: "m2_slot", lengths: ["m2_2242", "m2_2260", "m2_2280"], interfaces: ["nvme"], pcieGeneration: 4, label: L("M.2_2 slot (PCIe 4.0 x4, chipset)", "فتحة M.2_2 (PCIe 4.0 x4، من الشيبست)"), fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-2", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way.") },

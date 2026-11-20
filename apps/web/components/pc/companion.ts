@@ -292,8 +292,8 @@ export function companionSay(event: CompanionEvent, state: PCBuildState, powered
     case "cancel":
       return nextSay([{ key: "cancelled" }], "idle");
     case "undo":
-      // A lowering undone leaves the part in hand: the next thing is to lower it again, not a new step.
-      return event.step.startsWith("lower:") ? { lines: [undoLine(event.step)], mood: "idle", point: "scene" } : nextSay([undoLine(event.step)], "idle");
+      // A lowering or a pressing-home undone leaves the part in hand or resting: the next thing is to finish it, not a new step.
+      return event.step.startsWith("lower:") || event.step.startsWith("seat:") ? { lines: [undoLine(event.step)], mood: "idle", point: "scene" } : nextSay([undoLine(event.step)], "idle");
     case "nothingToUndo":
       return { lines: [{ key: powered ? "undo.turnOff" : "undo.nothing" }], mood: "thinking", point: powered ? "power" : undefined };
     case "restart":

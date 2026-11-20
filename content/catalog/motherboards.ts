@@ -136,7 +136,7 @@ export const motherboards: MotherboardEntry[] = [
     formFactor: "ATX",
     mountPoints: [
       ...socketMounts("lga1700", "LGA1700"),
-      ...dimmSlots("ddr5"),
+      ...dimmSlots("ddr5", undefined, { latches: "one_side", note: "Q-DIMM is in the board's ASUS Q-Design feature list (Newegg N82E16813119618 spec list): a clip at one end only. Which end moves is not confirmed from the manual; it is drawn at the far end." }),
       gpuSlot(5),
       {
         id: "m2-1",

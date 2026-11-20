@@ -755,6 +755,40 @@
       "label": "DIMM_A1"
     },
     {
+      "id": "dimm-a1-groove",
+      "shape": "box",
+      "at": [
+        164.5,
+        10.6,
+        86.3
+      ],
+      "size": [
+        2,
+        0.3,
+        134
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "dimm-a1-key",
+      "shape": "box",
+      "at": [
+        164.5,
+        10.6,
+        84.7
+      ],
+      "size": [
+        5,
+        0.9,
+        1.8
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "white_plastic"
+    },
+    {
       "id": "dimm-a1-latch",
       "shape": "box",
       "at": [
@@ -788,6 +822,40 @@
       "basis": "schematic",
       "finish": "black_plastic",
       "label": "DIMM_A2"
+    },
+    {
+      "id": "dimm-a2-groove",
+      "shape": "box",
+      "at": [
+        174,
+        10.6,
+        86.3
+      ],
+      "size": [
+        2,
+        0.3,
+        134
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "dimm-a2-key",
+      "shape": "box",
+      "at": [
+        174,
+        10.6,
+        84.7
+      ],
+      "size": [
+        5,
+        0.9,
+        1.8
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "white_plastic"
     },
     {
       "id": "dimm-a2-latch",
@@ -825,6 +893,40 @@
       "label": "DIMM_B1"
     },
     {
+      "id": "dimm-b1-groove",
+      "shape": "box",
+      "at": [
+        183.5,
+        10.6,
+        86.3
+      ],
+      "size": [
+        2,
+        0.3,
+        134
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "dimm-b1-key",
+      "shape": "box",
+      "at": [
+        183.5,
+        10.6,
+        84.7
+      ],
+      "size": [
+        5,
+        0.9,
+        1.8
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "white_plastic"
+    },
+    {
       "id": "dimm-b1-latch",
       "shape": "box",
       "at": [
@@ -858,6 +960,40 @@
       "basis": "schematic",
       "finish": "black_plastic",
       "label": "DIMM_B2"
+    },
+    {
+      "id": "dimm-b2-groove",
+      "shape": "box",
+      "at": [
+        193,
+        10.6,
+        86.3
+      ],
+      "size": [
+        2,
+        0.3,
+        134
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "black_plastic"
+    },
+    {
+      "id": "dimm-b2-key",
+      "shape": "box",
+      "at": [
+        193,
+        10.6,
+        84.7
+      ],
+      "size": [
+        5,
+        0.9,
+        1.8
+      ],
+      "role": "chip",
+      "basis": "schematic",
+      "finish": "white_plastic"
     },
     {
       "id": "dimm-b2-latch",

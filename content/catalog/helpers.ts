@@ -196,17 +196,23 @@ export const sataDataCables = (quantity: number): CableSpec =>
     quantity,
   );
 
-export const dimmSlots = (generation: "ddr3" | "ddr4" | "ddr5", slots: readonly string[] = ["a1", "a2", "b1", "b2"]): MountPointSpec[] =>
+export interface DimmClips { latches: "one_side" | "both" | "unverified"; note: string }
+const UNVERIFIED_CLIPS: DimmClips = { latches: "unverified", note: "Clip arrangement not confirmed for this board; one moving clip is modelled at the slot's far end." };
+/**
+ * Memory slots. The notch is off centre, so a module fits one way round (ASUS FAQ 1047257: open the clip,
+ * match the notch to the slot's key, push straight down until the clip locks). `clips` says which ends move.
+ * Alignment tolerance: 1.5 mm, about the clearance a module edge has to find the slot's groove (an
+ * educational figure, not a manufacturer one).
+ */
+export const dimmSlots = (generation: "ddr3" | "ddr4" | "ddr5", slots: readonly string[] = ["a1", "a2", "b1", "b2"], clips: DimmClips = UNVERIFIED_CLIPS): MountPointSpec[] =>
   slots.map((s) => ({
     id: `dimm-${s}`,
     kind: "dimm_slot" as const,
     generation,
     moduleType: "udimm" as const,
     label: L(`Memory slot DIMM_${s.toUpperCase()} (${generation.toUpperCase()})`, `فتحة الرام DIMM_${s.toUpperCase()} (${generation.toUpperCase()})`),
-    // The notch is off centre, so a module fits one way round. Which ends of the slot have latches is not
-    // shown in the manuals read; the model draws one latch and says so.
-    retention: { id: `dimm-${s}-latch`, kind: "dimm_latch" as const, latches: "unverified" as const, note: "Latch arrangement not confirmed in the manual read; one latch is modelled." },
-    keying: { rotationDeg: 0, toleranceMm: 4, mark: "notch" as const },
+    retention: { id: `dimm-${s}-latch`, kind: "dimm_latch" as const, latches: clips.latches, note: clips.note },
+    keying: { rotationDeg: 0, toleranceMm: 1.5, mark: "notch" as const },
   }));
 
 /** An M.2 slot held by ASUS's tool-free Q-Latch: turned open, the drive goes in at an angle, is pressed flat and the latch turned shut. */
