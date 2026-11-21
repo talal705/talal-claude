@@ -189,6 +189,10 @@ const T: Record<PCDiagnosticCode, Entry> = {
     m: ["The part is {distance} mm off centre. Centre it over the {place} before lowering it.", "القطعة بعيدة {distance} مم عن الوسط. وسّطها فوق {place} قبل ما تنزّلها."],
     x: ["A part is lowered straight down only when it is centred over its place; sliding it in damages the contacts.", "القطعة تنزل مستقيمة بس وهي في الوسط؛ سحبها على المكان يضرّ نقاط التلامس."],
   },
+  insert_angle_wrong: {
+    m: ["Tilt the drive up about {low}–{high}° and slide it into the slot at that angle; it does not go in flat.", "ميّل الدسك لفوق تقريبًا {low}–{high}° ودخّله في الفتحة بهالزاوية؛ ما يدخل وهو مسطّح."],
+    x: ["An M.2 drive's contacts go into the slot at an angle, then the drive is pressed flat. The manuals draw the angle without a number; this range is the lab's approximation.", "أطراف دسك M.2 تدخل الفتحة وهو مايل، وبعدين ينضغط مسطّح. الأدلة ترسم الزاوية بدون رقم؛ وهالمدى تقريب من المختبر."],
+  },
   alignment_required: {
     m: ["Hold the part over its place first: turn and centre it, then lower it.", "امسك القطعة فوق مكانها أول: لفّها ووسّطها، وبعدين نزّلها."],
     x: ["In this build every keyed part is aligned by the learner before it goes in.", "في هالتجميعة كل قطعة مفتاحية يحاذيها المتعلم قبل ما تدخل."],

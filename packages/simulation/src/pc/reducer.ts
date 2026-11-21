@@ -8,6 +8,7 @@ import type {
   PrepKind,
   RetentionSpec,
   InstalledPart,
+  Localized,
   PCAction,
   PCActionResult,
   PCBuildState,
@@ -43,7 +44,11 @@ export function createBuild(catalog: PCCatalog, rgbPreference: RgbPreference = "
 function initialMechanisms(entry: CatalogEntry): { mechanisms?: Record<string, MechanismState> } {
   const out: Record<string, MechanismState> = {};
   for (const m of entry.mountPoints) {
+    // A board's M.2 heatsink starts fitted, its screws in and the film still on its thermal pad.
+    if (m.kind === "m2_slot" && m.heatsink) { out[m.heatsink.id] = "closed"; out[`${m.heatsink.id}:screws`] = "closed"; out[`${m.heatsink.id}:film`] = "closed"; }
     if (!m.retention) continue;
+    // A screw-held M.2 slot starts with no stand at the length hole and no screw in ("open").
+    if (m.retention.kind === "m2_screw") { out[m.retention.id] = "open"; out[`${m.retention.id}:stand`] = "open"; continue; }
     out[m.retention.id] = "closed";
     if (m.retention.kind === "lga_load_plate") { out[`${m.retention.id}:cover`] = "closed"; out[`${m.retention.id}:lever`] = "closed"; }
     // A slot with a clip at each end: the near clip is its own mechanism.
@@ -59,8 +64,20 @@ const retentionName = (kind: RetentionSpec["kind"]) =>
   : kind === "pcie_latch" ? L("The PCIe slot latch", "مشبك فتحة PCIe")
   : kind === "slot_covers" ? L("The case's expansion slot covers", "أغطية فتحات التوسعة في الكيس")
   : kind === "m2_qlatch" ? L("The M.2 Q-Latch", "مشبك M.2 ‏(Q-Latch)")
+  : kind === "m2_screw" ? L("The M.2 screw", "برغي M.2")
   : kind === "zif_lever" ? L("The socket lever", "ذراع المقبس")
   : L("The socket's load plate and lever", "غطا المقبس وذراعه");
+
+const HEATSINK_NAME = L("The M.2 heatsink", "مشتّت M.2");
+const STAND_NAME = L("The M.2 screw stand", "قاعدة برغي M.2");
+/** The M.2 slots of a board under the heatsink with this id. */
+const slotsUnderHeatsink = (entry: CatalogEntry, hsId: string) => entry.mountPoints.filter((m) => m.kind === "m2_slot" && m.heatsink?.id === hsId);
+/** True while an M.2 place cannot be reached: its heatsink is on, or (screw-held) its stand is not fitted. */
+function m2Blocker(host: InstalledPart, place: MountPointSpec | undefined): Localized | null {
+  if (place?.kind !== "m2_slot") return null;
+  if (place.heatsink && (host.mechanisms?.[place.heatsink.id] ?? "closed") !== "open") return HEATSINK_NAME;
+  return null;
+}
 
 /** Detailed builds: what has to be done to a part before it goes in a place. Null when nothing is missing. */
 function prepGate(v: View, instanceId: string, place: MountPointSpec, fail: (code: PCDiagnosticCode, target: TutorTargetRef, params: TextParams) => PCActionResult) {
@@ -198,8 +215,34 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       // An Intel load plate has its lever as a second mechanism, `<plate>:lever` (released and up = "open").
       const leverOf = action.mechanismId.endsWith(":lever") ? action.mechanismId.slice(0, -":lever".length) : null;
       const nearOf = action.mechanismId.endsWith(":near") ? action.mechanismId.slice(0, -":near".length) : null;
-      const mount = entry.mountPoints.find((m) => m.retention?.id === (leverOf ?? nearOf ?? action.mechanismId)
-        && (!leverOf || m.retention.kind === "lga_load_plate") && (!nearOf || (m.retention.kind === "dimm_latch" && m.retention.latches === "both")));
+      // A board's M.2 heatsink: `<id>` (lifted off = "open"), `<id>:screws` (loosened = "open"), `<id>:film` (peeled = "open").
+      const hsBase = action.mechanismId.replace(/:(screws|film)$/, "");
+      const covered = slotsUnderHeatsink(entry, hsBase);
+      if (covered.length) {
+        const m = host.mechanisms ?? {};
+        if ((m[action.mechanismId] ?? "closed") === action.state) return ok({});
+        const why = (en: string, ar: string) => fail("retention_blocked", pcTarget.part(host.instanceId), { why: L(en, ar) });
+        const set = () => ok({ parts: state.parts.map((p) => (p.instanceId === host.instanceId ? { ...p, mechanisms: { ...m, [action.mechanismId]: action.state } } : p)) });
+        const fitted = (m[hsBase] ?? "closed") !== "open";
+        if (action.mechanismId.endsWith(":screws")) {
+          return fitted ? set() : why("Put the heatsink back on first; its screws hold it to the board.", "رجّع المشتّت مكانه أول؛ براغيه تثبّته على اللوحة.");
+        }
+        if (action.mechanismId.endsWith(":film")) {
+          if (action.state === "closed") return invalid(pcTarget.part(host.instanceId), "A peeled film is not put back on.", "الغلاف اللي انشال ما يرجع.");
+          return fitted ? why("Lift the heatsink off first; the film is on the thermal pad underneath.", "شيل المشتّت أول؛ الغلاف على الوسادة الحرارية اللي تحته.") : set();
+        }
+        if (action.state === "open") return (m[`${hsBase}:screws`] ?? "closed") === "open" ? set() : why("Loosen the heatsink's screws first.", "فك براغي المشتّت أول.");
+        const hsSpec = covered[0]!.kind === "m2_slot" ? covered[0]!.heatsink : undefined;
+        if (hsSpec?.padFilm && (m[`${hsBase}:film`] ?? "closed") !== "open") return why("Peel the plastic film off the heatsink's thermal pad before refitting it.", "شيل الغلاف البلاستيكي عن الوسادة الحرارية قبل ما ترجّع المشتّت.");
+        const loose = covered.some((slot) => state.parts.some((p) => p.attachments.some((a) => a.target.hostInstanceId === host.instanceId && a.target.mountPointId === slot.id && (a.seating !== "seated" || a.fastenersSecured < (slot.fastener?.count ?? 0)))));
+        if (loose) return why("Secure the drive under it first: pressed flat and held.", "ثبّت الدسك اللي تحته أول: مضغوط ومقفول.");
+        return set();
+      }
+      // A screw-held M.2 slot's stand: `<slot>-screw:stand` (fitted at the length hole = "closed").
+      const standOf = action.mechanismId.endsWith(":stand") ? action.mechanismId.slice(0, -":stand".length) : null;
+      const mount = entry.mountPoints.find((m) => m.retention?.id === (leverOf ?? nearOf ?? standOf ?? action.mechanismId)
+        && (!leverOf || m.retention.kind === "lga_load_plate") && (!nearOf || (m.retention.kind === "dimm_latch" && m.retention.latches === "both"))
+        && (!standOf || m.retention.kind === "m2_screw"));
       if (!mount?.retention) return unknown(`${action.instanceId}/${action.mechanismId}`, pcTarget.part(action.instanceId));
       const ret = mount.retention;
       const at = { hostInstanceId: host.instanceId, mountPointId: mount.id };
@@ -244,9 +287,21 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
         if (occupant && occAttachment?.seating !== "seated") return blocked("Let the CPU drop fully into the socket before lowering the lever.", "خلّ المعالج ينزل في المقبس لين الآخر قبل ما تنزّل الذراع.");
         return ok({ parts: state.parts.map(setHost({ [ret.id]: "closed" })).map(setOccupant({ fastenersSecured: lever })) });
       }
+      if (m2Blocker(host, mount)) return blocked("Lift the M.2 heatsink off first; it covers this slot.", "شيل مشتّت M.2 أول؛ هو مغطّي هالفتحة.");
+      if (ret.kind === "m2_screw") {
+        if (standOf) {
+          if (action.state === "open" && occupant) return blocked("Take the drive out before removing its screw stand.", "طلّع الدسك قبل ما تفك قاعدة البرغي.");
+          return ok({ parts: state.parts.map(setHost({ [action.mechanismId]: action.state })) });
+        }
+        // Screwed down over a drive pressed flat onto the stand; taken out, the drive's end springs up.
+        if (action.state === "open") return ok({ parts: state.parts.map(setHost({ [ret.id]: "open" })).map(setOccupant({ seating: "placed", fastenersSecured: 0 })) });
+        if (!occupant) return blocked("There is no drive here to screw down.", "ما فيه دسك هنا تثبّته بالبرغي.");
+        if (occAttachment?.seating !== "seated") return blocked("Press the drive flat onto the stand before screwing it down.", "اضغط الدسك مسطّح على القاعدة قبل ما تثبّته بالبرغي.");
+        return ok({ parts: state.parts.map(setHost({ [ret.id]: "closed" })).map(setOccupant({ fastenersSecured: lever })) });
+      }
       if (ret.kind === "m2_qlatch") {
         // Turned open, the drive's free end springs up off the standoff; turned shut over a drive pressed flat, it holds it.
-        if (action.state === "open") return ok({ parts: state.parts.map(setHost({ [ret.id]: "open" })).map(setOccupant({ fastenersSecured: 0 })) });
+        if (action.state === "open") return ok({ parts: state.parts.map(setHost({ [ret.id]: "open" })).map(setOccupant({ seating: "placed", fastenersSecured: 0 })) });
         if (occupant && occAttachment?.seating !== "seated") return blocked("Push the drive fully into the slot before pressing it down and turning the latch.", "ادفع الدسك لين آخر الفتحة قبل ما تنزّله وتلف المشبك.");
         return ok({ parts: state.parts.map(setHost({ [ret.id]: "closed" })).map(setOccupant({ fastenersSecured: lever })) });
       }
@@ -303,6 +358,10 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       const place = hostEntry?.mountPoints.find((m) => m.id === action.target.mountPointId);
       const gate = detailed && place ? prepGate(v, action.instanceId, place, fail) : null;
       if (gate) return gate;
+      if (detailed && hostPart && m2Blocker(hostPart, place)) return fail("retention_blocked", pcTarget.mount(action.target), { why: L("Lift the M.2 heatsink off first; it covers this slot.", "شيل مشتّت M.2 أول؛ هو مغطّي هالفتحة.") });
+      if (detailed && place?.retention?.kind === "m2_screw" && hostPart?.mechanisms?.[`${place.retention.id}:stand`] !== "closed") {
+        return fail("retention_blocked", pcTarget.mount(action.target), { why: L("Fit the screw stand at the drive's length hole first.", "ركّب قاعدة البرغي في فتحة طول الدسك أول.") });
+      }
       if (detailed && place?.retention && place.retention.kind !== "slot_covers" && (hostPart?.mechanisms?.[place.retention.id] ?? "closed") !== "open") {
         return fail("retention_closed", pcTarget.mount(action.target), { mechanism: retentionName(place.retention.kind) });
       }
@@ -327,6 +386,8 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
         }
         const distance = Math.hypot(a.offsetMm[0], a.offsetMm[1]);
         if (distance > place.keying.toleranceMm) return fail("alignment_off", pcTarget.mount(action.target), { distance: Math.round(distance * 10) / 10, place: placeName });
+        const tilt = place.keying.insertTiltDeg;
+        if (tilt && (a.tiltDeg === undefined || a.tiltDeg < tilt[0] || a.tiltDeg > tilt[1])) return fail("insert_angle_wrong", pcTarget.mount(action.target), { low: tilt[0], high: tilt[1] });
       }
       return ok({
         parts: withPart(action.instanceId, (p) => ({
@@ -362,6 +423,7 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
           }
           if (attachment.fastenersSecured > 0) return invalid(pcTarget.mount(attachment.target), "Remove the bracket screws first.", "فك براغي الحامل أول.");
         }
+        if (detailed && hostOf && m2Blocker(hostOf, placeSpec)) return fail("retention_blocked", pcTarget.mount(attachment.target), { why: L("Lift the M.2 heatsink off first; it covers this slot.", "شيل مشتّت M.2 أول؛ هو مغطّي هالفتحة.") });
         if (held) return fail("retention_closed", pcTarget.mount(attachment.target), { mechanism: retentionName(placeSpec!.retention!.kind) });
         return ok({ parts: withPart(part.instanceId, (p) => ({ ...p, attachments: others })) });
       }

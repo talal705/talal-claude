@@ -801,7 +801,7 @@ export type PCAction =
   | { type: "remove_part"; instanceId: InstanceId }
   /** Aligns the part on a mount point (`placed`). Rejected with a reason when it cannot physically go there. */
   /** `alignment`: how the part is held over a keyed place (rotation, offset from centre); required there in detailed builds. */
-  | { type: "mount_part"; instanceId: InstanceId; role?: string; target: MountRef; alignment?: { rotationDeg: number; offsetMm: [number, number] } }
+  | { type: "mount_part"; instanceId: InstanceId; role?: string; target: MountRef; alignment?: { rotationDeg: number; offsetMm: [number, number]; tiltDeg?: number } }
   | { type: "set_mechanics"; mode: "detailed" }
   /** Opens or closes a retention mechanism on a host part. */
   | { type: "set_mechanism"; instanceId: InstanceId; mechanismId: string; state: MechanismState }
@@ -905,6 +905,7 @@ export type PCDiagnosticCode =
   | "retention_blocked"
   | "keying_wrong"
   | "alignment_off"
+  | "insert_angle_wrong"
   | "alignment_required"
   | "prep_missing"
   | "prep_wrong"
