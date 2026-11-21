@@ -241,7 +241,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   // ---------- Learner actions ----------
 
   /** Which hands-on routine a keyed part follows: socket and plate, memory latch, or card latch and bracket. */
-  const handKind = (retKind: string): "cpu" | "ram" | "gpu" | "m2" => (retKind === "dimm_latch" ? "ram" : retKind === "pcie_latch" ? "gpu" : retKind === "m2_qlatch" ? "m2" : "cpu");
+  const handKind = (retKind: string): "cpu" | "ram" | "gpu" | "m2" => (retKind === "dimm_latch" ? "ram" : retKind === "pcie_latch" ? "gpu" : retKind === "m2_qlatch" || retKind === "m2_screw" ? "m2" : "cpu");
   /** How a keyed part comes off the bench: turned and off centre, so lining it up is the learner's job. */
   const pickup = (key: SimplePartKey, retKind: string) => {
     const k = handKind(retKind);
@@ -1249,13 +1249,16 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
       case "mechanism": {
         const open = step.desired === "open";
         if (k === "gpu") return t(open ? "hands.openPcie" : "hands.releasePcie");
-        if (k === "m2") return t(open ? "hands.openQLatch" : "hands.closeQLatch");
+        if (k === "m2") return ret?.kind === "m2_screw" ? t(open ? "hands.m2ScrewOut" : "hands.m2ScrewIn") : t(open ? "hands.openQLatch" : "hands.closeQLatch");
         return t(lga ? (open ? "hands.openPlate" : "hands.closePlate") : (open ? "hands.liftZif" : "hands.lowerZif"));
       }
       case "covers": return t("hands.removeCovers");
       case "lower": return t(k === "ram" ? "hands.ramLower" : k === "gpu" ? "hands.pushCard" : k === "m2" ? "hands.slideIn" : "hands.lowerIn");
       case "seat": return t("hands.pressIn");
       case "fasten": return t("hands.screwBracket");
+      case "heatsink": return t(({ screws: "hands.m2Screws", lift: "hands.m2Lift", film: "hands.m2Film", fit: "hands.m2Fit", tighten: "hands.m2Tighten" } as const)[step.step]);
+      case "stand": return t("hands.m2Stand");
+      case "tilt": return t("hands.m2Tilt");
     }
   }
   /** The one action the toolbar offers now, or why there is none (shown and read out with the button). */

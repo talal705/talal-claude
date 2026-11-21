@@ -5,7 +5,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import type { SimpleSceneTarget } from "./simple-scene";
 import {
-  ALL_SIMPLE_PARTS, caseCoversClosed, isRamKey, simpleBlock, simpleFastened, simpleKeying, simpleRamReference, simpleRamSlotOffsets, simpleRamSlots,
+  ALL_SIMPLE_PARTS, caseCoversClosed, isM2Key, isRamKey, simpleBlock, simpleFastened, simpleKeying, simpleM2Heatsink, simpleM2Slots, simpleRamReference, simpleRamSlotOffsets, simpleRamSlots,
   simpleRamTargetFor, simpleRetention, simplePartInstalled, type SimpleBlock, type SimpleHeld, type SimplePartKey,
 } from "./simple-model";
 
@@ -17,7 +17,7 @@ const attachmentOf = (state: PCBuildState, key: SimplePartKey) =>
 
 export type AimResult =
   | { ok: true; held: SimpleHeld; placeId: string }
-  | { ok: false; reason: SimpleBlock | "slotTaken" | "notItsPlace"; placeId: string };
+  | { ok: false; reason: SimpleBlock | "slotTaken" | "notItsPlace" | "doesNotFit"; placeId: string };
 
 /**
  * Brings the part in hand over the place the learner clicked: a memory module over that slot (any of
@@ -26,6 +26,14 @@ export type AimResult =
 export function aimHeld(state: PCBuildState, held: SimpleHeld, placeId: string): AimResult {
   const blocked = simpleBlock(state, held.key);
   if (blocked) return { ok: false, reason: blocked, placeId };
+  // An M.2 drive: any of the board's M.2 slots it fits (length and interface), over its connector, turn and tilt kept.
+  if (isM2Key(held.key)) {
+    const slot = simpleM2Slots(state, held.key).find((x) => x.id === placeId);
+    if (!slot) return { ok: false, reason: "notItsPlace", placeId };
+    if (slot.occupant && slot.occupant !== held.key) return { ok: false, reason: "slotTaken", placeId };
+    if (!slot.fits) return { ok: false, reason: "doesNotFit", placeId };
+    return { ok: true, held: { ...held, offsetMm: [0, 0], slotId: placeId }, placeId };
+  }
   if (isRamKey(held.key)) {
     const slot = simpleRamSlots(state).find((x) => x.id === placeId);
     const offset = simpleRamSlotOffsets(state).get(placeId);
@@ -46,6 +54,12 @@ export function aimHeld(state: PCBuildState, held: SimpleHeld, placeId: string):
  */
 export function aimTargets(state: PCBuildState, key: SimplePartKey, held: SimpleHeld | null): SimpleSceneTarget[] {
   const at = attachmentOf(state, key);
+  // An M.2 drive: every M.2 slot answers a click (none is suggested); once in, only its own slot.
+  if (isM2Key(key)) {
+    const host = ALL_SIMPLE_PARTS.find((p) => p.key === key)!.host;
+    return simpleM2Slots(state, key).filter((slot) => !at || slot.id === at.target.mountPointId)
+      .map((slot): SimpleSceneTarget => ({ id: `aim:${slot.id}`, kind: "mount", hostInstanceId: host, placeId: slot.id, role: at ? "target" : "decoy" }));
+  }
   if (isRamKey(key)) {
     if (at?.seating === "seated") return [];
     const host = simpleRamReference(state).hostInstanceId;
@@ -69,6 +83,12 @@ export type HandStep =
   | { kind: "lower" }
   | { kind: "seat" }
   | { kind: "fasten" }
+  /** An M.2 heatsink: loosen its screws, lift it off, peel its pad film, refit it, tighten its screws. */
+  | { kind: "heatsink"; hsId: string; step: "screws" | "lift" | "film" | "fit" | "tighten" }
+  /** A screw-held M.2 slot: fit the screw stand at the drive's length hole. */
+  | { kind: "stand" }
+  /** An M.2 drive in hand, not yet tilted to its insertion angle. */
+  | { kind: "tilt" }
   | null;
 
 /**
@@ -82,6 +102,7 @@ export function nextHandStep(state: PCBuildState, key: SimplePartKey, held: Simp
   if (!ret || simplePartInstalled(state, key)) return null;
   const at = attachmentOf(state, key);
   const hand = held?.key === key ? held : null;
+  if (isM2Key(key)) return nextM2Step(state, key, hand, at);
   if (isRamKey(key)) {
     if (at) return at.seating !== "seated" ? { kind: "seat" } : null;
     const target = hand ? simpleRamTargetFor(state, hand.offsetMm) : null;
@@ -104,5 +125,36 @@ export function nextHandStep(state: PCBuildState, key: SimplePartKey, held: Simp
   if (gpu) return simpleFastened(state, key) ? null : { kind: "fasten" };
   if (ret.open && ret.kind !== "dimm_latch") return { kind: "mechanism", desired: "closed" };
   if (ret.leverId && ret.leverOpen) return { kind: "lever", desired: "closed" };
+  return null;
+}
+
+/**
+ * An M.2 drive, in the order of the board's manual: the slot is chosen first (its heatsink and retention
+ * depend on it); the heatsink comes off; the stand goes in or the Q-Latch is turned open; the drive is
+ * tilted and inserted, pressed flat and held; then the film, the heatsink and its screws.
+ */
+function nextM2Step(state: PCBuildState, key: SimplePartKey, hand: SimpleHeld | null, at: ReturnType<typeof attachmentOf>): HandStep {
+  const slotId = at?.target.mountPointId ?? hand?.slotId;
+  if (!slotId) return { kind: "aim" };
+  const ret = simpleRetention(state, key, slotId);
+  if (!ret) return null;
+  const hs = simpleM2Heatsink(state, slotId);
+  if (!at) {
+    if (hs?.fitted) return { kind: "heatsink", hsId: hs.id, step: hs.screwsIn ? "screws" : "lift" };
+    const slot = simpleM2Slots(state, key).find((x) => x.id === slotId);
+    if (slot?.occupant && slot.occupant !== key) return { kind: "slotTaken", slotId };
+    if (ret.standId && !ret.standIn) return { kind: "stand" };
+    if (ret.kind === "m2_qlatch" && !ret.open) return { kind: "mechanism", desired: "open" };
+    const range = simpleKeying(state, key)?.insertTiltDeg;
+    const tilt = hand?.tiltDeg;
+    if (range && (tilt === undefined || tilt < range[0] || tilt > range[1])) return { kind: "tilt" };
+    return { kind: "lower" };
+  }
+  if (at.seating !== "seated") return { kind: "seat" };
+  // Pressed flat: the Q-Latch turned shut, or the screw in.
+  if (ret.open) return { kind: "mechanism", desired: "closed" };
+  if (hs?.filmOn) return { kind: "heatsink", hsId: hs.id, step: "film" };
+  if (hs && !hs.fitted) return { kind: "heatsink", hsId: hs.id, step: "fit" };
+  if (hs && !hs.screwsIn) return { kind: "heatsink", hsId: hs.id, step: "tighten" };
   return null;
 }

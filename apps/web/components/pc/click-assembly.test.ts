@@ -174,3 +174,64 @@ describe("click-based assembly: one click, one checked step", () => {
     expect(nextHandStep(s, "psu", null)).toBeNull();
   });
 });
+
+describe("click-based assembly: an M.2 drive, one documented step per click", () => {
+  /** One step as the page takes it: one engine call, or (aim, tilt) a change of the hand only. */
+  function m2Step(state: PCBuildState, held: SimpleHeld | null, step: HandStep): { state: PCBuildState; held: SimpleHeld | null } {
+    if (!step) throw new Error("no step");
+    const slotId = held?.slotId ?? state.parts.flatMap((p) => p.attachments).find((a) => a.target.mountPointId.startsWith("m2-") && state.parts.some((x) => x.catalogId === "samsung-990-pro-1tb" && x.attachments.includes(a)))?.target.mountPointId;
+    const ret = simpleRetention(state, "storage", slotId)!;
+    switch (step.kind) {
+      case "heatsink": {
+        const [id, st] = ({ screws: [`${step.hsId}:screws`, "open"], lift: [step.hsId, "open"], film: [`${step.hsId}:film`, "open"], fit: [step.hsId, "closed"], tighten: [`${step.hsId}:screws`, "closed"] } as const)[step.step];
+        return { state: must(setSimpleMechanism(state, id, st)), held };
+      }
+      case "stand": return { state: must(setSimpleMechanism(state, ret.standId!, "closed")), held };
+      case "mechanism": return { state: must(setSimpleMechanism(state, ret.id, step.desired)), held };
+      case "tilt": return { state, held: { ...held!, tiltDeg: 25 } };
+      case "lower": return { state: must(lowerSimplePart(state, "storage", held!)), held: null };
+      case "seat": return { state: must(reseatSimplePart(state, "storage")), held };
+      default: throw new Error(`unexpected step ${JSON.stringify(step)}`);
+    }
+  }
+  /** Clicks the drive's next step until it is in; the learner turns it right and chooses the slot (aim). */
+  function walk(state: PCBuildState, slotId: string): string[] {
+    let held: SimpleHeld | null = { key: "storage", rotationDeg: 0, offsetMm: [4, 0] };
+    const seen: string[] = [];
+    for (let i = 0; i < 20; i += 1) {
+      const step = nextHandStep(state, "storage", held);
+      if (!step) return seen;
+      seen.push(step.kind === "heatsink" ? `heatsink:${step.step}` : step.kind === "mechanism" ? `mechanism:${step.desired}` : step.kind);
+      if (step.kind === "aim") { const r = aimHeld(state, held!, slotId); if (!r.ok) throw new Error(r.reason); held = r.held; continue; }
+      ({ state, held } = m2Step(state, held, step));
+    }
+    throw new Error(`no end: ${seen.join(", ")}`);
+  }
+
+  it("TUF M.2_1: choose the slot, heatsink off, Q-Latch open, tilt, insert, press flat, latch, film, heatsink back, screws", () => {
+    expect(walk(createSimpleBuild(), "m2-1")).toEqual([
+      "aim", "heatsink:screws", "heatsink:lift", "mechanism:open", "tilt", "lower", "seat", "mechanism:closed", "heatsink:film", "heatsink:fit", "heatsink:tighten",
+    ]);
+  });
+
+  it("TUF M.2_2 has no heatsink: those steps are skipped", () => {
+    expect(walk(createSimpleBuild(), "m2-2")).toEqual(["aim", "mechanism:open", "tilt", "lower", "seat", "mechanism:closed"]);
+  });
+
+  it("PRIME B760M-A WIFI: the screw stand instead of a Q-Latch, and the screw holds it", () => {
+    activateSimpleModel(planModel({ version: 1, purpose: "study", workload: "", parts: { case: "corsair-4000d-airflow-black", motherboard: "asus-prime-b760m-a-wifi", cpu: "intel-core-i5-14600k", cooler: "arctic-freezer-36", psu: "corsair-rm650e-2025", gpu: null, ram: { id: "corsair-vengeance-rgb-ddr5-6000-32gb-kit", modules: 2 }, storage: ["samsung-990-pro-1tb"], fans: [] } }));
+    expect(walk(createSimpleBuild(), "m2-1")).toEqual([
+      "aim", "heatsink:screws", "heatsink:lift", "stand", "tilt", "lower", "seat", "mechanism:closed", "heatsink:film", "heatsink:fit", "heatsink:tighten",
+    ]);
+  });
+
+  it("aiming keeps the learner's turn and tilt; a slot another drive is in, or one the drive does not fit, is refused", () => {
+    const s = must(installSimplePart(createSimpleBuild(), "storage"));
+    const held: SimpleHeld = { key: "storage", rotationDeg: 180, offsetMm: [4, 0], tiltDeg: 10 };
+    expect(aimHeld(createSimpleBuild(), held, "m2-3")).toEqual({ ok: true, held: { ...held, offsetMm: [0, 0], slotId: "m2-3" }, placeId: "m2-3" });
+    expect(aimHeld(s, { ...held, key: "storage" }, "m2-1")).toMatchObject({ ok: true }); // its own slot
+    expect(aimHeld(createSimpleBuild(), held, "dimm-a1")).toMatchObject({ ok: false, reason: "notItsPlace" });
+    // Every M.2 slot can be clicked; none is suggested.
+    expect(aimTargets(createSimpleBuild(), "storage", held).map((t) => [t.placeId, t.role])).toEqual([["m2-1", "decoy"], ["m2-2", "decoy"], ["m2-3", "decoy"], ["m2-4", "decoy"]]);
+  });
+});
