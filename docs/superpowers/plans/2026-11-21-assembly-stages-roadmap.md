@@ -6,7 +6,7 @@ models' documents. A stage is "done" only when its verification gate (brief, sec
 
 | Stage | Plan | Status |
 |---|---|---|
-| 3 — M.2 storage | `2026-11-21-stage3-m2-storage.md` | in progress |
+| 3 — M.2 storage | `2026-11-21-stage3-m2-storage.md` | implemented and verified locally; awaiting review |
 | 4 — CPU cooling (air, AIO) | not written | not started |
 | 5 — Motherboard into case | not written | not started |
 | 6 — Power supply | not written | not started |

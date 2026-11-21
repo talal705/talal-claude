@@ -4,7 +4,50 @@ Current site brand: **بيئة التدريب الافتراضية (VTE)** in Ar
 **Virtual Training Environment (VTE)** in English. Older references below use the former name.
 The repository and hosting identifiers remain `talal-claude`; saved-data keys are unchanged.
 
-## Latest work: click-based assembly and top controls
+## Latest work: Stage 3 — M.2 storage (branch `feat/stage3-m2-storage`, 2026-11-21)
+
+Started from `feat/click-assembly-toolbar` at `2ecd636`. Not merged, not deployed to production.
+Plan: `docs/superpowers/plans/2026-11-21-stage3-m2-storage.md`; roadmap for stages 3–11:
+`docs/superpowers/plans/2026-11-21-assembly-stages-roadmap.md`.
+
+**Behaviour.** The learner picks the drive, chooses an M.2 slot by clicking it (in the view or with
+the slot buttons above it; no slot is suggested), then takes one documented step per click: loosen
+the heatsink's screws, lift it off, fit the screw stand or turn the Q-Latch open, turn the drive if it
+is reversed (refused, never corrected), tilt it up, insert it at an angle, press it flat, turn the
+Q-Latch or screw it down, peel the pad film, refit the heatsink, tighten its screws. A bare slot skips
+the heatsink. The drive counts as installed only when held down and its heatsink is back and screwed.
+Removal is the reverse in the M.2 panel (heatsink off, latch open or screw out — the drive rises —
+lift it out). The robot's line comes from the same next step (naming the slot), on every action and
+after a reload. Double clicks take one step. Enter = next step, T = tilt. Old saves migrate in place.
+
+**Hardware (verified from each board's own documents).**
+| Board | Heatsinks | Retention | Source |
+|---|---|---|---|
+| TUF GAMING Z790-PLUS WIFI | over M.2_1; over M.2_3 + M.2_4 (2 screws each); M.2_2 bare | Q-Latch (pre-installed at 2280); M.2_4 short drives: screw stand + screw | E21279 p. 1-11, pp. 2-7 to 2-12; official top photo |
+| TUF GAMING Z790-PLUS WIFI D4 | same, checked on its own photo | same | E20581 pp. 2-7 to 2-12; official top photo |
+| PRIME B760M-A WIFI | over M.2_1 (2 screws); M.2_2 bare | screw stand + one screw (the entry no longer borrows the TUF Q-Latch) | E21693 pp. 1-2, 1-14 |
+All three: pad film peeled before refitting; a screw package for M.2 is in the box. No M.2 slot-sharing
+rule is documented in these manuals, so none is applied.
+
+**Approximations.** Insertion angle 15–35° (manuals draw it without a number; the lab tilts to 25°).
+Rubber pad (single/double-sided drives) is optional and not modelled. The M.2_4 short-drive screw stand
+is catalog data only (the only M.2 drive offered, the 990 PRO 1TB, is 2280). Proportions are schematic.
+
+**Verification (local production build, Chrome with SwiftShader, 2026-11-21).**
+- `npm test`: 1015 passed, 0 failed, 34 skipped (no AI provider, no JDK, no `TEST_DATABASE_URL`; not counted).
+- `npm run type-check`, `npm run check:messages`, `npm run build`: passed.
+- `docs/handoff/2026-11-21/acceptance/m2.mjs`: EN 1440 31/31, AR 1440 31/31, EN 430 31/31 (slot clicked
+  in the 3D view, double click, wrong turn refused, reload in hand and resting, undo, removal, camera
+  unchanged, no page errors).
+- `docs/handoff/2026-11-21/acceptance/cpu-ram-click.mjs` (CPU and RAM through the new toolbar): EN 9/9, AR 9/9.
+- The Phase 2 scripts in `docs/handoff/2026-11-20/acceptance/` drive the old drag UI and stop early
+  (close-up button and drag handle moved by the click-toolbar change). They fail identically on a build
+  of the base `2ecd636`, so this is not a Stage 3 regression; they need rewriting for the click UI.
+- Not verified: the Vercel preview of this branch (login required), physical touch devices.
+
+**Next.** Owner/Codex review; then Stage 4 (cooling) per the roadmap.
+
+## Earlier: click-based assembly and top controls
 
 The owner's latest instruction replaces mandatory part dragging with click/tap placement, and moves
 assembly controls, guide switches and RGB above the 3D scene. Current work is on
