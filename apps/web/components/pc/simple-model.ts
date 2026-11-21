@@ -200,6 +200,8 @@ export const slotOf = (key: SimplePartKey): SimpleSlot => ALL_SIMPLE_PARTS.find(
 /** The other parts that fill the same slot. */
 export const rivalsOf = (key: SimplePartKey): SimplePartKey[] => ALL_SIMPLE_PARTS.filter((p) => p.key !== key && slotOf(p.key) === slotOf(key)).map((p) => p.key);
 export const isRamKey = (key: SimplePartKey) => /^ram\d*$/.test(key);
+/** An M.2 drive: planned into one of the board's M.2 slots (the learner may choose another). */
+export const isM2Key = (key: SimplePartKey) => /^m2-\d+$/.test(ALL_SIMPLE_PARTS.find((p) => p.key === key)?.mount ?? "");
 /** What a key is: `ram2` → ram, `storage3` → storage, `fan1` → fan, `cpu2` → cpu. */
 export const roleOf = (key: SimplePartKey): SimpleRole => {
   const base = key.replace(/\d+$/, "");
@@ -225,7 +227,11 @@ export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}`
  * Version 4 also carries the planned build it belongs to.
  */
 /** A part the learner is holding over its place: how it is turned and how far off centre (mm, along the place's own axes). */
-export interface SimpleHeld { key: SimplePartKey; rotationDeg: number; offsetMm: [number, number] }
+export interface SimpleHeld {
+  key: SimplePartKey; rotationDeg: number; offsetMm: [number, number];
+  /** An M.2 drive: how far it is tilted up from flat (degrees), and the slot the learner chose. */
+  tiltDeg?: number; slotId?: string;
+}
 export type SimpleSnapshot =
   | { version: 3; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean; held?: SimpleHeld | null }
   | { version: 4; plan: unknown; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean; held?: SimpleHeld | null };
@@ -237,11 +243,13 @@ export function parseHeld(value: unknown): SimpleHeld | null {
   if (typeof h.key !== "string" || !ALL_SIMPLE_PARTS.some((p) => p.key === h.key)) return null;
   if (typeof h.rotationDeg !== "number" || ![0, 90, 180, 270].includes(h.rotationDeg)) return null;
   if (!Array.isArray(off) || off.length !== 2 || !off.every((n) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) <= HELD_REACH_MM)) return null;
-  return { key: h.key, rotationDeg: h.rotationDeg, offsetMm: [off[0] as number, off[1] as number] };
+  const tilt = typeof h.tiltDeg === "number" && Number.isFinite(h.tiltDeg) && h.tiltDeg >= 0 && h.tiltDeg <= 90 ? { tiltDeg: h.tiltDeg } : {};
+  const slot = typeof h.slotId === "string" && /^m2-\d$/.test(h.slotId) ? { slotId: h.slotId } : {};
+  return { key: h.key, rotationDeg: h.rotationDeg, offsetMm: [off[0] as number, off[1] as number], ...tilt, ...slot };
 }
 /** How far from its place a held part can be moved (it stays over the board, above the socket area). */
 export const HELD_REACH_MM = 40;
-export type SimpleBlock = "cpuFirst" | "boardFirst" | "prepareBoard" | "cannotFit" | "socketTaken" | "coolerTaken" | "openFirst" | "turnPart" | "centrePart" | "closeBlocked" | "alreadyIn" | "unplugFirst" | "unscrewFirst" | "prepMissing" | "prepWrong";
+export type SimpleBlock = "cpuFirst" | "boardFirst" | "prepareBoard" | "cannotFit" | "socketTaken" | "coolerTaken" | "openFirst" | "turnPart" | "centrePart" | "closeBlocked" | "alreadyIn" | "unplugFirst" | "unscrewFirst" | "prepMissing" | "prepWrong" | "tiltPart";
 export type SimpleCableBlock = "fitCableParts" | "turnOffFirst" | "cannotConnect";
 export type SimpleRemoveBlock = "turnOffFirst" | "removeCoolerFirst" | "unplugCoolerFirst" | "notSwappable" | "boardFirst";
 /**
@@ -273,8 +281,8 @@ export function createSimpleBuild(): PCBuildState {
 // ---------- Mechanisms (CPU load plate, memory latches) ----------
 
 /** The retention of the place a part goes, with the host that carries it; null for parts held by screws only. */
-export function simpleRetention(state: PCBuildState, key: SimplePartKey): { hostInstanceId: string; id: string; kind: string; open: boolean; mountPointId: string; leverId: string | null; leverOpen: boolean; nearId: string | null; nearOpen: boolean } | null {
-  const target = simpleTarget(state, key);
+export function simpleRetention(state: PCBuildState, key: SimplePartKey, slotId?: string): { hostInstanceId: string; id: string; kind: string; open: boolean; mountPointId: string; leverId: string | null; leverOpen: boolean; nearId: string | null; nearOpen: boolean; standId: string | null; standIn: boolean } | null {
+  const target = simpleTarget(state, key, slotId);
   const host = state.parts.find((p) => p.instanceId === target.hostInstanceId);
   const mount = pcCatalog.entries.find((e) => e.id === host?.catalogId)?.mountPoints.find((m) => m.id === target.mountPointId);
   // The case's slot covers are not what holds the board: they matter for a card (see caseCoversClosed).
@@ -283,7 +291,9 @@ export function simpleRetention(state: PCBuildState, key: SimplePartKey): { host
   const leverId = mount.retention.kind === "lga_load_plate" ? `${mount.retention.id}:lever` : null;
   // A memory slot with a clip at each end: the near clip is its own mechanism.
   const nearId = mount.retention.kind === "dimm_latch" && mount.retention.latches === "both" ? `${mount.retention.id}:near` : null;
-  return { hostInstanceId: host.instanceId, id: mount.retention.id, kind: mount.retention.kind, open: host.mechanisms?.[mount.retention.id] === "open", mountPointId: mount.id, leverId, leverOpen: leverId ? host.mechanisms?.[leverId] === "open" : false, nearId, nearOpen: nearId ? host.mechanisms?.[nearId] === "open" : true };
+  // A screw-held M.2 slot: its stand at the length hole is a step of its own ("closed" = fitted).
+  const standId = mount.retention.kind === "m2_screw" ? `${mount.retention.id}:stand` : null;
+  return { hostInstanceId: host.instanceId, id: mount.retention.id, kind: mount.retention.kind, open: host.mechanisms?.[mount.retention.id] === "open", mountPointId: mount.id, leverId, leverOpen: leverId ? host.mechanisms?.[leverId] === "open" : false, nearId, nearOpen: nearId ? host.mechanisms?.[nearId] === "open" : true, standId, standIn: standId ? host.mechanisms?.[standId] === "closed" : true };
 }
 /** The keying the learner must match at a part's place (CPU triangle, DIMM notch), if any. */
 export function simpleKeying(state: PCBuildState, key: SimplePartKey) {
@@ -291,8 +301,11 @@ export function simpleKeying(state: PCBuildState, key: SimplePartKey) {
   const host = state.parts.find((p) => p.instanceId === target.hostInstanceId);
   return pcCatalog.entries.find((e) => e.id === host?.catalogId)?.mountPoints.find((m) => m.id === target.mountPointId)?.keying ?? null;
 }
-const hostOfRetention = (state: PCBuildState, retentionId: string) =>
-  state.parts.find((p) => pcCatalog.entries.find((e) => e.id === p.catalogId)?.mountPoints.some((m) => m.retention?.id === retentionId.replace(/:(lever|near)$/, "")));
+/** The part a mechanism is on: a retention (`<id>`, `<id>:lever|near|stand`) or an M.2 heatsink (`<id>`, `<id>:screws|film`). */
+const hostOfRetention = (state: PCBuildState, mechanismId: string) => {
+  const base = mechanismId.replace(/:(lever|near|stand|screws|film)$/, "");
+  return state.parts.find((p) => pcCatalog.entries.find((e) => e.id === p.catalogId)?.mountPoints.some((m) => m.retention?.id === base || (m.kind === "m2_slot" && m.heatsink?.id === base)));
+};
 
 /** Moves a lever, plate or latch. The engine refuses what cannot happen (a plate over a cooler, a latch over a half-in module). */
 export function setSimpleMechanism(state: PCBuildState, retentionId: string, desired: "open" | "closed"): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleBlock; message?: { en: string; ar: string } } {
@@ -313,7 +326,7 @@ function closeRetention(state: PCBuildState, ret: { id: string; leverId: string 
 }
 
 /** How the learner holds a part over its place. */
-export interface SimpleAlignment { rotationDeg: number; offsetMm: [number, number] }
+export interface SimpleAlignment { rotationDeg: number; offsetMm: [number, number]; tiltDeg?: number; slotId?: string }
 export const ALIGNED: SimpleAlignment = { rotationDeg: 0, offsetMm: [0, 0] };
 
 /**
@@ -325,14 +338,47 @@ export function lowerSimplePart(state: PCBuildState, key: SimplePartKey, alignme
   if (blocked) return { ok: false, reason: blocked };
   const spec = partSpec(key);
   if (state.parts.find((p) => p.instanceId === spec.id)?.attachments.length) return { ok: false, reason: "alreadyIn" };
-  const r = pc.applyAction(state, { type: "mount_part", instanceId: spec.id, target: simpleTarget(state, key), alignment }, pcCatalog);
+  const m2 = isM2Key(key);
+  const { slotId, ...pose } = alignment;
+  const r = pc.applyAction(state, { type: "mount_part", instanceId: spec.id, target: simpleTarget(state, key, m2 ? slotId : undefined), alignment: pose }, pcCatalog);
   if (!r.ok) {
     const code = r.rejection.code;
-    const reason: SimpleBlock = code === "retention_closed" ? "openFirst" : code === "keying_wrong" ? "turnPart" : code === "alignment_off" ? "centrePart" : "cannotFit";
+    const reason: SimpleBlock = code === "retention_closed" ? "openFirst" : code === "keying_wrong" ? "turnPart" : code === "alignment_off" ? "centrePart" : code === "insert_angle_wrong" ? "tiltPart" : "cannotFit";
     return { ok: false, reason, message: r.rejection.message };
   }
+  // An M.2 drive goes in at an angle and rests there: pressing it flat is its own step.
+  if (m2) return { ok: true, state: r.state };
   const seated = pc.applyAction(r.state, { type: "set_seating", instanceId: spec.id, seating: "seated" }, pcCatalog);
   return seated.ok ? { ok: true, state: seated.state } : { ok: false, reason: "cannotFit" };
+}
+
+// ---------- M.2: the learner chooses the slot; a board heatsink may cover it ----------
+
+const boardOf = (state: PCBuildState, key: SimplePartKey) => {
+  const host = state.parts.find((p) => p.instanceId === partSpec(key).host);
+  return { host, entry: pcCatalog.entries.find((e) => e.id === host?.catalogId) };
+};
+
+/** The board's M.2 heatsink over a slot and its state; null for a bare slot. */
+export function simpleM2Heatsink(state: PCBuildState, slotId: string): { id: string; screws: number; padFilm: boolean; fitted: boolean; screwsIn: boolean; filmOn: boolean } | null {
+  const host = state.parts.find((p) => pcCatalog.entries.find((e) => e.id === p.catalogId)?.mountPoints.some((m) => m.id === slotId && m.kind === "m2_slot"));
+  const slot = pcCatalog.entries.find((e) => e.id === host?.catalogId)?.mountPoints.find((m) => m.id === slotId);
+  if (!host || slot?.kind !== "m2_slot" || !slot.heatsink) return null;
+  const m = host.mechanisms ?? {};
+  const { id, screws, padFilm } = slot.heatsink;
+  return { id, screws, padFilm, fitted: (m[id] ?? "closed") !== "open", screwsIn: (m[`${id}:screws`] ?? "closed") !== "open", filmOn: padFilm && (m[`${id}:film`] ?? "closed") !== "open" };
+}
+
+/** The board's M.2 slots for this drive: whether it fits (length and interface), its heatsink, what is in it. */
+export function simpleM2Slots(state: PCBuildState, key: SimplePartKey): { id: string; label: { en: string; ar: string }; heatsinkId: string | null; fits: boolean; occupant: SimplePartKey | null }[] {
+  const { entry } = boardOf(state, key);
+  const drive = pcCatalog.entries.find((e) => e.id === partSpec(key).catalogId);
+  const spec = drive?.category === "storage" ? drive.spec : null;
+  const occupantOf = (slotId: string) => ALL_SIMPLE_PARTS.find((p) => state.parts.find((x) => x.instanceId === p.id)?.attachments.some((a) => a.target.hostInstanceId === partSpec(key).host && a.target.mountPointId === slotId))?.key ?? null;
+  return (entry?.mountPoints ?? []).flatMap((m) => (m.kind === "m2_slot" ? [{
+    id: m.id, label: m.label, heatsinkId: m.heatsink?.id ?? null, occupant: occupantOf(m.id),
+    fits: Boolean(spec && (m.lengths as string[]).includes(spec.formFactor) && (m.interfaces as string[]).includes(spec.interface)),
+  }] : []));
 }
 
 // ---------- Memory: the slot is where the learner holds the module ----------
@@ -470,8 +516,13 @@ export function liftSimplePart(state: PCBuildState, key: SimplePartKey): { ok: t
 }
 
 /** The slot or place a part is fitted to. A RAM stick takes A2 when it is first in, B2 when the other stick holds A2. */
-export function simpleTarget(state: PCBuildState, key: SimplePartKey): { hostInstanceId: string; mountPointId: string } {
+export function simpleTarget(state: PCBuildState, key: SimplePartKey, slotId?: string): { hostInstanceId: string; mountPointId: string } {
   const spec = partSpec(key);
+  // An M.2 drive: the slot it is in, else the slot the learner chose, else the plan's slot.
+  if (isM2Key(key)) {
+    const own = state.parts.find((p) => p.instanceId === spec.id)?.attachments[0];
+    return { hostInstanceId: spec.host, mountPointId: own?.target.mountPointId ?? slotId ?? spec.mount };
+  }
   if (!isRamKey(key)) return { hostInstanceId: spec.host, mountPointId: spec.mount };
   const own = state.parts.find((p) => p.instanceId === spec.id)?.attachments.find((a) => a.target.hostInstanceId === spec.host);
   if (own) return { hostInstanceId: spec.host, mountPointId: own.target.mountPointId };
@@ -482,11 +533,18 @@ export function simpleTarget(state: PCBuildState, key: SimplePartKey): { hostIns
 export function simplePartInstalled(state: PCBuildState, key: SimplePartKey): boolean {
   const spec = partSpec(key);
   // A module counts in any memory slot of its board (the learner chooses the slot); the recommendation is advice.
-  const mounts: readonly string[] = isRamKey(key) ? simpleRamSlots(state).map((x) => x.id) : [spec.mount];
+  const m2 = isM2Key(key);
+  const mounts: readonly string[] = isRamKey(key) ? simpleRamSlots(state).map((x) => x.id) : m2 ? simpleM2Slots(state, key).map((x) => x.id) : [spec.mount];
   const part = state.parts.find((p) => p.instanceId === spec.id);
   if (!part) return false;
   const fitted = (host: string, ids: readonly string[], screws: number) =>
     part.attachments.some((a) => a.target.hostInstanceId === host && ids.includes(a.target.mountPointId) && a.seating === "seated" && a.fastenersSecured >= screws);
+  if (m2) {
+    // Pressed flat, held, and the board's heatsink over it back on and screwed down.
+    const at = part.attachments.find((a) => a.target.hostInstanceId === spec.host && mounts.includes(a.target.mountPointId));
+    const hs = at ? simpleM2Heatsink(state, at.target.mountPointId) : null;
+    return fitted(spec.host, mounts, spec.screws) && (!hs || (hs.fitted && hs.screwsIn));
+  }
   return fitted(spec.host, mounts, spec.screws) && (!spec.radiator || fitted(spec.radiator.host, [spec.radiator.mount], spec.radiator.screws));
 }
 
@@ -612,6 +670,7 @@ export function installSimplePart(state: PCBuildState, key: SimplePartKey): { ok
   if (simplePartInstalled(state, key)) return { ok: true, state };
   const blocked = simpleBlock(state, key);
   if (blocked) return { ok: false, reason: blocked };
+  if (isM2Key(key)) return installM2Whole(state, key);
   const spec = partSpec(key);
   // A liquid cooler has two bodies: the pump block on the CPU, then the radiator in the case.
   const role = (name: string) => (spec.radiator ? { role: name } : {});
@@ -670,6 +729,46 @@ export function installSimplePart(state: PCBuildState, key: SimplePartKey): { ok
       ] : []),
     ]) };
   } catch { return { ok: false, reason: "cannotFit" }; }
+}
+
+/** The mechanism steps (`mech:` ids and states) that take the heatsink over this slot off, if it is on. */
+export function m2HeatsinkOff(state: PCBuildState, slotId: string): [string, "open" | "closed"][] {
+  const hs = simpleM2Heatsink(state, slotId);
+  if (!hs?.fitted) return [];
+  return [...(hs.screwsIn ? [[`${hs.id}:screws`, "open"] as [string, "open"]] : []), [hs.id, "open"]];
+}
+/** The steps that put the heatsink over this slot back on: film peeled, refitted, screws in. */
+export function m2HeatsinkOn(state: PCBuildState, slotId: string): [string, "open" | "closed"][] {
+  const hs = simpleM2Heatsink(state, slotId);
+  if (!hs) return [];
+  return [...(hs.filmOn ? [[`${hs.id}:film`, "open"] as [string, "open"]] : []), ...(hs.fitted ? [] : [[hs.id, "closed"] as [string, "closed"]]), ...(hs.screwsIn ? [] : [[`${hs.id}:screws`, "closed"] as [string, "closed"]])];
+}
+/** The angle the lab uses when a whole M.2 fitting is done in one step (older saves, tests): inside 15–35°. */
+export const M2_WHOLE_TILT_DEG = 25;
+
+/** An M.2 drive in one step (older saves, tests): every documented step of the plan's slot, in order. */
+function installM2Whole(state: PCBuildState, key: SimplePartKey): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleBlock } {
+  const slotId = simpleTarget(state, key).mountPointId;
+  let next = state;
+  const mech = (id: string, desired: "open" | "closed") => { const r = setSimpleMechanism(next, id, desired); if (!r.ok) throw new Error(id); next = r.state; };
+  try {
+    for (const [id, st] of m2HeatsinkOff(next, slotId)) mech(id, st);
+    const ret = simpleRetention(next, key)!;
+    const resting = next.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments.length;
+    if (!resting) {
+      if (ret.standId && !ret.standIn) mech(ret.standId, "closed");
+      if (ret.kind === "m2_qlatch" && !ret.open) mech(ret.id, "open");
+      const l = lowerSimplePart(next, key, { ...ALIGNED, tiltDeg: M2_WHOLE_TILT_DEG, slotId });
+      if (!l.ok) return { ok: false, reason: l.reason };
+      next = l.state;
+    }
+    const seated = reseatSimplePart(next, key);
+    if (!seated.ok) return seated;
+    next = seated.state;
+    mech(ret.id, "closed");
+    for (const [id, st] of m2HeatsinkOn(next, slotId)) mech(id, st);
+  } catch { return { ok: false, reason: "cannotFit" }; }
+  return { ok: true, state: next };
 }
 
 function radiatorLocation(state: PCBuildState, hostInstanceId: string, mountPointId: string): string {
@@ -869,7 +968,7 @@ export function applySimpleStep(state: PCBuildState, step: SimpleStep): PCBuildS
       const key = rest.split(":")[0]!;
       // A module lowered by hand rests in the slot it was held over; pressing it home is its own step.
       if (pose && isRamKey(key)) return lowerSimpleRam(state, key, { rotationDeg: pose.rotationDeg, offsetMm: pose.offsetMm });
-      return lowerSimplePart(state, key, pose ? { rotationDeg: pose.rotationDeg, offsetMm: pose.offsetMm } : ALIGNED);
+      return lowerSimplePart(state, key, pose ? { rotationDeg: pose.rotationDeg, offsetMm: pose.offsetMm, ...(pose.tiltDeg === undefined ? {} : { tiltDeg: pose.tiltDeg }), ...(pose.slotId ? { slotId: pose.slotId } : {}) } : ALIGNED);
     })()
     : kind === "seat" ? reseatSimplePart(state, rest)
     : kind === "lift" ? liftSimplePart(state, rest)
@@ -915,11 +1014,13 @@ const withStep = (snapshot: SimpleSnapshot, step: SimpleStep): SimpleSnapshot =>
 };
 export const withMechanism = (snapshot: SimpleSnapshot, retentionId: string, state: "open" | "closed") => withStep(snapshot, `mech:${retentionId}:${state}`);
 export const withLower = (snapshot: SimpleSnapshot, key: SimplePartKey, pose?: SimpleAlignment) =>
-  withStep(snapshot, pose ? `lower:${key}:${pose.rotationDeg}:${pose.offsetMm[0]}:${pose.offsetMm[1]}` : `lower:${key}`);
+  withStep(snapshot, pose ? `lower:${key}:${pose.rotationDeg}:${pose.offsetMm[0]}:${pose.offsetMm[1]}${pose.tiltDeg === undefined ? "" : `:t${pose.tiltDeg}`}${pose.slotId ? `:s${pose.slotId}` : ""}` : `lower:${key}`);
 /** The pose a lowered part was held in just before (from its `lower:` step), or null when not recorded. */
 export function loweredPose(step: string): SimpleHeld | null {
-  const m = /^lower:([a-z0-9]+):(0|90|180|270):(-?\d+(?:\.\d+)?):(-?\d+(?:\.\d+)?)$/.exec(step);
-  return m ? { key: m[1]!, rotationDeg: Number(m[2]), offsetMm: [Number(m[3]), Number(m[4])] } : null;
+  // An M.2 drive's step also says its tilt and the slot chosen: `…:t25:sm2-3`.
+  const m = /^lower:([a-z0-9]+):(0|90|180|270):(-?\d+(?:\.\d+)?):(-?\d+(?:\.\d+)?)(?::t(\d{1,2}))?(?::s(m2-\d))?$/.exec(step);
+  if (!m) return null;
+  return { key: m[1]!, rotationDeg: Number(m[2]), offsetMm: [Number(m[3]), Number(m[4])], ...(m[5] === undefined ? {} : { tiltDeg: Number(m[5]) }), ...(m[6] ? { slotId: m[6] } : {}) };
 }
 export const withSeat = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `seat:${key}`);
 export const withLift = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `lift:${key}`);
@@ -991,7 +1092,7 @@ const isStep = (step: unknown): step is SimpleStep => {
   if (kind === "plug") { const m = /^(.+):(\d)$/.exec(rest); return Boolean(m && isCableKey(m[1])); }
   if (kind === "prep") { const m = /^([a-z0-9]+):(paste|film|standoffs|io_shield|psu_fan|airflow):([a-z]*)$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
   if (kind === "screw") { const m = /^([a-z0-9]+):(\d{1,2})$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
-  return kind === "mech" && /^[a-z0-9-]+(:lever|:near)?:(open|closed)$/.test(rest);
+  return kind === "mech" && /^[a-z0-9-]+(:lever|:near|:stand|:screws|:film)?:(open|closed)$/.test(rest);
 };
 
 /**
@@ -1005,6 +1106,50 @@ export function migrateLeverSteps(history: readonly string[]): string[] {
     if (!m) return [st];
     return m[2] === "open" ? [`mech:${m[1]}:lever:open`, st] : [st, `mech:${m[1]}:lever:closed`];
   });
+}
+
+/**
+ * Saves from before M.2 heatsinks, screw stands and the insertion angle: the drive's steps are read as
+ * what they stood for on that board. The heatsink over the slot is taken off before the first step
+ * there and put back once the drive is held; an old lowering (which also pressed the drive flat) is
+ * an angled insertion and a press; a Q-Latch step on a screw-held slot is its stand and screw.
+ * Newer saves (any heatsink, stand or tilt step) are left as they are.
+ */
+export function migrateM2Steps(history: readonly string[]): string[] {
+  const keyOf = (st: string) => st.slice(st.indexOf(":") + 1).split(":")[0]!;
+  const driveStep = (st: string) => /^(lower|seat|lift):/.test(st) && isPartKey(keyOf(st)) && isM2Key(keyOf(st));
+  const qlatch = (st: string) => /^mech:(m2-\d)-qlatch:(open|closed)$/.exec(st);
+  if (!history.some((st) => qlatch(st) || driveStep(st))) return [...history];
+  if (history.some((st) => /:(stand|screws|film):(open|closed)$/.test(st) || /^lower:[a-z0-9]+:.*:t\d+/.test(st))) return [...history];
+  const out: string[] = [];
+  let state = createSimpleBuild();
+  const push = (st: string) => { state = applySimpleStep(state, st as SimpleStep); out.push(st); };
+  const mechs = (list: [string, "open" | "closed"][]) => { for (const [id, st] of list) push(`mech:${id}:${st}`); };
+  const slotOfKey = (key: SimplePartKey) => simpleTarget(state, key).mountPointId;
+  try {
+    for (const st of history) {
+      const q = qlatch(st);
+      const slotId = q ? q[1]! : driveStep(st) ? slotOfKey(keyOf(st)) : null;
+      if (!slotId) { push(st); continue; }
+      mechs(m2HeatsinkOff(state, slotId));
+      const screwHeld = state.parts.some((p) => pcCatalog.entries.find((e) => e.id === p.catalogId)?.mountPoints.some((m) => m.id === slotId && m.retention?.kind === "m2_screw"));
+      if (q && screwHeld) {
+        const standIn = state.parts.some((p) => p.mechanisms?.[`${slotId}-screw:stand`] === "closed");
+        if (q[2] === "open") { if (!standIn) push(`mech:${slotId}-screw:stand:closed`); }
+        else { push(`mech:${slotId}-screw:closed`); mechs(m2HeatsinkOn(state, slotId)); }
+        continue;
+      }
+      if (st.startsWith("lower:")) {
+        const pose = loweredPose(st);
+        push(`lower:${keyOf(st)}:${pose?.rotationDeg ?? 0}:${pose?.offsetMm[0] ?? 0}:${pose?.offsetMm[1] ?? 0}:t${M2_WHOLE_TILT_DEG}:s${slotId}`);
+        push(`seat:${keyOf(st)}`);
+        continue;
+      }
+      push(st);
+      if (q?.[2] === "closed") mechs(m2HeatsinkOn(state, slotId));
+    }
+  } catch { return [...history]; }
+  return out;
 }
 
 export function parseSimpleSnapshot(value: unknown): SimpleSnapshot | null {
@@ -1023,7 +1168,7 @@ export function parseSimpleSnapshot(value: unknown): SimpleSnapshot | null {
   let history: SimpleStep[];
   if (data.version === 3 || data.version === 4) {
     if (!Array.isArray(data.history) || data.history.length > 400 || !data.history.every(isStep)) return null;
-    history = migrateLeverSteps(data.history as string[]) as SimpleStep[];
+    history = migrateM2Steps(migrateLeverSteps(data.history as string[])) as SimpleStep[];
     // The lists must say what the steps say.
     const derived = deriveSimpleLists(history);
     const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x));

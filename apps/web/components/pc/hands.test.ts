@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  activateSimpleModel, createSimpleBuild, emptySimpleSnapshot, LEGACY_MODEL, liftSimplePart, lowerSimplePart, parseSimpleSnapshot, setSimpleMechanism, simpleBuildFromSnapshot,
+  activateSimpleModel, createSimpleBuild, emptySimpleSnapshot, LEGACY_MODEL, liftSimplePart, lowerSimplePart, parseSimpleSnapshot, reseatSimplePart, setSimpleMechanism, simpleBuildFromSnapshot,
   simplePartInstalled, simpleRetention, undoSimpleStep, withLift, withLower, withMechanism,
   caseCoversClosed, connectSimpleCable, disconnectSimpleCable, fastenSimplePart, installSimplePart, simpleFastened, SLOT_COVERS_ID, unfastenSimplePart, withFasten, withUnfasten,
   placeSimplePart, prepSimplePart, screwSimplePart, simpleScrewOrder, withPlace, withPrep, withScrew,
@@ -144,17 +144,24 @@ describe("hands-on graphics card", () => {
 
 describe("hands-on M.2 drive (Q-Latch)", () => {
   const must = <T,>(r: { ok: true; state: T } | { ok: false }) => { if (!r.ok) throw new Error(JSON.stringify(r)); return r.state; };
-  it("needs the Q-Latch unlocked, the notch matched and the drive in front of the slot; it counts once the latch is locked", () => {
+  it("needs the heatsink off and the Q-Latch unlocked, the notch matched, the drive in front of the slot and tilted; it counts once latched and the heatsink is back", () => {
     let s = createSimpleBuild();
+    const angled = { tiltDeg: 25, slotId: "m2-1" };
     expect(simpleRetention(s, "storage")?.kind).toBe("m2_qlatch");
-    expect(lowerSimplePart(s, "storage", aligned)).toMatchObject({ ok: false, reason: "openFirst" });
+    // M.2_1 is under its heatsink (manual E21279 p. 2-7): nothing there can be reached yet.
+    expect(lowerSimplePart(s, "storage", { ...aligned, ...angled })).toMatchObject({ ok: false, reason: "cannotFit" });
+    s = must(setSimpleMechanism(must(setSimpleMechanism(s, "m2-hs-1:screws", "open")), "m2-hs-1", "open"));
+    expect(lowerSimplePart(s, "storage", { ...aligned, ...angled })).toMatchObject({ ok: false, reason: "openFirst" });
     s = must(setSimpleMechanism(s, "m2-1-qlatch", "open"));
-    expect(lowerSimplePart(s, "storage", { rotationDeg: 180, offsetMm: [0, 0] })).toMatchObject({ ok: false, reason: "turnPart" });
-    expect(lowerSimplePart(s, "storage", { rotationDeg: 0, offsetMm: [3, 0] })).toMatchObject({ ok: false, reason: "centrePart" });
-    s = must(lowerSimplePart(s, "storage", { rotationDeg: 0, offsetMm: [1, 0] }));
+    expect(lowerSimplePart(s, "storage", { rotationDeg: 180, offsetMm: [0, 0], ...angled })).toMatchObject({ ok: false, reason: "turnPart" });
+    expect(lowerSimplePart(s, "storage", { rotationDeg: 0, offsetMm: [3, 0], ...angled })).toMatchObject({ ok: false, reason: "centrePart" });
+    s = must(lowerSimplePart(s, "storage", { rotationDeg: 0, offsetMm: [1, 0], ...angled }));
     expect(simplePartInstalled(s, "storage")).toBe(false);
-    s = must(setSimpleMechanism(s, "m2-1-qlatch", "closed"));
+    s = must(setSimpleMechanism(must(reseatSimplePart(s, "storage")), "m2-1-qlatch", "closed"));
+    expect(simplePartInstalled(s, "storage")).toBe(false); // the heatsink is still off
+    for (const [id, st] of [["m2-hs-1:film", "open"], ["m2-hs-1", "closed"], ["m2-hs-1:screws", "closed"]] as const) s = must(setSimpleMechanism(s, id, st));
     expect(simplePartInstalled(s, "storage")).toBe(true);
+    s = must(setSimpleMechanism(must(setSimpleMechanism(s, "m2-hs-1:screws", "open")), "m2-hs-1", "open"));
     expect(liftSimplePart(s, "storage")).toMatchObject({ ok: false, reason: "openFirst" });
     s = must(setSimpleMechanism(s, "m2-1-qlatch", "open"));
     expect(simplePartInstalled(s, "storage")).toBe(false);
