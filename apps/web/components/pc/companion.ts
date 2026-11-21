@@ -7,9 +7,10 @@ import { pcCatalog } from "./catalog";
 import {
   ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, isRamKey, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
   simpleCablesFor, simpleCableOrder, simplePartInstalled, simplePartOrder, simplePrerequisites, simpleRuleBlock, REMOVABLE, simpleRamRecommended, simpleSlotFilled, simpleSlotPart, simpleTarget, slotOf,
-  caseCoversClosed, simpleRamSlots, simpleRamTargetFor, simpleRetention,
+  caseCoversClosed, isM2Key, simpleM2Slots, simpleRamSlots, simpleRamTargetFor, simpleRetention,
   type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimpleHeld, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,
 } from "./simple-model";
+import { nextHandStep } from "./click-assembly";
 
 export type Selection = { kind: "part"; key: SimplePartKey } | { kind: "cable"; key: SimpleCableKey } | null;
 export type CompanionMood = "idle" | "wave" | "point" | "happy" | "concerned" | "thinking" | "celebrate";
@@ -263,6 +264,8 @@ function ramSlotName(state: PCBuildState, id: string): string {
  * Null for a part with no mechanism of its own, or one already in its place.
  */
 export function pickupLine(state: PCBuildState, key: SimplePartKey): CompanionLine | null {
+  // An M.2 drive: the learner chooses the slot; its heatsink and latch depend on that choice.
+  if (isM2Key(key)) return simplePartInstalled(state, key) || state.parts.find((p) => p.instanceId === ALL_SIMPLE_PARTS.find((x) => x.key === key)?.id)?.attachments.length ? null : { key: "hands.m2Pick" };
   const ret = simpleRetention(state, key);
   const inPlace = (state.parts.find((p) => p.instanceId === ALL_SIMPLE_PARTS.find((x) => x.key === key)?.id)?.attachments.length ?? 0) > 0;
   if (!ret || inPlace || simplePartInstalled(state, key)) return null;
@@ -278,7 +281,44 @@ export function pickupLine(state: PCBuildState, key: SimplePartKey): CompanionLi
  * a CPU, card or drive over its place says to turn it, or that it is ready to go in. Null when the part is
  * not in hand any more (in its place, or with no mechanism of its own).
  */
+/** An M.2 slot's printed name (M.2_1), the same in either language. */
+function m2SlotName(state: PCBuildState, key: SimplePartKey, id: string): string {
+  return simpleM2Slots(state, key).find((x) => x.id === id)?.label.en.match(/M\.2_\d+/)?.[0] ?? id;
+}
+
+/**
+ * The one next thing to do with an M.2 drive, from the same step the toolbar offers (so the robot,
+ * the button and the welcome back never disagree). Null when the drive and its heatsink are done.
+ */
+export function m2StepLine(state: PCBuildState, key: SimplePartKey, held: SimpleHeld | null): CompanionLine | null {
+  const step = nextHandStep(state, key, held);
+  if (!step) return null;
+  const at = state.parts.find((p) => p.instanceId === ALL_SIMPLE_PARTS.find((x) => x.key === key)?.id)?.attachments[0];
+  const slotId = at?.target.mountPointId ?? (held?.key === key ? held.slotId : undefined);
+  const slot = slotId ? { slot: m2SlotName(state, key, slotId) } : null;
+  switch (step.kind) {
+    case "aim": return { key: "hands.m2Pick" };
+    case "slotTaken": return { key: "hands.m2SlotTaken", values: { slot: m2SlotName(state, key, step.slotId) } };
+    case "heatsink": return step.step === "screws" && slot ? { key: "hands.m2HsScrewsFirst", values: slot } : { key: ({ screws: "hands.m2HsLiftNext", lift: "hands.m2HsLiftNext", film: "hands.m2FilmNext", fit: "hands.m2FitNext", tighten: "hands.m2TightenNext" } as const)[step.step] };
+    case "stand": return { key: "hands.m2StandFirst" };
+    case "tilt": return { key: "hands.m2TiltFirst" };
+    case "lower": return slot ? { key: "hands.m2Ready", values: slot } : { key: "hands.m2Pick" };
+    case "seat": return slot ? { key: "hands.m2PressFlat", values: slot } : null;
+    case "mechanism": {
+      if (step.desired === "open") return { key: "hands.m2OpenFirst" };
+      return { key: simpleRetention(state, key, slotId)?.kind === "m2_screw" ? "hands.m2ScrewNow" : "hands.m2LatchNow" };
+    }
+    default: return null;
+  }
+}
+
 export function heldLines(state: PCBuildState, held: SimpleHeld): CompanionLine[] | null {
+  // An M.2 drive in hand: the slot it is over, then its one next step there.
+  if (isM2Key(held.key)) {
+    const line = m2StepLine(state, held.key, held);
+    if (!line) return null;
+    return held.slotId && line.key !== "hands.m2Pick" ? [{ key: "resume.m2Over", values: { slot: m2SlotName(state, held.key, held.slotId) } }, line] : [line];
+  }
   const first = pickupLine(state, held.key);
   if (!first) return null;
   if (isRamKey(held.key)) {
@@ -309,6 +349,10 @@ export function heldLines(state: PCBuildState, held: SimpleHeld): CompanionLine[
 function resumeLines(state: PCBuildState, held: SimpleHeld | null): CompanionLine[] | null {
   const inHand = held ? heldLines(state, held) : null;
   if (inHand) return inHand;
+  // An M.2 drive left in its slot part-way (at an angle, not yet held, or its heatsink still off).
+  const m2 = !held && ALL_SIMPLE_PARTS.find((p) => isM2Key(p.key) && state.parts.find((x) => x.instanceId === p.id)?.attachments.length && !simplePartInstalled(state, p.key));
+  const m2Line = m2 ? m2StepLine(state, m2.key, null) : null;
+  if (m2Line) return [m2Line];
   const resting = ALL_SIMPLE_PARTS.find((p) => isRamKey(p.key) && state.parts.find((x) => x.instanceId === p.id)?.attachments.some((a) => a.seating !== "seated"));
   const at = resting && state.parts.find((x) => x.instanceId === resting.id)?.attachments[0];
   return at ? [{ key: "hands.ramResting", values: { slot: ramSlotName(state, at.target.mountPointId) } }] : null;

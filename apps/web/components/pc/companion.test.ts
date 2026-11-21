@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import en from "../../messages/en/labs.json";
 import ar from "../../messages/ar/labs.json";
-import { buildContext, companionSay, heldLines, intentOf, nextAction, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
+import { buildContext, companionSay, heldLines, intentOf, m2StepLine, nextAction, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
 import {
   connectSimpleCable, createSimpleBuild, installSimplePart, SIMPLE_CABLES, simpleBuildFromSnapshot, startSimplePC, undoSimpleStep, withCable, withPart,
   emptySimpleSnapshot, type SimplePartKey,
-  activateSimpleModel, LEGACY_MODEL, lowerSimpleRam, reseatSimplePart, setSimpleMechanism, simpleRamSlotOffsets, simpleRetention, type SimpleHeld,
+  activateSimpleModel, LEGACY_MODEL, lowerSimplePart, lowerSimpleRam, reseatSimplePart, setSimpleMechanism, simpleRamSlotOffsets, simpleRetention, type SimpleHeld,
 } from "./simple-model";
 import { planModel } from "./plan-model";
 import type { PCBuildState } from "@ytl/contracts";
@@ -326,5 +326,62 @@ describe("what the robot says about the part in hand after a click aims it", () 
     expect(heldLines(s, over)).toEqual([{ key: "hands.cpuTurn" }]);
     expect(heldLines(s, { ...over, rotationDeg: 0 })).toEqual([{ key: "aim.ready" }]);
     for (const messages of [en, ar] as Tree[]) expect(lookup(messages, "simplePc.companion.aim.ready")).toBeTypeOf("string");
+  });
+});
+
+describe("the robot and an M.2 drive", () => {
+  afterEach(() => activateSimpleModel(LEGACY_MODEL));
+  const must = <T,>(r: { ok: true; state: T } | { ok: false }) => { if (!r.ok) throw new Error(JSON.stringify(r)); return r.state; };
+  const mech = (s: PCBuildState, id: string, st: "open" | "closed") => must(setSimpleMechanism(s, id, st));
+  const say = (event: CompanionEvent, s: PCBuildState, held: SimpleHeld | null = null) => {
+    const out = companionSay(event, s, false, held ? { kind: "part", key: held.key } : null);
+    expectSpoken(out);
+    return out.lines;
+  };
+  const hand = (extra: Partial<SimpleHeld> = {}): SimpleHeld => ({ key: "storage", rotationDeg: 0, offsetMm: [0, 0], ...extra });
+
+  it("picked up: the learner chooses the slot (none is named)", () => {
+    expect(pickupLine(createSimpleBuild(), "storage")).toEqual({ key: "hands.m2Pick" });
+  });
+
+  it("each next step is one short line that names the slot the drive is over", () => {
+    let s = createSimpleBuild();
+    expect(m2StepLine(s, "storage", hand({ slotId: "m2-1" }))).toEqual({ key: "hands.m2HsScrewsFirst", values: { slot: "M.2_1" } });
+    s = mech(s, "m2-hs-1:screws", "open");
+    expect(m2StepLine(s, "storage", hand({ slotId: "m2-1" }))).toEqual({ key: "hands.m2HsLiftNext" });
+    s = mech(mech(s, "m2-hs-1", "open"), "m2-1-qlatch", "open");
+    expect(m2StepLine(s, "storage", hand({ slotId: "m2-1" }))).toEqual({ key: "hands.m2TiltFirst" });
+    expect(m2StepLine(s, "storage", hand({ slotId: "m2-1", tiltDeg: 25 }))).toEqual({ key: "hands.m2Ready", values: { slot: "M.2_1" } });
+    s = must(lowerSimplePart(s, "storage", hand({ slotId: "m2-1", tiltDeg: 25 })));
+    expect(m2StepLine(s, "storage", null)).toEqual({ key: "hands.m2PressFlat", values: { slot: "M.2_1" } });
+    s = must(reseatSimplePart(s, "storage"));
+    expect(m2StepLine(s, "storage", null)).toEqual({ key: "hands.m2LatchNow" });
+    s = mech(s, "m2-1-qlatch", "closed");
+    expect(m2StepLine(s, "storage", null)).toEqual({ key: "hands.m2FilmNext" });
+    s = mech(mech(s, "m2-hs-1:film", "open"), "m2-hs-1", "closed");
+    expect(m2StepLine(s, "storage", null)).toEqual({ key: "hands.m2TightenNext" });
+    s = mech(s, "m2-hs-1:screws", "closed");
+    expect(m2StepLine(s, "storage", null)).toBeNull();
+  });
+
+  it("welcome back with a drive in hand over a slot, or resting in one, or held but its heatsink still off", () => {
+    let s = mech(mech(mech(createSimpleBuild(), "m2-hs-1:screws", "open"), "m2-hs-1", "open"), "m2-1-qlatch", "open");
+    expect(say({ type: "resume", held: hand({ slotId: "m2-1" }) }, s, hand({ slotId: "m2-1" }))).toEqual([
+      { key: "welcomeBack" }, { key: "resume.m2Over", values: { slot: "M.2_1" } }, { key: "hands.m2TiltFirst" },
+    ]);
+    expect(say({ type: "resume", held: hand() }, s, hand())).toEqual([{ key: "welcomeBack" }, { key: "hands.m2Pick" }]);
+    s = must(lowerSimplePart(s, "storage", hand({ slotId: "m2-1", tiltDeg: 25 })));
+    expect(say({ type: "resume", held: null }, s)).toEqual([{ key: "welcomeBack" }, { key: "hands.m2PressFlat", values: { slot: "M.2_1" } }]);
+    s = mech(must(reseatSimplePart(s, "storage")), "m2-1-qlatch", "closed");
+    expect(say({ type: "resume", held: null }, s)).toEqual([{ key: "welcomeBack" }, { key: "hands.m2FilmNext" }]);
+  });
+
+  it("on the PRIME B760M-A WIFI it asks for the screw stand and the screw", () => {
+    activateSimpleModel(planModel({ version: 1, purpose: "study", workload: "", parts: { case: "corsair-4000d-airflow-black", motherboard: "asus-prime-b760m-a-wifi", cpu: "intel-core-i5-14600k", cooler: "arctic-freezer-36", psu: "corsair-rm650e-2025", gpu: null, ram: { id: "corsair-vengeance-rgb-ddr5-6000-32gb-kit", modules: 2 }, storage: ["samsung-990-pro-1tb"], fans: [] } }));
+    let s = mech(mech(createSimpleBuild(), "m2-hs-1:screws", "open"), "m2-hs-1", "open");
+    expect(m2StepLine(s, "storage", hand({ slotId: "m2-1" }))).toEqual({ key: "hands.m2StandFirst" });
+    s = must(lowerSimplePart(mech(s, "m2-1-screw:stand", "closed"), "storage", hand({ slotId: "m2-1", tiltDeg: 25 })));
+    s = must(reseatSimplePart(s, "storage"));
+    expect(m2StepLine(s, "storage", null)).toEqual({ key: "hands.m2ScrewNow" });
   });
 });
