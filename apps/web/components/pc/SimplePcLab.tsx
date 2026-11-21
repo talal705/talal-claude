@@ -14,7 +14,7 @@ import { buildContext, companionSay, heldLines, intentOf, m2StepLine, nextLine, 
 import { aimHeld, aimTargets, nextHandStep, type HandStep } from "./click-assembly";
 import { focusOn, moveCamera, selectPart } from "./scene/scene-store";
 import {
-  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, connectSimpleCable, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, isM2Key, isRamKey, lastSimpleStep, M2_WHOLE_TILT_DEG, simpleM2Slots,
+  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, connectSimpleCable, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, isM2Key, isRamKey, lastSimpleStep, M2_WHOLE_TILT_DEG, simpleM2Heatsink, simpleM2Slots,
   parseSimpleSnapshot, SIMPLE_PART_LIST, SIMPLE_PARTS, SIMPLE_SAVE_KEY, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot,
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
   simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap,
@@ -984,6 +984,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (kind === "gpu") return GpuHands();
     if (kind === "cpu") return CpuHands();
     if (kind === "ram") return RamHands();
+    if (kind === "m2") return M2Hands();
     // The CPU has its own panel (CpuHands); this one is memory and M.2.
     const cpu = (kind as string) === "cpu";
     const m2 = kind === "m2";
@@ -1251,6 +1252,52 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     // Memory: left/right move across the slots, up/down along them.
     const map: Record<string, () => void> = { q: () => turn(cpu ? -90 : 180), e: () => turn(cpu ? 90 : 180), arrowleft: () => (ram ? nudge(0, -1) : nudge(-1, 0)), arrowright: () => (ram ? nudge(0, 1) : nudge(1, 0)), arrowup: () => (ram ? nudge(-1, 0) : nudge(0, -1)), arrowdown: () => (ram ? nudge(1, 0) : nudge(0, 1)), enter: () => (isM2Key(key) ? primaryHand(key) : handLower(key)), ...(isM2Key(key) ? { t: () => tiltHeld(!(hold?.tiltDeg)) } : {}) };
     if (map[k]) { e.preventDefault(); e.stopPropagation(); map[k](); }
+  }
+
+  /**
+   * An M.2 drive: the chosen slot's heatsink (screws, lift, film, refit, screws), the screw stand or the
+   * Q-Latch, the angle, inserting, pressing flat, holding it; and the same in reverse to take it out.
+   */
+  function M2Hands() {
+    const key = selectedPart!;
+    const ret = keyed!;
+    const at = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
+    const slotId = at?.target.mountPointId ?? (hold?.key === key ? hold.slotId : undefined);
+    const hs = slotId ? simpleM2Heatsink(state, slotId) : null;
+    const screw = ret.kind === "m2_screw";
+    const disabled = !ready || handsOff();
+    const button = (label: string, run: () => void, primary = true) => <button key={label} className={primary ? styles.installButton : styles.cancel} type="button" disabled={disabled} onClick={run}>{label}</button>;
+    const state2 = (open: boolean) => t(open ? "hands.open" : "hands.closed");
+    return (
+      <div className={styles.hands}>
+        <div className={styles.handsHead}>
+          <p className={styles.handsState}>
+            {slotId ? <bdi>{m2SlotName(slotId)}</bdi> : t("companion.hands.m2Pick")}
+            {hs ? ` · ${t(hs.fitted ? "hands.m2HsOn" : "hands.m2HsOff")}${hs.fitted ? ` (${t(hs.screwsIn ? "hands.m2HsTight" : "hands.m2HsLoose")})` : hs.filmOn ? ` · ${t("hands.m2FilmOn")}` : ""}` : ""}
+            {slotId ? ` · ${screw ? t(ret.open ? "hands.m2ScrewOutState" : "hands.m2ScrewInState") : t("hands.qlatch", { state: state2(ret.open) })}` : ""}
+          </p>
+          {slotId && <button type="button" className={styles.closeup} onClick={() => focusOn(ret.hostInstanceId, slotId)}>{t("hands.closeup")}</button>}
+        </div>
+        {slotId && <div className={styles.holdRow}>
+          {hs?.fitted && hs.screwsIn && button(t("hands.m2Screws"), () => handHeatsink(key, hs.id, "screws"))}
+          {hs?.fitted && !hs.screwsIn && <>{button(t("hands.m2Lift"), () => handHeatsink(key, hs.id, "lift"))}{button(t("hands.m2Tighten"), () => handHeatsink(key, hs.id, "tighten"), false)}</>}
+          {hs && !hs.fitted && <>{hs.filmOn && button(t("hands.m2Film"), () => handHeatsink(key, hs.id, "film"))}{button(t("hands.m2Fit"), () => handHeatsink(key, hs.id, "fit"), false)}</>}
+          {!at && screw && !ret.standIn && button(t("hands.m2Stand"), () => handStand(key))}
+          {!at && !screw && button(t(ret.open ? "hands.closeQLatch" : "hands.openQLatch"), () => handMechanism(key, ret.open ? "closed" : "open"), !ret.open)}
+          {!at && hold?.key === key && <>
+            {button(t("hands.flip"), () => turn(180), false)}
+            {button(t(hold.tiltDeg ? "toolbar.layFlat" : "toolbar.tiltUp"), () => tiltHeld(!hold.tiltDeg), false)}
+            {button(t("hands.slideIn"), () => handM2Insert(key))}
+          </>}
+          {at && at.seating !== "seated" && <>{button(t("hands.pressIn"), () => handSeat(key))}{button(t("hands.liftOut"), () => handLift(key), false)}</>}
+          {at && at.seating === "seated" && ret.open && button(t(screw ? "hands.m2ScrewIn" : "hands.closeQLatch"), () => handMechanism(key, "closed"))}
+          {at && at.seating === "seated" && !ret.open && !hs?.fitted && button(t(screw ? "hands.m2ScrewOut" : "hands.openQLatch"), () => handMechanism(key, "open"), false)}
+        </div>}
+        <p className={styles.hint}>{t("hands.markM2")}</p>
+        <p className={styles.cablesNote}>{t("hands.m2Source")}</p>
+        <p className={styles.cablesNote}>{t("hands.note")}</p>
+      </div>
+    );
   }
 
   /** The graphics card: slot covers, the slot's push latch, bracket alignment, screws; and the same in reverse. */

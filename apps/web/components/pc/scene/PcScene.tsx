@@ -1873,6 +1873,8 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
   const three = useThree();
   useEffect(() => {
     const w = window as unknown as { __ytlSocketScreen?: () => Record<string, [number, number]> };
+    // The camera's pose, to check that no assembly step moves it.
+    (window as unknown as { __ytlCamera?: () => number[] }).__ytlCamera = () => [...three.camera.position.toArray(), ...three.camera.quaternion.toArray()].map((n) => Math.round(n * 1000) / 1000);
     w.__ytlSocketScreen = () => {
       const out: Record<string, [number, number]> = {};
       const rect = three.gl.domElement.getBoundingClientRect();
@@ -1882,6 +1884,12 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
         if (!item) continue;
         out.centre = screen(compose(item.frame, { at: [s.layout.centre[0], s.layout.centre[1] + s.layout.size[1] / 2 + 22, s.layout.centre[2]], quat: [0, 0, 0, 1] }).at);
         for (const what of ["lever", "plate", "mark"] as const) out[what] = screen(compose(item.frame, { at: socketPoint(s.layout, what, socketMoved(state.parts.find((p) => p.instanceId === hostId), s.retentionId, s.kind)), quat: [0, 0, 0, 1] }).at);
+      }
+      // Every M.2 slot (its top face), to click it in the view.
+      for (const part of state.parts) {
+        const item = placed.get(part.instanceId);
+        const slots = geometry.get(part.catalogId)?.solids.filter((x) => x.role === "m2_slot") ?? [];
+        for (const slot of slots) if (item && slot.size) out[`m2:${slot.id}`] = screen(compose(item.frame, { at: [slot.at[0], slot.at[1] + slot.size[1] / 2, slot.at[2]], quat: [0, 0, 0, 1] }).at);
       }
       for (const [hostId, layout] of dimmHosts) {
         const item = placed.get(hostId);
