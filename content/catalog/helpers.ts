@@ -260,3 +260,48 @@ export const fanMounts = (location: "front" | "top" | "rear" | "side", count: nu
     label: L(`${en} fan position ${i + 1}`, `مكان مروحة ${ar} رقم ${i + 1}`),
     fastener: { kind: "fan_screw" as const, count: 4 },
   }));
+
+// ---------- CPU cooler mounting (from the coolers' own manuals) ----------
+
+/** Kit parts named in a cooler's packaging list. */
+export const KIT = {
+  contactFrame: { id: "contact-frame", label: L("CPU Contact Frame", "إطار التلامس للمعالج") },
+  shoulderScrew: { id: "shoulder-screw", label: L("Shoulder screw", "برغي كتف") },
+  t20Driver: { id: "t20-driver", label: L("T20 driver", "مفك T20") },
+  vrmFanModule: { id: "vrm-fan-module", label: L("VRM fan module", "مروحة وحدة الطاقة (VRM)") },
+  retentionRing: { id: "retention-ring", label: L("Intel retention ring", "حلقة التثبيت لإنتل") },
+  retentionPin: { id: "retention-pin", label: L("Retention pin", "دبوس تثبيت") },
+} as const;
+const kit = (part: { id: string; label: ReturnType<typeof L> }, count: number) => ({ id: part.id, count, label: part.label });
+
+/**
+ * ARCTIC's contact-frame mounting on Intel LGA1700 / LGA1851: the board's backplate is kept, the socket's ILM is
+ * taken off, and the frame (4 screws, engaged then tightened in a cross pattern) holds the CPU. `verifiedBody`:
+ * whether the manual's text states the cooler body's two screws and their alternate tightening.
+ */
+export const contactFrameMounting = (source: string, verifiedBody: boolean, extraKit: ReturnType<typeof kit>[] = []) => ({
+  kind: "contact_frame" as const,
+  sockets: ["lga1700" as const, "lga1851" as const],
+  backplate: "retained" as const,
+  kit: [kit(KIT.contactFrame, 1), kit(KIT.shoulderScrew, 4), kit(KIT.t20Driver, 1), ...extraKit],
+  frame: { screws: 4 },
+  bodyScrews: { count: 2, order: "alternate" as const, verified: verifiedBody },
+  source,
+});
+
+/** ARCTIC Freezer 7 X on Intel: a retention ring and 4 push pins, the mounting position set to the socket family. */
+export const retentionRingMounting = (source: string) => ({
+  kind: "retention_ring" as const,
+  sockets: ["lga1700" as const, "lga1851" as const, "lga1200" as const, "lga1150" as const],
+  backplate: "none" as const,
+  kit: [kit(KIT.retentionRing, 1), kit(KIT.retentionPin, 4)],
+  ring: {
+    pins: 4,
+    positions: [
+      { id: "1700", sockets: ["lga1700" as const, "lga1851" as const], label: L("LGA1851 / LGA1700 position", "وضع LGA1851 / LGA1700") },
+      { id: "1200", sockets: ["lga1200" as const, "lga1150" as const], label: L("LGA1200 / LGA115x position", "وضع LGA1200 / LGA115x") },
+    ],
+  },
+  source,
+});
+export const vrmModule = (count = 1) => kit(KIT.vrmFanModule, count);

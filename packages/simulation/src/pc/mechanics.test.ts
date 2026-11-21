@@ -60,6 +60,7 @@ describe("detailed mechanics: CPU", () => {
       { type: "set_mechanism", instanceId: "motherboard-1", mechanismId: "cpu-socket-plate", state: "closed" },
       { type: "set_mechanism", instanceId: "motherboard-1", mechanismId: "cpu-socket-plate:lever", state: "closed" },
       { type: "set_prep", instanceId: "cooling-4", prep: "paste", value: "applied" },
+      { type: "set_prep", instanceId: "cooling-4", prep: "film", value: "removed" },
       { type: "mount_part", instanceId: "cooling-4", target: at("cooler-mount") },
     ]);
     expect(code(s, { type: "set_mechanism", instanceId: "motherboard-1", mechanismId: "cpu-socket-plate:lever", state: "open" })).toBe("retention_blocked");
@@ -137,10 +138,17 @@ describe("detailed mechanics: preparation before fitting", () => {
       { type: "set_mechanism", instanceId: "motherboard-1", mechanismId: "cpu-socket-plate:lever", state: "closed" },
     ]);
     expect(code(s, { type: "mount_part", instanceId: "cooling-4", target: at("cooler-mount") })).toBe("prep_missing");
-    // The film is not recorded for this cooler, so peeling it is neither asked for nor accepted.
-    expect(code(s, { type: "set_prep", instanceId: "cooling-4", prep: "film", value: "removed" })).toBe("prep_wrong");
+    // ARCTIC's manual shows a protective film on this cooler's base: it has to come off, and peeling it is accepted.
+    s = run(s, [{ type: "set_prep", instanceId: "cooling-4", prep: "film", value: "removed" }]);
+    expect(code(s, { type: "mount_part", instanceId: "cooling-4", target: at("cooler-mount") })).toBe("prep_missing"); // paste still missing
     s = run(s, [{ type: "set_prep", instanceId: "cooling-4", prep: "paste", value: "applied" }]);
     expect(code(s, { type: "set_prep", instanceId: "cooling-4", prep: "paste", value: "applied" })).toBe("prep_wrong");
     expect(code(s, { type: "mount_part", instanceId: "cooling-4", target: at("cooler-mount") })).toBe("ok");
+  });
+
+  it("a cooler with no recorded film neither asks for it nor accepts it", () => {
+    const s = run(start(), [{ type: "add_part", catalogId: "generic-low-profile-air-cooler" }]);
+    const generic = s.parts.find((p) => p.catalogId === "generic-low-profile-air-cooler")!.instanceId;
+    expect(code(s, { type: "set_prep", instanceId: generic, prep: "film", value: "removed" })).toBe("prep_wrong");
   });
 });

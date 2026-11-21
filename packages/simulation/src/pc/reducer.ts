@@ -317,6 +317,10 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       return ok({ parts: state.parts.map(setHost({ [action.mechanismId]: action.state })).map(action.state === "open" ? release : (p) => p) });
     }
 
+    case "set_hardware":
+      // The rules arrive with the contact frame and cooler fixing (hardware.ts); until then nothing is accepted.
+      return invalid(pcTarget.part(action.instanceId), "That hardware step is not available.", "هذي الخطوة ما هي متاحة.");
+
     case "set_prep": {
       const part = partById(v, action.instanceId);
       const entry = part && entryOf(v, part);
@@ -326,6 +330,7 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       const allowed: Record<PrepKind, { category: CatalogEntry["category"]; values: string[] }> = {
         paste: { category: "cooling", values: ["applied"] }, film: { category: "cooling", values: ["removed"] },
         standoffs: { category: "motherboard", values: ["checked"] }, io_shield: { category: "motherboard", values: ["fitted"] },
+        backplate: { category: "motherboard", values: ["padding", "tape"] },
         psu_fan: { category: "psu", values: ["down", "up"] }, airflow: { category: "fan", values: ["intake", "exhaust"] },
       };
       const rule = allowed[action.prep];

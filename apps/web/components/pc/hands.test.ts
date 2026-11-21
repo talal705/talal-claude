@@ -177,10 +177,11 @@ describe("hands-on preparation, placing and screws", () => {
     for (const k of ["cpu", "ram", "ram2", "storage"]) snap = { ...snap, history: [...snap.history, `part:${k}` as const] };
     return simpleBuildFromSnapshot(snap);
   };
-  it("a cooler needs the paste its catalog entry asks for; the film is refused when not recorded; screws go across the diagonal", () => {
+  it("a cooler needs the paste and the film removal its catalog entry asks for; screws go across the diagonal", () => {
     let s = withBoardReady();
     expect(placeSimplePart(s, "cooler")).toMatchObject({ ok: false, reason: "prepMissing" });
-    expect(prepSimplePart(s, "cooler", "film", "removed")).toMatchObject({ ok: false, reason: "prepWrong" });
+    s = must(prepSimplePart(s, "cooler", "film", "removed"));
+    expect(placeSimplePart(s, "cooler")).toMatchObject({ ok: false, reason: "prepMissing" }); // paste still missing
     s = must(prepSimplePart(s, "cooler", "paste", "applied"));
     expect(prepSimplePart(s, "cooler", "paste", "applied")).toMatchObject({ ok: false, reason: "prepWrong" });
     s = must(placeSimplePart(s, "cooler"));

@@ -198,6 +198,14 @@ const T: Record<PCDiagnosticCode, Entry> = {
     x: ["In this build every keyed part is aligned by the learner before it goes in.", "في هالتجميعة كل قطعة مفتاحية يحاذيها المتعلم قبل ما تدخل."],
   },
 
+  mounting_missing: {
+    m: ["{why}", "{why}"],
+    x: ["A cooler's own mounting hardware has to be ready before it goes on: the manufacturer's order protects the CPU and the board.", "عدّة تثبيت المبرّد لازم تكون جاهزة قبل ما يركب: ترتيب الشركة يحمي المعالج واللوحة."],
+  },
+  hardware_order_wrong: {
+    m: ["{why}", "{why}"],
+    x: ["Screws that hold a CPU or a cooler go in a few turns each first, then are tightened evenly, so the pressure is the same on every side.", "البراغي اللي تمسك المعالج أو المبرّد تدخل كم لفّة أول، وبعدين تنربط بالتساوي، عشان الضغط يكون نفسه من كل الجهات."],
+  },
   prep_missing: {
     m: ["{what}", "{what}"],
     x: ["Some parts need a step before they go in: paste on the CPU, the film off the cooler, the standoffs checked, the right way round for air.", "بعض القطع تحتاج خطوة قبل ما تركب: معجون على المعالج، شيل الغلاف عن المبرّد، التأكد من القواعد، والاتجاه الصح للهوا."],

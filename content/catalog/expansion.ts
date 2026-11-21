@@ -5,7 +5,7 @@
 // version "unrecorded": the engine then treats the CPU as supported, and the planner reports the BIOS
 // question as unknown (conditional) instead of guessing a version.
 import type { CaseEntry, CoolingEntry, CpuEntry, FanEntry, GpuEntry, MotherboardEntry, MountPointSpec, RamEntry, StorageEntry } from "@ytl/contracts";
-import { FASTENER_NOTE, L, NO_ASSET, SLOT_COVERS, boardPorts, dimmSlots, lgaSocketDetail, m2Heatsink, m2ScrewStand, pcieSlotDetail, fanLead, fanMounts, frontPanelLeads, port, sataDataCables, source, zone } from "./helpers";
+import { FASTENER_NOTE, L, NO_ASSET, SLOT_COVERS, boardPorts, dimmSlots, lgaSocketDetail, m2Heatsink, m2ScrewStand, pcieSlotDetail, retentionRingMounting, fanLead, fanMounts, frontPanelLeads, port, sataDataCables, source, zone } from "./helpers";
 
 const ON = "2026-11-18";
 /** BIOS history not read for this board; see the file comment. */
@@ -402,13 +402,20 @@ export const compactAirCooler: CoolingEntry = {
   partNumber: "ACFRE00077A",
   generic: false,
   description: L(
-    "A small air cooler, 132.5 mm tall, with one 100 mm fan and pre-applied MX-4 thermal paste. Its brackets cover older Intel sockets (115X, which includes LGA1150) as well as LGA1700 and LGA1851.",
-    "مبرّد هوائي صغير، ارتفاعه 132.5 مم، بمروحة 100 مم ومعجون MX-4 محطوط من المصنع. تثبيته يناسب مقابس Intel القديمة (115X ومنها LGA1150) وبعد LGA1700 و LGA1851.",
+    "A small air cooler, 132.5 mm tall, with one 100 mm fan and thermal paste already applied. Its brackets cover older Intel sockets (115X, which includes LGA1150) as well as LGA1700 and LGA1851.",
+    "مبرّد هوائي صغير، ارتفاعه 132.5 مم، بمروحة 100 مم ومعجون حراري محطوط من المصنع. تثبيته يناسب مقابس Intel القديمة (115X ومنها LGA1150) وبعد LGA1700 و LGA1851.",
   ),
-  sources: [source("ARCTIC", "Freezer 7 X — General Specifications", "https://www.arctic.de/en/Freezer-7-X/ACFRE00077A", ON)],
-  verification: "verified",
-  unverifiedFields: [],
-  teachingNotes: [FASTENER_NOTE, "coolingCapacityW is null: ARCTIC publishes no wattage rating for this cooler, so the lab does not judge whether it is enough for a given CPU.", "The page lists the pre-applied paste: do not add more on top of it."],
+  sources: [
+    source("ARCTIC", "Freezer 7 X — General Specifications", "https://www.arctic.de/en/Freezer-7-X/ACFRE00077A", ON),
+    source("ARCTIC", "Freezer 7 X spec sheet (PDF): pre-applied thermal compound, dimensions, supported sockets", "https://www.arctic.de/media/e5/ee/fe/1708069696/Spec_Sheet_Freezer_7X_EN.pdf", "2026-11-22"),
+    source("ARCTIC", "Freezer 7 X Rev 3 user manual — Intel: packaging content (retention ring, retention pins), mounting-clip position per socket, installation", "https://support.arctic.de/freezer7xr3", "2026-11-22"),
+  ],
+  verification: "partially_verified",
+  unverifiedFields: [
+    "retention pin order (the manual's drawings do not give one)",
+    "interference with the board's own components on LGA1150 (ARCTIC's compatibility lists cover socket 1151 v1 and v2 only)",
+  ],
+  teachingNotes: [FASTENER_NOTE, "coolingCapacityW is null: ARCTIC publishes no wattage rating for this cooler, so the lab does not judge whether it is enough for a given CPU.", "The page lists the pre-applied paste: do not add more on top of it.", "ARCTIC's Rev 3 spec sheet and this entry's earlier source name the pre-applied compound differently, so the lab names none. On Intel the manual uses a retention ring and four push pins (no backplate), and the mounting-clip position must match the socket family (LGA1851/1700 or LGA1200/LGA115x)."],
   dimensions: { lengthMm: 74.3, widthMm: 110.5, heightMm: 132.5 },
   formFactor: "Compact tower air cooler",
   mountPoints: [],
@@ -418,7 +425,10 @@ export const compactAirCooler: CoolingEntry = {
   cables: [fanLead("fan", "fan_4pin_pwm", L("Cooler fan lead (4-pin PWM)", "سلك مروحة المبرّد (PWM من 4 سنون)"))],
   rgb: null,
   asset: NO_ASSET,
-  spec: { type: "air", supportedSockets: ["lga1851", "lga1700", "lga1200", "lga1150", "am5", "am4"], heightMm: 132.5, radiatorSizeMm: null, fanCount: 1, fanSizeMm: 100, coolingCapacityW: null, paste: { supplied: "pre_applied", film: true, source: "ARCTIC product page as recorded for this entry: pre-applied MX-4 under a protective cover peeled off before mounting." } },
+  spec: { type: "air", supportedSockets: ["lga1851", "lga1700", "lga1200", "lga1150", "am5", "am4"], heightMm: 132.5, radiatorSizeMm: null, fanCount: 1, fanSizeMm: 100, coolingCapacityW: null, paste: { supplied: "pre_applied", film: true, source: "ARCTIC product page as recorded for this entry, and the Rev 3 spec sheet ('thermal compound pre-applied'): pre-applied under a protective cover peeled off before mounting." },
+    mounting: [retentionRingMounting("https://support.arctic.de/freezer7xr3")],
+    connections: [{ cableId: "fan", requirement: "required", note: L("The fan's 4-pin PWM lead goes to CPU_FAN.", "سلك مروحة المبرّد PWM من 4 سنون يروح لـ CPU_FAN.") }],
+  },
 };
 
 export const expansionEntries = { cpus: [legacyCpu], motherboards: [entryBoard, legacyBoard], ram: [legacyRam], gpus: [rtx5060], storage: [hdd], cases: [smallCase, largeCase], fans: [fan140], cooling: [compactAirCooler] };

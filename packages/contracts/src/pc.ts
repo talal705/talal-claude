@@ -588,6 +588,35 @@ export interface CoolingSpec {
    * cover on the contact plate that must come off. Absent when not recorded (the lab then asks for neither).
    */
   paste?: { supplied: "pre_applied" | "tube"; film: boolean | null; source: string };
+  /**
+   * How the cooler is fixed on each socket family, from the manufacturer's manual. The first entry whose
+   * `sockets` lists the board's socket applies; none means the lab's generic fixing (a bracket and screws).
+   */
+  mounting?: CoolerMountingSpec[];
+  /** The electrical connections the cooler needs, for the wiring stage. Mechanical mounting never depends on them. */
+  connections?: { cableId: string; requirement: "required" | "optional" | "recommended"; note: Localized }[];
+}
+
+/** One mounting method of a cooler on some sockets (see `CoolingSpec.mounting`). */
+export interface CoolerMountingSpec {
+  /**
+   * `contact_frame`: the socket's Independent Loading Mechanism comes off and the cooler's frame holds the CPU;
+   * `retention_ring`: a ring and push pins on the board, no backplate; `generic`: the lab's older fixing.
+   */
+  kind: "contact_frame" | "retention_ring" | "generic";
+  sockets: CpuSocket[];
+  /** `retained`: the board's own socket backplate stays and is supported or taped; `none`: no backplate is used. */
+  backplate: "retained" | "none";
+  /** The kit parts of this method, from the manufacturer's packaging list. */
+  kit: { id: string; count: number; label: Localized }[];
+  /** Contact frame: its screws, engaged 2 turns each, then tightened in a cross pattern. */
+  frame?: { screws: number };
+  /** Retention ring: the pins, and the mounting position that must match the socket. */
+  ring?: { pins: number; positions: { id: string; sockets: CpuSocket[]; label: Localized }[] };
+  /** The cooler body's own screws; `verified: false` when the manual's text does not state the count or order. */
+  bodyScrews?: { count: number; order: "alternate" | "any"; verified: boolean };
+  /** Where the method is documented. */
+  source: string;
 }
 
 /** Kept for saved data from before 2026-10-27 only (decision 11): no monitor is offered or required. */
@@ -730,10 +759,16 @@ export interface InstalledPart {
   mechanisms?: Record<string, MechanismState>;
   /** Detailed builds: preparation done on this part before it is fitted (paste, film, standoffs, orientation). */
   prep?: Partial<Record<PrepKind, string>>;
+  /**
+   * Detailed builds: kit hardware and fixing progress that is not open/closed, by key (a board's ILM and
+   * contact frame; a cooler's screws, ring and pins). Screw progress is one character per screw:
+   * `0` out, `1` engaged (a couple of turns), `2` tight. Absent keys mean the factory state.
+   */
+  hardware?: Record<string, string>;
 }
 
 /** Preparation a learner does before fitting a part, and the values each takes. */
-export type PrepKind = "paste" | "film" | "standoffs" | "io_shield" | "psu_fan" | "airflow";
+export type PrepKind = "paste" | "film" | "standoffs" | "io_shield" | "psu_fan" | "airflow" | "backplate";
 
 export type MechanismState = "open" | "closed";
 
@@ -807,6 +842,8 @@ export type PCAction =
   | { type: "set_mechanism"; instanceId: InstanceId; mechanismId: string; state: MechanismState }
   /** paste: "applied"; film: "removed"; standoffs: "checked"; io_shield: "fitted"; psu_fan: "down" | "up"; airflow: "intake" | "exhaust"; "" undoes. */
   | { type: "set_prep"; instanceId: InstanceId; prep: PrepKind; value: string }
+  /** Detailed builds: one step of kit hardware or fixing (see `InstalledPart.hardware`); `""` clears the key. */
+  | { type: "set_hardware"; instanceId: InstanceId; key: string; value: string }
   | { type: "unmount_part"; instanceId: InstanceId; role?: string }
   | { type: "set_seating"; instanceId: InstanceId; role?: string; seating: SeatingState }
   | { type: "set_fasteners"; instanceId: InstanceId; role?: string; secured: number }
@@ -908,6 +945,8 @@ export type PCDiagnosticCode =
   | "insert_angle_wrong"
   | "alignment_required"
   | "prep_missing"
+  | "mounting_missing"
+  | "hardware_order_wrong"
   | "prep_wrong"
   // Build diagnostics
   | "part_missing"
