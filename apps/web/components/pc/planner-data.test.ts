@@ -2,12 +2,24 @@ import { afterEach, describe, expect, it } from "vitest";
 import { pc } from "@ytl/simulation";
 import { pcCatalog } from "./catalog";
 import { planModel } from "./plan-model";
-import { compatibleOptions, PLANNER_IDS, suggestBuild, WORKLOADS, withChoice } from "./planner-data";
+import { compatibleOptions, PLANNER_IDS, suggestBuild, WORKLOADS, withChoice, withoutChoice } from "./planner-data";
 import { activateSimpleModel, connectSimpleCable, createSimpleBuild, installSimplePart, LEGACY_MODEL, SIMPLE_PARTS, simplePartOrder, simpleCablesFor, startSimplePC } from "./simple-model";
 
 afterEach(() => activateSimpleModel(LEGACY_MODEL));
 
 describe("planner data", () => {
+  it("removes the chosen drive before assembly, preserving other drives and duplicate copies", () => {
+    const [first, second, third] = PLANNER_IDS.storage;
+    const plan = { ...suggestBuild("gaming", "1080p"), storage: [first!, second!, third!, second!] };
+    const removed = withoutChoice(plan, "storage", plan.storage.indexOf(second!));
+    expect(removed.storage).toEqual([first, third, second]);
+    expect(removed.cpu).toBe(plan.cpu);
+    expect(plan.storage).toEqual([first, second, third, second]);
+    const lastCopyRemoved = withoutChoice(removed, "storage", removed.storage!.indexOf(second!));
+    expect(lastCopyRemoved.storage).toEqual([first, third]);
+    expect(withChoice(lastCopyRemoved, "storage", second!).storage).toEqual([first, third, second]);
+  });
+
   it("offers only catalog entries", () => {
     for (const ids of Object.values(PLANNER_IDS)) for (const id of ids) expect(pcCatalog.entries.some((e) => e.id === id)).toBe(true);
   });

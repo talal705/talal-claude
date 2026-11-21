@@ -1371,6 +1371,8 @@
         "fans": "Case fans"
       },
       "add": "Add to my build",
+      "removeFromBuild": "Remove from my build",
+      "addAnother": "Add another copy",
       "replace": "Use this instead",
       "remove": "Remove",
       "inBuild": "In my build",
