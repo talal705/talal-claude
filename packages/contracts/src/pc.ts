@@ -273,7 +273,8 @@ export interface FastenerSpec {
 export interface RetentionSpec {
   id: string;
   /** `slot_covers`: a case's expansion-slot covers, which a graphics card's bracket needs out of the way. */
-  kind: "lga_load_plate" | "zif_lever" | "dimm_latch" | "pcie_latch" | "slot_covers" | "m2_qlatch";
+  /** `m2_screw`: a screw stand at the drive's length hole and one screw through the drive's notch. */
+  kind: "lga_load_plate" | "zif_lever" | "dimm_latch" | "pcie_latch" | "slot_covers" | "m2_qlatch" | "m2_screw";
   /** DIMM latches: which ends move. "unverified" when the board's manual does not show it. */
   latches?: "one_side" | "both" | "unverified";
   /**
@@ -294,6 +295,11 @@ export interface KeyingSpec {
   toleranceMm: number;
   /** What the learner matches: "triangle" (CPU corner mark), "notch" (DIMM key). */
   mark: "triangle" | "notch" | "bracket";
+  /**
+   * A part that goes in at an angle (an M.2 drive): the tilt, in degrees from flat, the lab accepts.
+   * The manuals draw an angled insertion without a figure; the range is an educational approximation.
+   */
+  insertTiltDeg?: [number, number];
 }
 
 interface MountPointBase {
@@ -344,7 +350,24 @@ export type MountPointSpec =
       lengths: StorageFormFactor[];
       interfaces: StorageInterface[];
       pcieGeneration: number | null;
+      /**
+       * The board's M.2 heatsink over this slot, when it has one: removed (screws, then lifted) before a
+       * drive goes in, its thermal pads' plastic film peeled, then refitted. Slots under one heatsink share its id.
+       */
+      heatsink?: M2HeatsinkSpec;
+      /** Shorter drives (2242, 2260) held another way than `retention` (a screw stand and screw). */
+      shortRetention?: "m2_screw";
     });
+
+export interface M2HeatsinkSpec {
+  id: string;
+  /** Screws holding it to the board. */
+  screws: number;
+  /** A plastic film on its thermal pad, peeled before it is refitted. */
+  padFilm: boolean;
+  /** Where this is documented. */
+  note: string;
+}
 
 export type MountKind = MountPointSpec["kind"];
 

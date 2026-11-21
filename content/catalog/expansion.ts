@@ -5,7 +5,7 @@
 // version "unrecorded": the engine then treats the CPU as supported, and the planner reports the BIOS
 // question as unknown (conditional) instead of guessing a version.
 import type { CaseEntry, CoolingEntry, CpuEntry, FanEntry, GpuEntry, MotherboardEntry, MountPointSpec, RamEntry, StorageEntry } from "@ytl/contracts";
-import { FASTENER_NOTE, L, NO_ASSET, SLOT_COVERS, boardPorts, dimmSlots, lgaSocketDetail, m2QLatch, pcieSlotDetail, fanLead, fanMounts, frontPanelLeads, port, sataDataCables, source, zone } from "./helpers";
+import { FASTENER_NOTE, L, NO_ASSET, SLOT_COVERS, boardPorts, dimmSlots, lgaSocketDetail, m2Heatsink, m2ScrewStand, pcieSlotDetail, fanLead, fanMounts, frontPanelLeads, port, sataDataCables, source, zone } from "./helpers";
 
 const ON = "2026-11-18";
 /** BIOS history not read for this board; see the file comment. */
@@ -151,6 +151,7 @@ export const entryBoard: MotherboardEntry = {
     source("ASUS", "PRIME B760M-A WIFI — Tech Specs", "https://www.asus.com/motherboards-components/motherboards/prime/prime-b760m-a-wifi/techspec/", ON),
     source("ASUS", "PRIME B760M-A WIFI User's Manual E21693 — p. viii (Q-DIMM), p. 1-12 (system memory, recommended configurations), p. 1-13 (installing and removing a DIMM)", "https://dlcdnets.asus.com/pub/ASUS/mb/LGA1700/PRIME_B760M-A_WIFI/E21693_PRIME_B760M-A_WIFI_UM_WEB.pdf", "2026-11-20"),
     source("ASUS", "PRIME B760M-A WIFI — official top-view product photo (memory slot clips at the top end)", "https://dlcdnwebimgs.asus.com/gain/63f59141-7212-4e98-ade8-f0dd1cd4a349", "2026-11-20"),
+    source("ASUS", "PRIME B760M-A WIFI User's Manual E21693 — p. 1-2 (layout), p. 1-14 (M.2 installation)", "https://dlcdnets.asus.com/pub/ASUS/mb/LGA1700/PRIME_B760M-A_WIFI/E21693_PRIME_B760M-A_WIFI_UM_WEB.pdf", "2026-11-21"),
   ],
   verification: "partially_verified",
   unverifiedFields: [
@@ -166,8 +167,8 @@ export const entryBoard: MotherboardEntry = {
     ...socket("lga1700", "LGA1700"),
     ...dimmSlots("ddr5", undefined, { latches: "one_side", latchEnd: "top", note: "ASUS manual E21693 (English, First Edition Feb 2023): Q-DIMM in the ASUS Q-Design list (p. viii); p. 1-12 slots DIMM_A1–DIMM_B2 and the recommended configurations; p. 1-13 shows one moving clip, the other end fixed (open the clip, match the notch, press down until it closes; remove: press the clip, lift). ASUS's official top-view photo of this board shows the clip at the top end of each slot." }),
     x16(4, "PCIe 4.0"),
-    { id: "m2-1", kind: "m2_slot", lengths: ["m2_2242", "m2_2260", "m2_2280"], interfaces: ["nvme"], pcieGeneration: 4, label: L("M.2_1 slot (PCIe 4.0 x4, CPU)", "فتحة M.2_1 (PCIe 4.0 x4، من المعالج)"), fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-1", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way.") },
-    { id: "m2-2", kind: "m2_slot", lengths: ["m2_2242", "m2_2260", "m2_2280"], interfaces: ["nvme"], pcieGeneration: 4, label: L("M.2_2 slot (PCIe 4.0 x4, chipset)", "فتحة M.2_2 (PCIe 4.0 x4، من الشيبست)"), fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-2", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way.") },
+    { id: "m2-1", kind: "m2_slot", lengths: ["m2_2242", "m2_2260", "m2_2280"], interfaces: ["nvme"], pcieGeneration: 4, label: L("M.2_1 slot (PCIe 4.0 x4, CPU)", "فتحة M.2_1 (PCIe 4.0 x4، من المعالج)"), ...m2ScrewStand("m2-1", "ASUS manual E21693 p. 1-14 (steps 3-5): fit the screw stand at the drive's length hole (2242, 2260 or 2280, p. 1-2), insert the drive, secure it with one screw. No Q-Latch is shown for this board."), heatsink: m2Heatsink("m2-hs-1", "ASUS manual E21693 p. 1-14 (steps 1-2, 6-8): two screws, lifted off; plastic film on the thermal pad peeled before refitting. It covers M.2_1, above the first x16 slot (layout p. 1-2).") },
+    { id: "m2-2", kind: "m2_slot", lengths: ["m2_2242", "m2_2260", "m2_2280"], interfaces: ["nvme"], pcieGeneration: 4, label: L("M.2_2 slot (PCIe 4.0 x4, chipset)", "فتحة M.2_2 (PCIe 4.0 x4، من الشيبست)"), ...m2ScrewStand("m2-2", "ASUS manual E21693 p. 1-14 (steps 3-5): fit the screw stand at the drive's length hole (2242, 2260 or 2280, p. 1-2), insert the drive, secure it with one screw. No Q-Latch is shown for this board.") },
   ],
   mounting: [{ role: "main", kind: "motherboard_tray", label: L("Motherboard tray of the case", "صينية اللوحة الأم في الهيكل") }],
   zones: boardZones("Four DDR5 slots in two channels.", "أربع فتحات DDR5 على قناتين."),

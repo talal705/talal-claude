@@ -218,8 +218,22 @@ export const dimmSlots = (generation: "ddr3" | "ddr4" | "ddr5", slots: readonly 
 /** An M.2 slot held by ASUS's tool-free Q-Latch: turned open, the drive goes in at an angle, is pressed flat and the latch turned shut. */
 export const m2QLatch = (slotId: string, note: string) => ({
   retention: { id: `${slotId}-qlatch`, kind: "m2_qlatch" as const, note },
-  keying: { rotationDeg: 0, toleranceMm: 2, mark: "notch" as const },
+  keying: M2_KEYING,
 });
+/**
+ * The angle an M.2 drive goes in at, in degrees from flat. The manuals draw an angled insertion without a
+ * figure: 15–35° is an educational approximation, not a manufacturer value.
+ */
+export const M2_INSERT_TILT_DEG: [number, number] = [15, 35];
+const M2_KEYING = { rotationDeg: 0, toleranceMm: 2, mark: "notch" as const, insertTiltDeg: M2_INSERT_TILT_DEG };
+/** An M.2 slot where the drive is held by a screw stand at its length hole and one screw (no Q-Latch). */
+export const m2ScrewStand = (slotId: string, note: string) => ({
+  retention: { id: `${slotId}-screw`, kind: "m2_screw" as const, note },
+  fastener: { kind: "m2_screw" as const, count: 1 },
+  keying: M2_KEYING,
+});
+/** A board's M.2 heatsink: held by screws, a plastic film on its thermal pad. Slots under it share the id. */
+export const m2Heatsink = (id: string, note: string, screws = 2) => ({ id, screws, padFilm: true, note });
 
 /** A PCIe x16 slot's latch and the card's alignment (connector over the slot, bracket in the case opening). */
 export const pcieSlotDetail = (note: string) => ({

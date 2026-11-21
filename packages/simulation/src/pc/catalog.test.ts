@@ -124,3 +124,44 @@ describe("catalog", () => {
     }
   });
 });
+
+describe("M.2 slots, from each board's own manual", () => {
+  const slots = (boardId: string) => {
+    const board = pcCatalog.entries.find((e) => e.id === boardId)!;
+    return { board, m2: Object.fromEntries(board.mountPoints.filter((m) => m.kind === "m2_slot").map((m) => [m.id, m])) as Record<string, Extract<(typeof board.mountPoints)[number], { kind: "m2_slot" }>> };
+  };
+  const pages = (boardId: string) => pcCatalog.entries.find((e) => e.id === boardId)!.sources.map((s) => s.title).join(" | ");
+
+  it("TUF GAMING Z790-PLUS WIFI and its D4 version: two screwed heatsinks (M.2_1; M.2_3 + M.2_4), M.2_2 bare; Q-Latch, screw stand for short drives in M.2_4", () => {
+    for (const [id, manual] of [["asus-tuf-gaming-z790-plus-wifi", "E21279"], ["asus-tuf-gaming-z790-plus-wifi-d4", "E20581"]] as const) {
+      const { m2 } = slots(id);
+      expect(Object.keys(m2), id).toEqual(["m2-1", "m2-2", "m2-3", "m2-4"]);
+      expect(m2["m2-1"]!.heatsink?.id, id).toBe("m2-hs-1");
+      expect(m2["m2-2"]!.heatsink, id).toBeUndefined();
+      expect(m2["m2-3"]!.heatsink?.id, id).toBe("m2-hs-2");
+      expect(m2["m2-4"]!.heatsink?.id, id).toBe("m2-hs-2");
+      for (const s of Object.values(m2)) {
+        expect(s.retention?.kind, `${id} ${s.id}`).toBe("m2_qlatch");
+        if (s.heatsink) expect([s.heatsink.screws, s.heatsink.padFilm], `${id} ${s.id}`).toEqual([2, true]);
+        expect(s.keying?.insertTiltDeg, `${id} ${s.id}`).toEqual([15, 35]);
+      }
+      expect(m2["m2-4"]!.shortRetention, id).toBe("m2_screw");
+      expect(m2["m2-1"]!.shortRetention, id).toBeUndefined();
+      expect(pages(id), id).toMatch(new RegExp(`${manual} — [^|]*pp\\. 2-7 to 2-12`));
+    }
+  });
+
+  it("PRIME B760M-A WIFI: one screwed heatsink over M.2_1, M.2_2 bare; a screw stand and a screw, no Q-Latch", () => {
+    const { m2 } = slots("asus-prime-b760m-a-wifi");
+    expect(Object.keys(m2)).toEqual(["m2-1", "m2-2"]);
+    expect(m2["m2-1"]!.heatsink).toMatchObject({ id: "m2-hs-1", screws: 2, padFilm: true });
+    expect(m2["m2-2"]!.heatsink).toBeUndefined();
+    for (const s of Object.values(m2)) {
+      expect(s.retention).toMatchObject({ id: `${s.id}-screw`, kind: "m2_screw" });
+      expect(s.fastener).toEqual({ kind: "m2_screw", count: 1 });
+      expect(s.retention?.note).not.toMatch(/assumed/);
+      expect(s.keying?.insertTiltDeg).toEqual([15, 35]);
+    }
+    expect(pages("asus-prime-b760m-a-wifi")).toContain("E21693 — p. 1-2 (layout), p. 1-14 (M.2 installation)");
+  });
+});
