@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { PCBuildState } from "@ytl/contracts";
-import { aimHeld, aimTargets, nextHandStep, type HandStep } from "./click-assembly";
+import { aimClick, aimHeld, aimTargets, createStepGate, m2LiftPose, nextHandStep, sameAim, type HandStep } from "./click-assembly";
+import { heldLines } from "./companion";
 import { planModel } from "./plan-model";
 import {
-  activateSimpleModel, createSimpleBuild, installSimplePart, LEGACY_MODEL, lowerSimplePart, lowerSimpleRam, reseatSimplePart, setSimpleMechanism,
-  simplePartInstalled, simpleRamSlotOffsets, simpleRamSlots, simpleRetention, type SimpleHeld,
+  activateSimpleModel, createSimpleBuild, emptySimpleSnapshot, installSimplePart, LEGACY_MODEL, liftSimplePart, lowerSimplePart, lowerSimpleRam, M2_WHOLE_TILT_DEG,
+  parseSimpleSnapshot, reseatSimplePart, setSimpleMechanism, simpleBuildFromSnapshot, simplePartInstalled, simpleRamSlotOffsets, simpleRamSlots, simpleRetention,
+  simpleTarget, withLift, withLower, withMechanism, withPart, withSeat, type SimpleHeld, type SimplePartKey, type SimpleSnapshot,
 } from "./simple-model";
 
 afterEach(() => activateSimpleModel(LEGACY_MODEL));
@@ -233,5 +235,172 @@ describe("click-based assembly: an M.2 drive, one documented step per click", ()
     expect(aimHeld(createSimpleBuild(), held, "dimm-a1")).toMatchObject({ ok: false, reason: "notItsPlace" });
     // Every M.2 slot can be clicked; none is suggested.
     expect(aimTargets(createSimpleBuild(), "storage", held).map((t) => [t.placeId, t.role])).toEqual([["m2-1", "decoy"], ["m2-2", "decoy"], ["m2-3", "decoy"], ["m2-4", "decoy"]]);
+  });
+});
+
+describe("click-based assembly: what a click on a place does (the page's aimAt decision)", () => {
+  /** The drive held over `from` (aimed there by a click), turned and tilted by the learner. */
+  const over = (state: PCBuildState, from: string): SimpleHeld => {
+    const r = aimClick(state, { key: "storage", rotationDeg: 180, offsetMm: [4, 0], tiltDeg: 25 }, from);
+    if (!r.ok || !r.moved) throw new Error(`aim ${from}: ${JSON.stringify(r)}`);
+    return r.held;
+  };
+
+  for (const [from, to] of [["m2-1", "m2-2"], ["m2-3", "m2-4"], ["m2-2", "m2-1"]] as const) {
+    it(`an M.2 drive over ${from}: a click on ${to} moves it there (turn and tilt kept), with no mechanical step and no change to the build`, () => {
+      const s = createSimpleBuild();
+      const before = JSON.stringify(s);
+      const held = over(s, from);
+      expect(held).toEqual({ key: "storage", rotationDeg: 180, offsetMm: [0, 0], tiltDeg: 25, slotId: from });
+      const r = aimClick(s, held, to);
+      // Both slots aim to the connector centre ([0, 0]): the slot itself is what tells them apart.
+      expect(r).toEqual({ ok: true, moved: true, placeId: to, held: { ...held, slotId: to } });
+      expect(JSON.stringify(s)).toBe(before);
+      // The next step is now about the new slot, never the old one's heatsink or latch.
+      const next = nextHandStep(s, "storage", (r as { held: SimpleHeld }).held);
+      if (next?.kind === "heatsink") expect(next.hsId).not.toContain(from);
+      expect(nextHandStep(s, "storage", (r as { held: SimpleHeld }).held)).toEqual(nextHandStep(s, "storage", { ...held, slotId: to }));
+    });
+  }
+
+  it("TUF: from M.2_1 (heatsink steps), a click on M.2_2 makes the next step M.2_2's latch, and M.2_1's heatsink is left as it was", () => {
+    let s = createSimpleBuild();
+    const held = over(s, "m2-1");
+    const first = nextHandStep(s, "storage", held);
+    expect(first).toMatchObject({ kind: "heatsink", step: "screws" });
+    // One real step on M.2_1 (its heatsink's screws out), then the learner changes their mind.
+    s = must(setSimpleMechanism(s, `${(first as { hsId: string }).hsId}:screws`, "open"));
+    const before = JSON.stringify(s);
+    const r = aimClick(s, held, "m2-2");
+    expect(r).toMatchObject({ ok: true, moved: true, held: { slotId: "m2-2", rotationDeg: 180, tiltDeg: 25 } });
+    expect(JSON.stringify(s)).toBe(before);
+    expect(nextHandStep(s, "storage", (r as { held: SimpleHeld }).held)).toEqual({ kind: "mechanism", desired: "open" });
+  });
+
+  it("a click on the slot the drive is already over is the next step there (not a move)", () => {
+    const s = createSimpleBuild();
+    const held = over(s, "m2-2");
+    expect(aimClick(s, held, "m2-2")).toEqual({ ok: true, moved: false, placeId: "m2-2", held });
+  });
+
+  it("CPU and memory keep their behaviour: the same place is a step, another memory slot is a move", () => {
+    const s = createSimpleBuild();
+    const cpu = aimClick(s, { key: "cpu", rotationDeg: 90, offsetMm: [-32, -18] }, "cpu-socket");
+    expect(cpu).toEqual({ ok: true, moved: true, placeId: "cpu-socket", held: { key: "cpu", rotationDeg: 90, offsetMm: [0, 0] } });
+    expect(aimClick(s, (cpu as { held: SimpleHeld }).held, "cpu-socket")).toMatchObject({ ok: true, moved: false });
+    const off = simpleRamSlotOffsets(s);
+    const a1 = aimClick(s, { key: "ram", rotationDeg: 0, offsetMm: [6, -30] }, "dimm-a1");
+    expect(a1).toEqual({ ok: true, moved: true, placeId: "dimm-a1", held: { key: "ram", rotationDeg: 0, offsetMm: off.get("dimm-a1") } });
+    const held = (a1 as { held: SimpleHeld }).held;
+    expect(aimClick(s, held, "dimm-a1")).toMatchObject({ ok: true, moved: false });
+    expect(aimClick(s, held, "dimm-b2")).toMatchObject({ ok: true, moved: true, held: { offsetMm: off.get("dimm-b2") } });
+  });
+
+  it("refusals pass through unchanged", () => {
+    const s = createSimpleBuild();
+    expect(aimClick(s, { key: "storage", rotationDeg: 0, offsetMm: [4, 0] }, "dimm-a1")).toEqual({ ok: false, reason: "notItsPlace", placeId: "dimm-a1" });
+  });
+
+  it("sameAim compares the slot as well as the pose", () => {
+    const a: SimpleHeld = { key: "storage", rotationDeg: 0, offsetMm: [0, 0], slotId: "m2-1" };
+    expect(sameAim(a, { ...a })).toBe(true);
+    expect(sameAim(a, { ...a, slotId: "m2-2" })).toBe(false);
+    expect(sameAim(a, { ...a, offsetMm: [0, 1] })).toBe(false);
+    expect(sameAim(a, { ...a, key: "storage2" as SimpleHeld["key"] })).toBe(false);
+  });
+});
+
+describe("one hand step at a time: the gate every assembly input goes through", () => {
+  function gate() {
+    const pending: (() => void)[] = [];
+    const g = createStepGate(450, (f) => pending.push(f));
+    /** The end of the current input event (the microtask after the handler). */
+    const endEvent = () => { while (pending.length) pending.shift()!(); };
+    return { g, endEvent };
+  }
+
+  it("a second input inside the step's time is ignored; after it, the next one goes", () => {
+    const { g, endEvent } = gate();
+    expect(g.take(1000)).toBe(true); endEvent();
+    expect(g.take(1100)).toBe(false); endEvent(); // double click
+    expect(g.take(1449)).toBe(false); endEvent(); // key repeat
+    expect(g.take(1450)).toBe(true); endEvent();
+  });
+
+  it("nested calls inside the same input (toolbar → step → mechanism) count as one step", () => {
+    const { g, endEvent } = gate();
+    expect(g.take(1000)).toBe(true);
+    expect(g.take(1000.2)).toBe(true);
+    expect(g.take(1000.4)).toBe(true);
+    endEvent();
+    expect(g.take(1001)).toBe(false);
+  });
+
+  it("aiming (a pure move of the hand) is never refused, but arms the gate so a double click on a slot is not also a step", () => {
+    const { g, endEvent } = gate();
+    g.arm(1000); endEvent();
+    expect(g.take(1200)).toBe(false); endEvent();
+    expect(g.take(1500)).toBe(true); endEvent();
+  });
+});
+
+describe("taking an installed M.2 drive out: it stays in hand over the slot it came from", () => {
+  const TWO = () => activateSimpleModel(planModel({ version: 1, purpose: "study", workload: "", parts: { case: "corsair-4000d-airflow-black", motherboard: "asus-tuf-gaming-z790-plus-wifi", cpu: "intel-core-i5-14600k", cooler: "arctic-freezer-36", psu: "corsair-rm650e-2025", gpu: null, ram: { id: "corsair-vengeance-rgb-ddr5-6000-32gb-kit", modules: 2 }, storage: ["samsung-990-pro-1tb", "samsung-990-pro-1tb"], fans: [] } }));
+  const IN = (slotId: string) => ({ rotationDeg: 0, offsetMm: [0, 0] as [number, number], tiltDeg: M2_WHOLE_TILT_DEG, slotId });
+  /** Fitted by hand under the shared heatsink (M.2_3/M.2_4) and latched, then the latch opened again (heatsink off): ready to lift. */
+  function fittedThenOpened(drives: [SimplePartKey, string][]): SimpleSnapshot {
+    let sn = withMechanism(withMechanism(emptySimpleSnapshot(), "m2-hs-2:screws", "open"), "m2-hs-2", "open");
+    for (const [key, slot] of drives) sn = withMechanism(withSeat(withLower(withMechanism(sn, `${slot}-qlatch`, "open"), key, IN(slot)), key), `${slot}-qlatch`, "closed");
+    for (const [, slot] of drives) sn = withMechanism(sn, `${slot}-qlatch`, "open");
+    return sn;
+  }
+  const printed = (slot: string) => `M.2_${slot.slice(-1)}`;
+
+  for (const [key, slot] of [["storage", "m2-3"], ["storage2", "m2-4"]] as const) {
+    it(`${key} out of ${slot}: the hand keeps ${slot}, the installed turn (0°), the insertion tilt and the connector position`, () => {
+      TWO();
+      const sn = fittedThenOpened([["storage", "m2-3"], ["storage2", "m2-4"]]);
+      const before = simpleBuildFromSnapshot(sn);
+      const pose = m2LiftPose(before, key);
+      expect(pose).toEqual({ key, rotationDeg: 0, offsetMm: [0, 0], tiltDeg: M2_WHOLE_TILT_DEG, slotId: slot });
+      const after = must(liftSimplePart(before, key));
+      expect(simpleBuildFromSnapshot(withLift(sn, key))).toEqual(after);
+      // Over that same connector: what the scene and the engine read is the source slot, not the plan's default one.
+      expect(simpleTarget(after, key, pose!.slotId).mountPointId).toBe(slot);
+      expect(aimClick(after, pose!, slot)).toMatchObject({ ok: true, moved: false });
+      // The robot names the slot it came out of.
+      expect(heldLines(after, pose!)?.[0]).toEqual({ key: "resume.m2Over", values: { slot: printed(slot) } });
+    });
+  }
+
+  it("a drive fitted in M.2_3 while the plan's slot is M.2_1 comes out over M.2_3", () => {
+    const sn = fittedThenOpened([["storage", "m2-3"]]);
+    const before = simpleBuildFromSnapshot(sn);
+    expect(simpleTarget(createSimpleBuild(), "storage").mountPointId).toBe("m2-1");
+    const pose = m2LiftPose(before, "storage");
+    expect(pose).toEqual({ key: "storage", rotationDeg: 0, offsetMm: [0, 0], tiltDeg: M2_WHOLE_TILT_DEG, slotId: "m2-3" });
+    const after = must(liftSimplePart(before, "storage"));
+    expect(simpleTarget(after, "storage").mountPointId).toBe("m2-1"); // the fallback the page used to show
+    expect(simpleTarget(after, "storage", pose!.slotId).mountPointId).toBe("m2-3");
+    expect(nextHandStep(after, "storage", pose)).not.toMatchObject({ kind: "aim" });
+  });
+
+  it("the pose in hand after taking a drive out of M.2_4 survives a save and reload", () => {
+    TWO();
+    const sn = fittedThenOpened([["storage", "m2-3"], ["storage2", "m2-4"]]);
+    const pose = m2LiftPose(simpleBuildFromSnapshot(sn), "storage2")!;
+    const saved: SimpleSnapshot = { ...withLift(sn, "storage2"), held: pose };
+    const restored = parseSimpleSnapshot(JSON.parse(JSON.stringify(saved)));
+    expect(restored?.held).toEqual({ key: "storage2", rotationDeg: 0, offsetMm: [0, 0], tiltDeg: M2_WHOLE_TILT_DEG, slotId: "m2-4" });
+    const after = simpleBuildFromSnapshot(restored!);
+    expect(after.parts.some((p) => p.attachments.some((a) => a.target.mountPointId === "m2-4"))).toBe(false);
+    expect(simpleTarget(after, "storage2", restored!.held!.slotId).mountPointId).toBe("m2-4");
+    expect(heldLines(after, restored!.held!)?.[0]).toEqual({ key: "resume.m2Over", values: { slot: "M.2_4" } });
+  });
+
+  it("no M.2 lift pose for a drive not in a slot, or for a CPU or a memory module", () => {
+    expect(m2LiftPose(createSimpleBuild(), "storage")).toBeNull();
+    expect(m2LiftPose(simpleBuildFromSnapshot(withPart(emptySimpleSnapshot(), "ram")), "ram")).toBeNull();
+    expect(m2LiftPose(simpleBuildFromSnapshot(withPart(emptySimpleSnapshot(), "cpu")), "cpu")).toBeNull();
   });
 });

@@ -5,7 +5,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import type { SimpleSceneTarget } from "./simple-scene";
 import {
-  ALL_SIMPLE_PARTS, caseCoversClosed, isM2Key, isRamKey, simpleBlock, simpleFastened, simpleKeying, simpleM2Heatsink, simpleM2Slots, simpleRamReference, simpleRamSlotOffsets, simpleRamSlots,
+  ALL_SIMPLE_PARTS, caseCoversClosed, isM2Key, isRamKey, M2_WHOLE_TILT_DEG, simpleBlock, simpleFastened, simpleKeying, simpleM2Heatsink, simpleM2Slots, simpleRamReference, simpleRamSlotOffsets, simpleRamSlots,
   simpleRamTargetFor, simpleRetention, simplePartInstalled, type SimpleBlock, type SimpleHeld, type SimplePartKey,
 } from "./simple-model";
 
@@ -44,6 +44,63 @@ export function aimHeld(state: PCBuildState, held: SimpleHeld, placeId: string):
   const ret = simpleRetention(state, held.key);
   if (!ret || ret.mountPointId !== placeId) return { ok: false, reason: "notItsPlace", placeId };
   return { ok: true, held: { ...held, offsetMm: [0, 0] }, placeId };
+}
+
+/**
+ * How an M.2 drive is held once the learner takes it out of its slot, read from where it is BEFORE the
+ * removal: over that same slot's connector, turned as it was in (0°: the M-key only lets it in that way)
+ * and at the insertion angle it rises to once its latch or screw is off. Null for anything that is not an
+ * M.2 drive in a slot. Never another slot, and never a turn it did not have.
+ */
+export function m2LiftPose(state: PCBuildState, key: SimplePartKey): SimpleHeld | null {
+  if (!isM2Key(key)) return null;
+  const slotId = attachmentOf(state, key)?.target.mountPointId;
+  if (!slotId) return null;
+  return { key, rotationDeg: 0, offsetMm: [0, 0], tiltDeg: M2_WHOLE_TILT_DEG, slotId };
+}
+
+/**
+ * Whether two holds are over the same place in the same way: the part, the slot it is over (M.2 drives
+ * are all aimed at their connector centre, [0, 0], so only the slot tells M.2_1 from M.2_2) and the offset.
+ */
+export function sameAim(a: SimpleHeld, b: SimpleHeld): boolean {
+  return a.key === b.key && (a.slotId ?? null) === (b.slotId ?? null) && a.offsetMm[0] === b.offsetMm[0] && a.offsetMm[1] === b.offsetMm[1];
+}
+
+export type AimClick = Extract<AimResult, { ok: false }> | { ok: true; held: SimpleHeld; placeId: string; moved: boolean };
+
+/**
+ * What a click on a place does with a keyed part in hand: refused (as aimHeld says), a move of the hand
+ * over another place (turn and tilt kept, the build untouched), or, on the place it is already over, the
+ * next mechanical step there (moved: false).
+ */
+export function aimClick(state: PCBuildState, held: SimpleHeld, placeId: string): AimClick {
+  const r = aimHeld(state, held, placeId);
+  if (!r.ok) return r;
+  return { ok: true, held: r.held, placeId: r.placeId, moved: !sameAim(r.held, held) };
+}
+
+/**
+ * One hand step at a time, whichever input asked for it (a click in the view, the toolbar, a panel
+ * button, Enter or T). take() lets one step through per `ms`; calls nested inside that same input event
+ * (the toolbar → the step → the mechanism) pass too, until `defer` runs at the end of the event. arm()
+ * starts the wait without being refused itself: aiming the hand is never blocked, but a double click on
+ * a slot does not also take a step.
+ */
+export function createStepGate(ms: number, defer: (f: () => void) => void = queueMicrotask) {
+  let until = -Infinity;
+  let open = false;
+  return {
+    take(now: number): boolean {
+      if (open) return true;
+      if (now < until) return false;
+      until = now + ms;
+      open = true;
+      defer(() => { open = false; });
+      return true;
+    },
+    arm(now: number): void { until = Math.max(until, now + ms); },
+  };
 }
 
 /**

@@ -33,7 +33,8 @@ rule is documented in these manuals, so none is applied.
 Rubber pad (single/double-sided drives) is optional and not modelled. The M.2_4 short-drive screw stand
 is catalog data only (the only M.2 drive offered, the 990 PRO 1TB, is 2280). Proportions are schematic.
 
-**Verification (local production build, Chrome with SwiftShader, 2026-11-21).**
+**Verification of `9866a99` (local production build, Chrome with SwiftShader, 2026-11-21).**
+These are the original results for the code at `9866a99`; they predate the review corrections below.
 - `npm test`: 1015 passed, 0 failed, 34 skipped (no AI provider, no JDK, no `TEST_DATABASE_URL`; not counted).
 - `npm run type-check`, `npm run check:messages`, `npm run build`: passed.
 - `docs/handoff/2026-11-21/acceptance/m2.mjs`: EN 1440 31/31, AR 1440 31/31, EN 430 31/31 (slot clicked
@@ -45,7 +46,45 @@ is catalog data only (the only M.2 drive offered, the 990 PRO 1TB, is 2280). Pro
   of the base `2ecd636`, so this is not a Stage 3 regression; they need rewriting for the click UI.
 - Not verified: the Vercel preview of this branch (login required), physical touch devices.
 
-**Next.** Owner/Codex review; then Stage 4 (cooling) per the roadmap.
+**Review corrections after `9866a99` (2026-11-21).** Made after the verification above and committed
+in the commit that follows `9866a99` on this branch; the browser results above do not cover them.
+1. *One step at a time from every input.* A shared step gate (`createStepGate` in `click-assembly.ts`)
+   now guards every hand step — view clicks, toolbar, panel buttons, Enter and T — not only the toolbar.
+   Calls nested inside the same input count as one step. Selecting, turning/nudging and the camera are
+   never held back.
+2. *Clicking another M.2 slot moves the hand, it does not take a step.* All M.2 slots aim to the
+   connector centre `[0, 0]`, so the old "same offset = same place" test treated a click on M.2_2 while
+   over M.2_1 as the next step on M.2_1. `aimClick`/`sameAim` now compare the slot too: a click on another
+   slot only moves the drive there (turn and tilt kept, build unchanged); a click on the slot it is over
+   is the next step there. A move arms the gate so a double click on a slot is not also a step.
+3. *Taking an installed M.2 out keeps it over its own slot.* `handLift` used the generic pickup pose for
+   M.2 (180°, `[4, 0]`, no slot, no tilt), so the scene fell back to the plan's default slot and the drive
+   jumped and reversed (e.g. out of M.2_3/M.2_4 it appeared at M.2_1). `m2LiftPose` now reads the source
+   slot from the drive's attachment *before* removal and holds it over that same connector, at the
+   installed turn (0°, the only one its key accepts) and the 25° insertion tilt. No other slot is chosen
+   and nothing is turned for the learner. The pose is saved with the progress and restored on reload.
+   CPU and RAM removal are unchanged.
+4. *Guidance names the source slot.* After an M.2 removal the robot said "Out and back on the bench",
+   which was wrong. New line `hands.m2Lifted` (EN/AR): "Out of {slot} and in your hand, still at its
+   angle over that slot." After a reload, `resume.m2Over` names the same slot (tested for M.2_3/M.2_4).
+
+Checks for these corrections (local, no browser), in order:
+- Codex review pass on corrections 1–2: 91 focused tests and the type check passed.
+- Claude pass on corrections 3–4: `npx vitest run apps/web/components/pc` — 23 files, 230 passed,
+  0 failed, 0 skipped (includes the new M.2_3/M.2_4 removal and save/reload tests in
+  `click-assembly.test.ts`, 32 tests). `npm run type-check` and `npm run check:messages` passed.
+  The full `npm test` and `npm run build` were not run in that pass.
+- Codex final check of the final code, after all removal fixes: `npm test` (run with escalated
+  permission so the suite could start its local test server) — 80 files passed, 1031 tests passed,
+  0 failed, 34 skipped (skipped tests are not counted as passes). Production build
+  (`npm run build` with `SWC_NATIVE_BINDING_CACHE=/private/tmp/talal-review-swc`) passed. Earlier in
+  the Codex review, `npm run type-check` and `npm run check:messages` also passed.
+- **Not browser-tested.** No browser automation or visual check was used for these corrections, in any
+  pass; the acceptance scripts above were not re-run. The removal pose in the 3D view, the new robot
+  line and the step gate in a real browser still need checking.
+
+**Next.** Owner review of these corrections and a browser check of them; then Stage 4 (cooling) per
+the roadmap.
 
 ## Earlier: click-based assembly and top controls
 

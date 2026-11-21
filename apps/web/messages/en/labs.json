@@ -1309,7 +1309,8 @@
         "ramSlotTaken": "{slot} already has a module. Choose a free slot.",
         "ramResting": "It rests in {slot}. Now press it straight down until the clip locks.",
         "ramNotRecommended": "It fits. For {n} module(s) the manual recommends {rec}; this slot works, but may not give the best (dual-channel) setup.",
-        "ramLifted": "Out of the slot and in your hand, right above it."
+        "ramLifted": "Out of the slot and in your hand, right above it.",
+        "m2Lifted": "Out of {slot} and in your hand, still at its angle over that slot."
       }
     },
     "partNotes": {

@@ -11,7 +11,7 @@ import { BuildCompanion, type CompanionMessage } from "./BuildCompanion";
 import { pcCatalog } from "./catalog";
 import { askCompanionAi, companionAskRequest, fetchTutorStatus, type AiStatus } from "./companion-ai";
 import { buildContext, companionSay, heldLines, intentOf, m2StepLine, nextLine, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
-import { aimHeld, aimTargets, nextHandStep, type HandStep } from "./click-assembly";
+import { aimClick, aimTargets, createStepGate, m2LiftPose, nextHandStep, type HandStep } from "./click-assembly";
 import { focusOn, moveCamera, selectPart } from "./scene/scene-store";
 import {
   ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, connectSimpleCable, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, isM2Key, isRamKey, lastSimpleStep, M2_WHOLE_TILT_DEG, simpleM2Heatsink, simpleM2Slots,
@@ -153,8 +153,13 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const [ticked, setTicked] = useState(0);
   /** How the learner holds a keyed part (CPU, memory) over its place: turned and off centre until they line it up. */
   const [hold, setHold] = useState<({ key: SimplePartKey } & SimpleAlignment) | null>(null);
-  /** One hand step at a time: a second click or key press while a step is running is ignored. */
-  const handBusyUntil = useRef(0);
+  /**
+   * One hand step at a time, from every input (view, toolbar, panel buttons, Enter, T): a second click or
+   * a repeated key while a step is running is ignored. Selection, turning/nudging the hand and the camera
+   * are not steps and are never held back.
+   */
+  const stepGate = useRef(createStepGate(HAND_STEP_MS));
+  const takeStep = () => stepGate.current.take(performance.now());
   const state = mode === "fault" && fault ? fault.state : built;
   /** The retention a part works with now: for an M.2 drive in hand, the one of the slot it is over. */
   const retOf = (key: SimplePartKey) => simpleRetention(state, key, hold?.key === key ? hold.slotId : undefined);
@@ -308,6 +313,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
       if (!fault || fault.solved) return;
       if (simpleRetention(state, key)) { primaryHand(key); return; }
       if (screwedByHand(key)) return;
+      if (!takeStep()) return;
       const step = installSimplePart(state, key);
       if (step.ok) { setFault({ ...fault, state: step.state }); setSelection(null); react({ type: "installed", key }, step.state, false, null); }
       return;
@@ -319,6 +325,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     // The physical steps come first (pushing a resting part home has none to repeat).
     if (!simplePartInstalled(state, key) && ticked < substepsFor(key).length && !simpleSlotPart(state, slotOf(key))) { speak({ lines: [{ key: "blocked.substeps" }], mood: "concerned", point: "parts" }); return; }
     const rival = simpleSlotPart(state, slotOf(key));
+    if (!takeStep()) return;
     if (rival && rival !== key) { swap(rival, key); return; }
     const step = installSimplePart(state, key);
     if (!step.ok) { react({ type: "select", selection: { kind: "part", key } }); return; }
@@ -333,14 +340,15 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   // ---------- Hands-on: mechanisms and alignment (CPU, memory) ----------
 
   /** Keeps a mechanism or seating change: a step in the saved progress, or the fault build's state. */
-  function keepHand(next: ReturnType<typeof createSimpleBuild>, step: (s: SimpleSnapshot) => SimpleSnapshot, line: string, mood: "happy" | "point" | "concerned" = "point") {
+  function keepHand(next: ReturnType<typeof createSimpleBuild>, step: (s: SimpleSnapshot) => SimpleSnapshot, line: string, mood: "happy" | "point" | "concerned" = "point", values?: Record<string, string>) {
     if (mode === "fault") { if (fault) setFault({ ...fault, state: next }); }
     else setSaved((previous) => step(previous));
     setVerdict(null);
-    speak({ lines: [{ key: `hands.${line}` }], mood, point: "scene" });
+    speak({ lines: [values ? { key: `hands.${line}`, values } : { key: `hands.${line}` }], mood, point: "scene" });
   }
   function handMechanism(key: SimplePartKey, desired: "open" | "closed") {
     if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
+    if (!takeStep()) return;
     const ret = retOf(key);
     if (ret && isM2Key(key)) {
       const r = setSimpleMechanism(state, ret.id, desired);
@@ -370,6 +378,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** The Intel socket's load lever: released from its tab and lifted, or pushed down and locked under it. */
   function handLever(key: SimplePartKey, desired: "open" | "closed") {
     if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
+    if (!takeStep()) return;
     const ret = simpleRetention(state, key);
     if (!ret?.leverId) return;
     const r = setSimpleMechanism(state, ret.leverId, desired);
@@ -386,6 +395,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** A memory slot's clip, clicked in the view or with its button: opens it, or closes it over an empty slot. */
   function handClip(slotId: string, near: boolean) {
     if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
+    if (!takeStep()) return;
     const slot = simpleRamSlots(state).find((x) => x.id === slotId);
     const id = slot ? (near ? slot.nearId : slot.clipId) : null;
     if (!slot || !id) return;
@@ -399,6 +409,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** Lowers the held module into the slot it is over: it rests there until pressed home. */
   function handRamLower(key: SimplePartKey) {
     if (lockedOn || !hold || hold.key !== key) return;
+    if (!takeStep()) return;
     const r = lowerSimpleRam(state, key, hold);
     const slotName = (id?: string) => { const sl = simpleRamSlots(state).find((x) => x.id === id); return sl ? (locale === "ar" ? sl.label.ar : sl.label.en).replace(/ \(.*\)$/, "") : ""; };
     if (!r.ok) {
@@ -425,6 +436,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (isRamKey(key)) { handRamLower(key); return; }
     if (isM2Key(key)) { handM2Insert(key); return; }
     if (lockedOn || !hold || hold.key !== key) return;
+    if (!takeStep()) return;
     const ret = simpleRetention(state, key);
     const k = handKind(ret?.kind ?? "");
     const cpu = k === "cpu";
@@ -448,6 +460,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** An M.2 drive in hand goes into the slot it is over, tilted as the learner holds it; it rests there at an angle. */
   function handM2Insert(key: SimplePartKey) {
     if (lockedOn || !hold || hold.key !== key) return;
+    if (!takeStep()) return;
     const r = lowerSimplePart(state, key, hold);
     if (!r.ok) { sayEngine(r.message, r.reason === "turnPart" ? "m2Turn" : r.reason === "centrePart" ? "m2Centre" : "m2OpenFirst"); return; }
     const pose = { rotationDeg: hold.rotationDeg, offsetMm: hold.offsetMm, ...(hold.tiltDeg === undefined ? {} : { tiltDeg: hold.tiltDeg }), ...(hold.slotId ? { slotId: hold.slotId } : {}) };
@@ -459,6 +472,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** An M.2 heatsink: one of its five steps (screws out, lift, film, refit, screws in). */
   function handHeatsink(key: SimplePartKey, hsId: string, step: "screws" | "lift" | "film" | "fit" | "tighten") {
     if (handsOff()) return;
+    if (!takeStep()) return;
     const [id, desired] = ({ screws: [`${hsId}:screws`, "open"], lift: [hsId, "open"], film: [`${hsId}:film`, "open"], fit: [hsId, "closed"], tighten: [`${hsId}:screws`, "closed"] } as const)[step];
     const r = setSimpleMechanism(state, id, desired);
     if (!r.ok) { sayEngine(r.message, "closeBlocked"); return; }
@@ -470,6 +484,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** A screw-held M.2 slot: the screw stand goes in at the drive's length hole. */
   function handStand(key: SimplePartKey) {
     if (handsOff()) return;
+    if (!takeStep()) return;
     const ret = retOf(key);
     if (!ret?.standId) return;
     const r = setSimpleMechanism(state, ret.standId, "closed");
@@ -481,6 +496,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** Tilts the drive in hand up to the insertion angle, or lays it flat again (never done for the learner). */
   function tiltHeld(up: boolean) {
     if (!hold || !isM2Key(hold.key) || handsOff()) return;
+    if (!takeStep()) return;
     const next = { ...hold, tiltDeg: up ? M2_WHOLE_TILT_DEG : 0 };
     setHold(next);
     const line = m2StepLine(state, hold.key, next);
@@ -488,6 +504,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   }
   function handSeat(key: SimplePartKey) {
     if (lockedOn) return;
+    if (!takeStep()) return;
     const r = reseatSimplePart(state, key);
     if (!r.ok) return;
     // An M.2 drive pressed flat is not held yet: the latch or screw comes next, with the drive still selected.
@@ -498,12 +515,22 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   }
   function handLift(key: SimplePartKey) {
     if (lockedOn) return;
+    if (!takeStep()) return;
     const ret = simpleRetention(state, key);
     const k = handKind(ret?.kind ?? "");
+    // An M.2 drive: its pose in hand is read from the slot it is in now, before it comes out.
+    const m2Pose = m2LiftPose(state, key);
     const r = liftSimplePart(state, key);
     if (!r.ok) {
       const line = r.reason === "unplugFirst" ? "gpuUnplug" : r.reason === "unscrewFirst" ? "gpuUnscrew" : k === "gpu" ? "gpuReleaseFirst" : k === "ram" && ret?.nearId ? "ramOpenBoth" : `${k}OpenFirst`;
       speak({ lines: [{ key: `hands.${line}` }], mood: "concerned", point: "scene" });
+      return;
+    }
+    // A drive comes up out of its slot at its insertion angle and stays in hand over that same connector,
+    // turned as it was in: it is not moved, turned or given another slot for the learner.
+    if (m2Pose) {
+      keepHand(r.state, (sn) => withLift(sn, key), "m2Lifted", "point", { slot: m2SlotName(m2Pose.slotId!) });
+      setHold(m2Pose);
       return;
     }
     keepHand(r.state, (sn) => withLift(sn, key), isRamKey(key) ? "ramLifted" : "lifted");
@@ -518,12 +545,14 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const handsOff = () => lockedOn || (mode === "fault" && (!fault || fault.solved));
   function handPrep(key: SimplePartKey, prep: "paste" | "film" | "standoffs" | "io_shield" | "psu_fan" | "airflow", value: string, line: string) {
     if (handsOff()) return;
+    if (!takeStep()) return;
     const r = prepSimplePart(state, key, prep, value);
     if (!r.ok) { sayEngine(r.message, "closeBlocked"); return; }
     keepHand(r.state, (sn) => withPrep(sn, key, prep, value), line);
   }
   function handPlace(key: SimplePartKey, line: string) {
     if (handsOff()) return;
+    if (!takeStep()) return;
     const r = placeSimplePart(state, key);
     if (!r.ok) {
       if (r.reason === "prepMissing" || r.reason === "prepWrong") sayEngine(r.message, "closeBlocked");
@@ -534,6 +563,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   }
   function handPlug(key: SimpleCableKey, endIndex: number) {
     if (handsOff() || !plugHold || plugHold.key !== key) return;
+    if (!takeStep()) return;
     if (!plugHold.portId) { speak({ lines: [{ key: "hands.pickPort" }], mood: "point", point: "cables" }); return; }
     const r = plugSimpleEnd(state, key, endIndex, plugHold.portId, plugHold.reversed);
     if (!r.ok) {
@@ -560,6 +590,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** A liquid cooler, once its paste is on: pump block on the CPU and radiator in the case. */
   function handFitLiquid(key: SimplePartKey) {
     if (handsOff()) return;
+    if (!takeStep()) return;
     if (simplePrepMissing(state, key).length > 0) { speak({ lines: [{ key: "hands.liquidPrep" }], mood: "concerned", point: "scene" }); return; }
     const step = installSimplePart(state, key);
     if (!step.ok) { react({ type: "select", selection: { kind: "part", key } }); return; }
@@ -572,6 +603,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   }
   function handScrew(key: SimplePartKey, corner: number) {
     if (handsOff()) return;
+    if (!takeStep()) return;
     if (mode !== "fault") {
       const order = simpleScrewOrder(saved.history, key);
       if (order.done.includes(corner)) return;
@@ -587,12 +619,14 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** The case's expansion-slot covers beside the card's slot: out before a card, back once no card is there. */
   function handCovers(desired: "open" | "closed") {
     if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
+    if (!takeStep()) return;
     const r = setSimpleMechanism(state, SLOT_COVERS_ID, desired);
     if (!r.ok) { speak({ lines: [{ key: "hands.coversBlocked" }], mood: "concerned", point: "scene" }); return; }
     keepHand(r.state, (sn) => withMechanism(sn, SLOT_COVERS_ID, desired), desired === "open" ? "coversOut" : "coversIn");
   }
   function handFasten(key: SimplePartKey) {
     if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
+    if (!takeStep()) return;
     const r = fastenSimplePart(state, key);
     if (!r.ok) { speak({ lines: [{ key: "hands.gpuSeatFirst" }], mood: "concerned", point: "scene" }); return; }
     keepHand(r.state, (sn) => withFasten(sn, key), "gpuScrewed", "happy");
@@ -601,6 +635,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   }
   function handUnfasten(key: SimplePartKey) {
     if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
+    if (!takeStep()) return;
     const r = unfastenSimplePart(state, key);
     if (!r.ok) return;
     keepHand(r.state, (sn) => withUnfasten(sn, key), "gpuUnscrewed");
@@ -632,6 +667,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   function swap(from: SimplePartKey, to: SimplePartKey) {
     const blocked = simpleSwapBlock(state, to);
     if (blocked) { react({ type: "removeBlocked", key: from, reason: blocked }); return; }
+    if (!takeStep()) return;
     const next = withSwap(saved, from, to);
     let after: ReturnType<typeof simpleBuildFromSnapshot>;
     try { after = simpleBuildFromSnapshot(next); } catch { react({ type: "select", selection: { kind: "part", key: to } }); return; }
@@ -647,6 +683,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const blocked = simpleRemoveBlock(state, key);
     if (blocked) { react({ type: "removeBlocked", key, reason: blocked }); return; }
     if (!simplePartInstalled(state, key)) return;
+    if (!takeStep()) return;
     const next = withoutPart(saved, key);
     const after = simpleBuildFromSnapshot(next);
     setSaved(next);
@@ -660,6 +697,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (mode === "fault") {
       if (!fault || fault.solved) return;
       if (!simpleCableConnected(state, key)) { if (!(selection?.kind === "cable" && selection.key === key)) chooseCable(key); return; }
+      if (!takeStep()) return;
       const step = connectSimpleCable(state, key);
       if (step.ok) { setFault({ ...fault, state: step.state }); setSelection(null); react({ type: "connected", key }, step.state, false, null); }
       return;
@@ -667,6 +705,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (saved.powered) { react({ type: "select", selection: { kind: "cable", key } }); return; }
     // Each end goes in by hand (see CablePanel): pick the port, turn the plug, push it home.
     if (!simpleCableConnected(state, key)) { if (!(selection?.kind === "cable" && selection.key === key)) chooseCable(key); return; }
+    if (!takeStep()) return;
     const step = connectSimpleCable(state, key);
     if (!step.ok) { react({ type: "select", selection: { kind: "cable", key } }); return; }
     if (simpleCableConnected(state, key)) return;
@@ -677,6 +716,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   }
 
   function unplug(key: SimpleCableKey) {
+    if (!takeStep()) return;
     if (mode === "fault") {
       if (!fault || fault.solved) return;
       const off = disconnectSimpleCable(state, key);
@@ -716,7 +756,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   function aimAt(key: SimplePartKey, placeId: string) {
     if (!hold || hold.key !== key) { primaryHand(key); return; }
     if (handsOff()) { if (lockedOn) speak({ lines: [{ key: "blocked.turnOff" }], mood: "concerned", point: "power" }); return; }
-    const r = aimHeld(state, hold, placeId);
+    const r = aimClick(state, hold, placeId);
     if (!r.ok) {
       if (r.reason === "slotTaken") speak({ lines: [isM2Key(key) ? { key: "hands.m2SlotTaken", values: { slot: m2SlotName(placeId) } } : { key: "hands.ramSlotTaken", values: { slot: ramSlotName(placeId) } }], mood: "concerned", point: "scene" });
       else if (r.reason === "doesNotFit") speak({ lines: [{ key: "hands.m2NoFit", values: { slot: m2SlotName(placeId) } }], mood: "concerned", point: "scene" });
@@ -724,7 +764,11 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
       else react({ type: "select", selection: { kind: "part", key } });
       return;
     }
-    if (r.held.offsetMm[0] === hold.offsetMm[0] && r.held.offsetMm[1] === hold.offsetMm[1]) { primaryHand(key); return; }
+    // Over the place it is already over (same slot, same pose): the click is the next step there.
+    // Another place (another M.2 or memory slot, or onto the socket): only the hand moves, no step is
+    // taken, and a double click on the slot does not also take one.
+    if (!r.moved) { primaryHand(key); return; }
+    stepGate.current.arm(performance.now());
     setHold(r.held);
     speak({ lines: heldLines(state, r.held) ?? [{ key: "aim.ready" }], mood: "point", point: "scene" });
   }
@@ -735,10 +779,9 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   }
   function runStep(key: SimplePartKey, step: HandStep) {
     if (!step || handsOff()) return;
-    // A double click or a repeated key during the step's animation does not take a second step.
-    const now = performance.now();
-    if (now < handBusyUntil.current) return;
-    handBusyUntil.current = now + HAND_STEP_MS;
+    // A double click or a repeated key during the step's animation does not take a second step
+    // (the step's own function below passes the same gate: it is the same input).
+    if (!takeStep()) return;
     switch (step.kind) {
       case "aim": {
         // One place only (socket, card slot, M.2 slot): the action can bring it there. Memory: the learner picks the slot.
