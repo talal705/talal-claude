@@ -973,7 +973,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     : guide && ramGuideTarget ? { ...guide, targets: [ramGuideTarget] } : guide;
   ramDebug.current = ramKey ? { key: ramKey, target: ramTarget?.slotId ?? null, installedIn: ramAt?.target.mountPointId ?? null, seating: ramAt?.seating ?? null, glow: ramGlow, highlight: ramScene.targetSlot, guide: sceneGuide?.targets ?? null, heading: placeName(ramKey) } : null;
   const heldNow = selectedPart && keyed && hold?.key === selectedPart && !(state.parts.find((p) => p.instanceId === partSpec(selectedPart).id)?.attachments.length)
-    ? { instanceId: partSpec(selectedPart).id, target: isRamKey(selectedPart) ? simpleRamReference(state) : simpleTarget(state, selectedPart), rotationDeg: hold.rotationDeg, offsetMm: hold.offsetMm, liftMm: keyed.kind === "pcie_latch" ? 40 : isRamKey(selectedPart) ? 12 : 22 }
+    ? { instanceId: partSpec(selectedPart).id, target: isRamKey(selectedPart) ? simpleRamReference(state) : simpleTarget(state, selectedPart, hold.slotId), rotationDeg: hold.rotationDeg, offsetMm: hold.offsetMm, liftMm: keyed.kind === "pcie_latch" ? 40 : isRamKey(selectedPart) ? 12 : 22, ...(hold.tiltDeg ? { tiltDeg: hold.tiltDeg } : {}) }
     : null;
 
   /** The CPU's or module's own mechanism, alignment and lowering, one honest step at a time. */

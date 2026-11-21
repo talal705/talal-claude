@@ -1,7 +1,7 @@
 // The scene's view of the retention mechanisms the engine tracks: the CPU load plate and lever, the
 // socket cover, memory, PCIe and M.2 latches, and the case's expansion-slot covers. The drawing follows `InstalledPart.mechanisms`, so what the
 // learner sees is always the state the engine checks (no separate animation state).
-import type { InstalledPart } from "@ytl/contracts";
+import type { InstalledPart, MountPointSpec } from "@ytl/contracts";
 import { catalogIndex } from "../catalog";
 import type { PartGeometry, Quat, Solid, Vec3 } from "./geometry";
 import { add, compose, IDENTITY, rotate, type PlacedPart } from "./placement";
@@ -83,6 +83,12 @@ function drawMechanisms(geometry: PartGeometry, part: InstalledPart, socketDrawn
           : box(`${mount.id}-cover`, [cx, cy + sy / 2 + 1.8, cz], [sx - 10, 2.5, sz - 10], "black_plastic"));
       }
     }
+    if (ret.kind === "m2_screw") {
+      // The screw stand at the drive's length hole (the slot's far end), and the screw over a drive held down.
+      const standIn = part.mechanisms?.[`${ret.id}:stand`] === "closed";
+      if (standIn) extra.push(box(`${mount.id}-stand`, [cx + sx / 2 - 3, cy + sy / 2 + 1, cz], [3, 2, 3], "nickel"));
+      if (standIn && !open) extra.push(box(`${mount.id}-screw`, [cx + sx / 2 - 3, cy + sy / 2 + 3, cz], [4, 1, 4], "nickel"));
+    }
     if (ret.kind === "m2_qlatch") {
       // The Q-Latch at the slot's far end: across the drive's end when locked, turned aside when unlocked.
       extra.push(box(`${mount.id}-qlatch`, [cx + sx / 2 - 3, cy + sy / 2 + 2, cz], open ? [3, 3, 9] : [9, 3, 3], "black_plastic", open ? aboutY(Math.PI / 4) : undefined));
@@ -106,7 +112,38 @@ function drawMechanisms(geometry: PartGeometry, part: InstalledPart, socketDrawn
       }
     }
   }
+  extra.push(...m2Heatsinks(solids, entry?.mountPoints ?? [], part));
   return { ...geometry, solids: [...solids, ...extra] };
+}
+
+/**
+ * A board's M.2 heatsinks: a plate over the slots it covers, two screws at its ends (standing up when
+ * loosened). Lifted off, it rests beside those slots with its thermal pad's film showing until peeled.
+ */
+function m2Heatsinks(solids: Solid[], mounts: readonly MountPointSpec[], part: InstalledPart): Solid[] {
+  const covered = new Map<string, Solid[]>();
+  for (const m of mounts) {
+    if (m.kind !== "m2_slot" || !m.heatsink) continue;
+    const slot = solids.find((s) => s.id === m.id);
+    if (slot?.size) covered.set(m.heatsink.id, [...(covered.get(m.heatsink.id) ?? []), slot]);
+  }
+  const out: Solid[] = [];
+  for (const [id, slots] of covered) {
+    const lo = (i: 0 | 1 | 2) => Math.min(...slots.map((s) => s.at[i] - s.size![i] / 2));
+    const hi = (i: 0 | 1 | 2) => Math.max(...slots.map((s) => s.at[i] + s.size![i] / 2));
+    const size: Vec3 = [hi(0) - lo(0) + 4, 5, hi(2) - lo(2) + 4];
+    const fittedAt: Vec3 = [(lo(0) + hi(0)) / 2, hi(1) + 6, (lo(2) + hi(2)) / 2];
+    const lifted = part.mechanisms?.[id] === "open";
+    // Lifted: beside its slots and a little up, so the slots underneath are in plain view.
+    const at: Vec3 = lifted ? [fittedAt[0], fittedAt[1] + 14, fittedAt[2] + size[2] + 10] : fittedAt;
+    out.push(box(id, at, size, "black_metal"));
+    const loose = part.mechanisms?.[`${id}:screws`] === "open";
+    for (const [i, x] of [at[0] - size[0] / 2 + 3, at[0] + size[0] / 2 - 3].entries()) {
+      out.push(box(`${id}-screw-${i}`, [x, at[1] + size[1] / 2 + (loose ? 3 : 0.5), at[2]], [3, loose ? 5 : 1, 3], "nickel"));
+    }
+    if (lifted && part.mechanisms?.[`${id}:film`] !== "open") out.push(box(`${id}-film`, [at[0], at[1] - size[1] / 2 - 0.4, at[2]], [size[0] - 4, 0.6, size[2] - 4], "glass"));
+  }
+  return out;
 }
 
 /**
@@ -114,14 +151,16 @@ function drawMechanisms(geometry: PartGeometry, part: InstalledPart, socketDrawn
  * turned about its own vertical axis through the middle of its footprint (the way a hand turns it: a
  * module flipped end for end stays over the same slot), shifted off centre and lifted.
  */
-export function heldFrame(placedAt: PlacedPart, geometry: PartGeometry | undefined, held: { rotationDeg: number; offsetMm: [number, number]; liftMm: number }): PlacedPart {
+export function heldFrame(placedAt: PlacedPart, geometry: PartGeometry | undefined, held: { rotationDeg: number; offsetMm: [number, number]; liftMm: number; tiltDeg?: number }): PlacedPart {
   const size = geometry?.bounds.size;
   const attach: [number, number, number] = size ? [size[0] / 2, 0, size[2] / 2] : [0, 0, 0];
   const q = placedAt.frame.quat;
   const turn = aboutY((held.rotationDeg * Math.PI) / 180);
   const pivot = rotate(q, [attach[0] - rotate(turn, attach)[0], attach[1] - rotate(turn, attach)[1], attach[2] - rotate(turn, attach)[2]]);
   const shifted = add(add(placedAt.frame.at, pivot), rotate(q, [held.offsetMm[0], held.liftMm, held.offsetMm[1]]));
-  const frame = compose({ at: shifted, quat: q }, { at: [0, 0, 0], quat: turn });
+  const turned = compose({ at: shifted, quat: q }, { at: [0, 0, 0], quat: turn });
+  // An M.2 drive tilted up for insertion: its far end rises about its connector end.
+  const frame = held.tiltDeg ? compose(turned, { at: [0, 0, 0], quat: aboutZ((held.tiltDeg * Math.PI) / 180) }) : turned;
   return { ...placedAt, frame, onBench: false };
 }
 

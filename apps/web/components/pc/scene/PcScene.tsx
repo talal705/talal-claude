@@ -1676,6 +1676,11 @@ const standsFirst = (part: InstalledPart) => catalogIndex.byId.get(part.catalogI
 const BENCH_TOP_MM = 36;
 /** Rows of the workbench: short enough that the bench is nearly square, so the default view can come close. */
 const BENCH_ROW_MM = 950;
+/** An M.2 drive only inserted (not pressed flat) is drawn at its place's insertion angle (mid-range). */
+const insertTiltDeg = (hostCatalogId: string, mountPointId: string): number => {
+  const range = catalogIndex.byId.get(hostCatalogId)?.mountPoints.find((m) => m.id === mountPointId)?.keying?.insertTiltDeg;
+  return range ? (range[0] + range[1]) / 2 : 0;
+};
 const BENCH_TOP = new THREE.MeshStandardMaterial({ color: BENCH_TOP_COLOR, roughness: 0.9, metalness: 0 });
 const BENCH_MAT = new THREE.MeshStandardMaterial({ color: BENCH_MAT_COLOR, roughness: 0.95, metalness: 0 });
 
@@ -1808,7 +1813,7 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
   const projectId = usePC((store) => store.projectId);
   const { geometry, ready } = useGeometry(useMemo(() => state.parts.map((part) => part.catalogId), [state.parts]));
   const benchSlots = useMemo(() => new Map<string, { at: Vec3; size: Vec3 }>(), [state, geometry, benchOrder, beside]);
-  const basePlaced = useMemo(() => placeParts({ state, geometry, fallbackSize, isAside, standsFirst, benchRowMm: BENCH_ROW_MM, benchOrder, beside, slotsOut: benchOrder ? benchSlots : undefined }), [state, geometry, benchOrder, beside, benchSlots]);
+  const basePlaced = useMemo(() => placeParts({ state, geometry, fallbackSize, isAside, standsFirst, benchRowMm: BENCH_ROW_MM, benchOrder, beside, slotsOut: benchOrder ? benchSlots : undefined, placedTiltDeg: insertTiltDeg }), [state, geometry, benchOrder, beside, benchSlots]);
   // A part the learner holds over its place: where it would be once placed, then turned, shifted and lifted as held.
   const placed = useMemo(() => {
     if (!held) return basePlaced;
@@ -2131,7 +2136,7 @@ export interface PcSceneProps {
   /** Dragging the held part: its new offset from its place, mm along the place's own axes. */
   onHeldDrag?: (offsetMm: [number, number]) => void;
   /** A part the learner is holding over its place (rotation and offset as held; nothing is fitted yet). */
-  held?: { instanceId: string; target: { hostInstanceId: string; mountPointId: string }; rotationDeg: number; offsetMm: [number, number]; liftMm: number } | null;
+  held?: { instanceId: string; target: { hostInstanceId: string; mountPointId: string }; rotationDeg: number; offsetMm: [number, number]; liftMm: number; tiltDeg?: number } | null;
 }
 
 /** The main light, from the front and above; it casts the shadows at medium and high quality. */
