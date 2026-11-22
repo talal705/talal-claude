@@ -239,6 +239,11 @@ const T: Record<PCDiagnosticCode, Entry> = {
       "الرام نوعها صح للفتحة، بس طرف منها ما انضغط لين يطقّ المشبك. بعض نقاط التلامس ما توصل، ففحص الرام وقت التشغيل يفشل. اضغط الطرفين بقوة.",
     ],
   },
+  cpu_frame_loose: {
+    o: ["Fans spin, but a status light on the motherboard stays on and the computer does not finish its self-test.", "المراوح تدور، بس لمبة حالة في اللوحة الأم تبقى شغّالة والكمبيوتر ما يكمّل الفحص الذاتي."],
+    m: ["The CPU's contact frame is not tight on all four screws.", "إطار التلامس حق المعالج مو مربوط على البراغي الأربعة."],
+    x: ["With the ILM off, the contact frame presses the CPU onto the socket's contacts. Until all four screws are tight, the CPU does not make contact.", "لما يكون الـ ILM مشال، إطار التلامس يضغط المعالج على نقاط المقبس. قبل ما تنربط البراغي الأربعة، المعالج ما يوصل."],
+  },
   cpu_lever_open: {
     o: ["Fans spin, but a status light on the motherboard stays on and the computer does not finish its self-test.", "المراوح تدور، بس لمبة حالة في اللوحة الأم تبقى شغّالة والكمبيوتر ما يكمّل الفحص الذاتي."],
     m: ["The lever of the CPU socket is not locked.", "ذراع مقبس المعالج مو مقفّلة."],

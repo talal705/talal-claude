@@ -219,7 +219,8 @@ function analyse(v: View, run: boolean): Analysis {
       if (a.seating !== "seated") {
         blocking("post", "part_not_seated", "assembly", cpu.part.instanceId, cpuTarget, { part: displayName(cpu.entry), mount: socket?.label ?? "", symptom: SYMPTOM.noPost });
       } else if ((socket?.fastener?.count ?? 0) > a.fastenersSecured) {
-        blocking("post", "cpu_lever_open", "assembly", cpu.part.instanceId, pcTarget.mount(a.target), {}, [], [cpuTarget]);
+        // With the ILM off, the contact frame is what holds the CPU: say so instead of blaming the lever.
+        blocking("post", board.part.hardware?.ilm === "removed" ? "cpu_frame_loose" : "cpu_lever_open", "assembly", cpu.part.instanceId, pcTarget.mount(a.target), {}, [], [cpuTarget]);
       }
       // Fitting the socket is not support: the board's own list decides, and it names a first BIOS version.
       const row = board.entry.spec.cpuSupport.find((s) => s.cpuId === cpu.entry.id);

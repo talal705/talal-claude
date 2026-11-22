@@ -23,6 +23,7 @@ import type {
 } from "@ytl/contracts";
 import { pcTarget } from "@ytl/contracts";
 import { checkConnect } from "./cabling";
+import { applyHardware, backplateRule } from "./hardware";
 import { cableSpecOf } from "./catalog";
 import { L, type TextParams } from "./messages";
 import { checkMount } from "./placement";
@@ -257,6 +258,7 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       const setHost = (states: Record<string, MechanismState>) => (p: InstalledPart) => (p.instanceId === host.instanceId ? { ...p, mechanisms: { ...(p.mechanisms ?? {}), ...states } } : p);
       const coolerOn = () => state.parts.some((p) => p.attachments.some((a) => a.target.hostInstanceId === host.instanceId && entry.mountPoints.find((m) => m.id === a.target.mountPointId)?.kind === "cpu_cooler_mount"));
       if (ret.kind === "lga_load_plate") {
+        if (host.hardware?.ilm === "removed") return blocked("The ILM is off: the contact frame holds the CPU. Put the ILM back (after taking the frame off) to use the plate and lever.", "الـ ILM مشال: إطار التلامس يمسك المعالج. رجّع الـ ILM (بعد ما تشيل الإطار) عشان تستخدم الغطا والذراع.");
         // Intel's loading mechanism: the lever is released from its retention tab and lifted, then the
         // plate is opened; to close, the plate comes down first, then the lever is pushed down under its tab.
         const leverId = `${ret.id}:lever`;
@@ -317,9 +319,12 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       return ok({ parts: state.parts.map(setHost({ [action.mechanismId]: action.state })).map(action.state === "open" ? release : (p) => p) });
     }
 
-    case "set_hardware":
-      // The rules arrive with the contact frame and cooler fixing (hardware.ts); until then nothing is accepted.
-      return invalid(pcTarget.part(action.instanceId), "That hardware step is not available.", "هذي الخطوة ما هي متاحة.");
+    case "set_hardware": {
+      if (!detailed) return invalid(pcTarget.part(action.instanceId), "Kit hardware is worked on in detailed builds only.", "عدّة التثبيت تنشتغل في التجميعات المفصّلة بس.");
+      if (!partById(v, action.instanceId)) return unknown(action.instanceId, pcTarget.part(action.instanceId));
+      const result = applyHardware(v, action);
+      return result.ok ? ok({ parts: result.parts }) : fail(result.code, pcTarget.part(action.instanceId), { why: result.why });
+    }
 
     case "set_prep": {
       const part = partById(v, action.instanceId);
@@ -337,8 +342,12 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       if (!rule || entry.category !== rule.category || (action.value !== "" && !rule.values.includes(action.value))) {
         return invalid(target, "That step does not apply to this part.", "هذي الخطوة ما تنطبق على هالقطعة.");
       }
-      if (part.attachments.length > 0 && action.prep !== "airflow") return invalid(target, "Take the part out first; this is done before it is fitted.", "طلّع القطعة أول؛ هذي الخطوة قبل التركيب.");
-      if (part.attachments.length > 0) return invalid(target, "Take the fan off before turning it round.", "فك المروحة قبل ما تقلبها.");
+      // The socket backplate is supported or taped with the board either outside or inside the case.
+      if (action.prep === "backplate") {
+        const refusal = backplateRule(v, part, action.value);
+        if (refusal) return fail(refusal.code, target, { why: refusal.why });
+      } else if (part.attachments.length > 0 && action.prep !== "airflow") return invalid(target, "Take the part out first; this is done before it is fitted.", "طلّع القطعة أول؛ هذي الخطوة قبل التركيب.");
+      if (part.attachments.length > 0 && action.prep !== "backplate") return invalid(target, "Take the fan off before turning it round.", "فك المروحة قبل ما تقلبها.");
       if (action.value !== "" && entry.category === "cooling") {
         const paste = entry.spec.paste;
         if (action.prep === "paste" && paste?.supplied === "pre_applied") return wrong("This cooler's paste is already on its plate. Adding more on top makes too thick a layer.", "المعجون محطوط على قاعدة هالمبرّد من المصنع. إضافة فوقه تخلّي الطبقة سميكة زيادة.");
@@ -429,6 +438,7 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
           if (attachment.fastenersSecured > 0) return invalid(pcTarget.mount(attachment.target), "Remove the bracket screws first.", "فك براغي الحامل أول.");
         }
         if (detailed && hostOf && m2Blocker(hostOf, placeSpec)) return fail("retention_blocked", pcTarget.mount(attachment.target), { why: L("Lift the M.2 heatsink off first; it covers this slot.", "شيل مشتّت M.2 أول؛ هو مغطّي هالفتحة.") });
+        if (detailed && hostOf?.hardware?.frame === "placed" && placeSpec?.kind === "cpu_socket") return fail("retention_blocked", pcTarget.mount(attachment.target), { why: L("The contact frame is over the CPU. Take the frame off first.", "إطار التلامس فوق المعالج. شيل الإطار أول.") });
         if (held) return fail("retention_closed", pcTarget.mount(attachment.target), { mechanism: retentionName(placeSpec!.retention!.kind) });
         return ok({ parts: withPart(part.instanceId, (p) => ({ ...p, attachments: others })) });
       }
