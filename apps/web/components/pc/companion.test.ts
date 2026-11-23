@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 import en from "../../messages/en/labs.json";
 import ar from "../../messages/ar/labs.json";
-import { buildContext, companionSay, heldLines, intentOf, m2StepLine, nextAction, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
+import { buildContext, companionSay, coolerDoneLine, coolerRemovalLine, coolerStepLine, heldLines, intentOf, m2StepLine, nextAction, pickupLine, topicOf, type CompanionEvent, type CompanionLine, type CompanionSay, type Selection } from "./companion";
 import {
   connectSimpleCable, createSimpleBuild, installSimplePart, SIMPLE_CABLES, simpleBuildFromSnapshot, startSimplePC, undoSimpleStep, withCable, withPart,
   emptySimpleSnapshot, type SimplePartKey,
   activateSimpleModel, LEGACY_MODEL, lowerSimplePart, lowerSimpleRam, reseatSimplePart, setSimpleMechanism, simpleRamSlotOffsets, simpleRetention, type SimpleHeld,
 } from "./simple-model";
 import { planModel } from "./plan-model";
+import { applyCoolerStep, nextCoolerStep } from "./cooler-assembly";
 import type { PCBuildState } from "@ytl/contracts";
 
 type Tree = Record<string, unknown>;
@@ -383,5 +384,59 @@ describe("the robot and an M.2 drive", () => {
     s = must(lowerSimplePart(mech(s, "m2-1-screw:stand", "closed"), "storage", hand({ slotId: "m2-1", tiltDeg: 25 })));
     s = must(reseatSimplePart(s, "storage"));
     expect(m2StepLine(s, "storage", null)).toEqual({ key: "hands.m2ScrewNow" });
+  });
+});
+
+describe("the robot and a cooler", () => {
+  afterEach(() => activateSimpleModel(LEGACY_MODEL));
+  const must = <T,>(r: { ok: true; state: T } | { ok: false }) => { if (!r.ok) throw new Error(JSON.stringify(r)); return r.state; };
+  const spoken = (line: CompanionLine) => expectSpoken({ lines: [line], mood: "point" });
+
+  it("every step of a cooler gets one line, in English and Arabic, and none shows a raw key", () => {
+    for (const key of ["cooler", "aio"] as const) {
+      let s = must(installSimplePart(createSimpleBuild(), "cpu"));
+      const seen = new Set<string>();
+      for (let i = 0; i < 60; i += 1) {
+        const step = nextCoolerStep(s, key);
+        const line = coolerStepLine(s, key);
+        if (!step) { expect(line).toBeNull(); break; }
+        expect(line, JSON.stringify(step)).not.toBeNull();
+        spoken(line!);
+        seen.add(line!.key);
+        if (step.kind === "cpuFirst" || step.kind === "boardFirst") break;
+        s = must(applyCoolerStep(s, key, step));
+      }
+      expect([...seen]).toEqual(expect.arrayContaining(["cooler.backplatePadding", "cooler.ilm", "cooler.frame", "cooler.frameScrewEngage", "cooler.frameScrewTight", "cooler.paste", "cooler.film", "cooler.screwEngage", "cooler.screwTight"]));
+    }
+  });
+
+  it("the line names the screw: frame screw 3 of 4, then the next one across", () => {
+    let s = must(installSimplePart(createSimpleBuild(), "cpu"));
+    for (let i = 0; i < 7; i += 1) s = must(applyCoolerStep(s, "cooler", nextCoolerStep(s, "cooler")));
+    expect(nextCoolerStep(s, "cooler")).toMatchObject({ kind: "frameScrew", to: "engaged", index: 2 });
+    expect(coolerStepLine(s, "cooler")).toEqual({ key: "cooler.frameScrewEngage", values: { n: 3, total: 4 } });
+  });
+
+  it("welcome back in the middle of the frame, with the CPU waiting: the next screw, not 'start with the processor'", () => {
+    let s = must(installSimplePart(createSimpleBuild(), "cpu"));
+    for (let i = 0; i < 7; i += 1) s = must(applyCoolerStep(s, "cooler", nextCoolerStep(s, "cooler")));
+    const say = companionSay({ type: "resume", held: null }, s, false, null);
+    expectSpoken(say);
+    expect(say.lines).toEqual([{ key: "welcomeBack" }, { key: "cooler.frameScrewEngage", values: { n: 3, total: 4 } }]);
+    expect(say.point).toBe("scene");
+  });
+
+  it("removal lines: the radiator first, a loosened screw, then the body", () => {
+    expect(coolerRemovalLine({ kind: "radiatorUnscrew", count: 7 }, "aio")).toEqual({ key: "cooler.unscrewRadiator", values: { n: 8, total: 8 } });
+    expect(coolerRemovalLine({ kind: "liftRadiator" }, "aio")).toEqual({ key: "cooler.liftRadiator" });
+    expect(coolerRemovalLine({ kind: "screw", index: 1, to: "loosened", value: "21" }, "cooler")).toEqual({ key: "cooler.looseScrew", values: { n: 2 } });
+    expect(coolerRemovalLine({ kind: "liftBody" }, "cooler")).toEqual({ key: "cooler.liftBody" });
+    for (const line of [coolerRemovalLine({ kind: "liftBody" }, "cooler")!, coolerRemovalLine({ kind: "screw", index: 0, to: "out", value: "01" }, "cooler")!]) spoken(line);
+  });
+
+  it("a finished cooler says it is mounted and that wiring comes later", () => {
+    const s = must(installSimplePart(must(installSimplePart(createSimpleBuild(), "cpu")), "cooler"));
+    expect(coolerDoneLine(s, "cooler")).toEqual({ key: "cooler.notWired" });
+    spoken(coolerDoneLine(s, "cooler")!);
   });
 });

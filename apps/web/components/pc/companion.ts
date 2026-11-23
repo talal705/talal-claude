@@ -11,6 +11,7 @@ import {
   type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimpleHeld, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,
 } from "./simple-model";
 import { nextHandStep } from "./click-assembly";
+import { nextCoolerRemoval, nextCoolerStep, simpleCoolerProgress, type CoolerStep } from "./cooler-assembly";
 
 export type Selection = { kind: "part"; key: SimplePartKey } | { kind: "cable"; key: SimpleCableKey } | null;
 export type CompanionMood = "idle" | "wave" | "point" | "happy" | "concerned" | "thinking" | "celebrate";
@@ -281,6 +282,53 @@ export function pickupLine(state: PCBuildState, key: SimplePartKey): CompanionLi
  * a CPU, card or drive over its place says to turn it, or that it is ready to go in. Null when the part is
  * not in hand any more (in its place, or with no mechanism of its own).
  */
+/**
+ * The one line for the next step of fitting a cooler (the same step the toolbar offers): it names the screw,
+ * the frame or the position. Null when the cooler is fitted or has no modelled mounting.
+ */
+export function coolerStepLine(state: PCBuildState, key: SimplePartKey): CompanionLine | null {
+  const step = nextCoolerStep(state, key);
+  if (!step) return null;
+  const spec = ALL_SIMPLE_PARTS.find((p) => p.key === key)!;
+  const bodyTotal = state.parts.find((p) => p.instanceId === spec.id)?.hardware?.screws?.length ?? 2;
+  switch (step.kind) {
+    case "cpuFirst": return { key: "cooler.cpuFirst" };
+    case "boardFirst": return { key: "cooler.boardFirst" };
+    case "backplate": return { key: step.value === "tape" ? "cooler.backplateTape" : "cooler.backplatePadding" };
+    case "frameScrew": return { key: step.to === "engaged" ? "cooler.frameScrewEngage" : "cooler.frameScrewTight", values: { n: step.index + 1, total: 4 } };
+    case "position": return { key: step.id === "1700" ? "cooler.position1700" : "cooler.position1200" };
+    case "pin": return { key: "cooler.pin", values: { n: step.index + 1, total: 4 } };
+    case "place": return { key: spec.radiator ? "cooler.placeBlock" : "cooler.place" };
+    case "screw": return { key: step.to === "engaged" ? "cooler.screwEngage" : "cooler.screwTight", values: { n: step.index + 1, total: Math.max(bodyTotal, 2) } };
+    case "radiatorScrew": return { key: "cooler.radiatorScrew", values: { n: step.count, total: spec.radiator?.screws ?? 8 } };
+    case "lever": case "plate": case "ilm": case "frame": case "clean": case "paste": case "film": case "ring": case "vrmFan": case "radiator": return { key: `cooler.${step.kind}` };
+    default: return null;
+  }
+}
+/** The line for one step of taking a cooler off. */
+export function coolerRemovalLine(step: CoolerStep, key: SimplePartKey): CompanionLine | null {
+  const total = ALL_SIMPLE_PARTS.find((p) => p.key === key)?.radiator?.screws ?? 8;
+  switch (step?.kind) {
+    case "radiatorUnscrew": return { key: "cooler.unscrewRadiator", values: { n: step.count + 1, total } };
+    case "liftRadiator": return { key: "cooler.liftRadiator" };
+    case "screw": return { key: step.to === "loosened" ? "cooler.looseScrew" : "cooler.outScrew", values: { n: step.index + 1 } };
+    case "liftBody": return { key: "cooler.liftBody" };
+    default: return null;
+  }
+}
+/** What the robot says when a cooler is mechanically fitted: wiring is its own stage, so the lead is not connected yet. */
+export function coolerDoneLine(state: PCBuildState, key: SimplePartKey): CompanionLine | null {
+  const progress = simpleCoolerProgress(state, key);
+  return progress.mechanicallyComplete ? { key: progress.connected ? "cooler.done" : "cooler.notWired" } : null;
+}
+/** A cooler the learner started and has not finished: the board's frame work, or its own preparation or fixing. */
+const coolerInProgress = (state: PCBuildState) =>
+  ALL_SIMPLE_PARTS.find((p) => /^(cooler|aio)$/.test(p.key) && nextCoolerStep(state, p.key) && (() => {
+    const board = state.parts.find((x) => x.instanceId === ALL_SIMPLE_PARTS.find((q) => q.key === "motherboard")?.id);
+    const part = state.parts.find((x) => x.instanceId === p.id);
+    return Boolean(board?.hardware?.ilm || board?.hardware?.frame || board?.prep?.backplate || part?.hardware || part?.prep?.paste || part?.prep?.film || part?.attachments.length);
+  })())?.key ?? null;
+
 /** An M.2 slot's printed name (M.2_1), the same in either language. */
 function m2SlotName(state: PCBuildState, key: SimplePartKey, id: string): string {
   return simpleM2Slots(state, key).find((x) => x.id === id)?.label.en.match(/M\.2_\d+/)?.[0] ?? id;
@@ -349,6 +397,10 @@ export function heldLines(state: PCBuildState, held: SimpleHeld): CompanionLine[
 function resumeLines(state: PCBuildState, held: SimpleHeld | null): CompanionLine[] | null {
   const inHand = held ? heldLines(state, held) : null;
   if (inHand) return inHand;
+  // A cooler started and not finished: the next documented step, not the build's next part.
+  const coolerKey = !held ? coolerInProgress(state) : null;
+  const coolerLine = coolerKey ? coolerStepLine(state, coolerKey) : null;
+  if (coolerLine && !["cooler.cpuFirst", "cooler.boardFirst"].includes(coolerLine.key)) return [coolerLine];
   // An M.2 drive left in its slot part-way (at an angle, not yet held, or its heatsink still off).
   const m2 = !held && ALL_SIMPLE_PARTS.find((p) => isM2Key(p.key) && state.parts.find((x) => x.instanceId === p.id)?.attachments.length && !simplePartInstalled(state, p.key));
   const m2Line = m2 ? m2StepLine(state, m2.key, null) : null;
