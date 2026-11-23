@@ -4,6 +4,79 @@ Current site brand: **بيئة التدريب الافتراضية (VTE)** in Ar
 **Virtual Training Environment (VTE)** in English. Older references below use the former name.
 The repository and hosting identifiers remain `talal-claude`; saved-data keys are unchanged.
 
+## Latest work: Stage 4 — CPU cooling + PC-section isolation (branch `feat/stage4-cooling`, 2026-11-23)
+
+Started from `feat/stage3-m2-storage` at `f2f78af`. Not merged, not deployed to production. Plan:
+`docs/superpowers/plans/2026-11-22-stage4-cpu-cooling.md`; ledger (git-ignored) `.superpowers/sdd/2026-11-22-stage4-cpu-cooling/progress.md`.
+Superpowers skills actually invoked: writing-plans, executing-plans, test-driven-development,
+systematic-debugging, verification-before-completion. Final review: self-review (no subagents were requested).
+
+**Behaviour.** A cooler is fitted and removed one documented step per click (toolbar, cooler panel, robot and
+resume all read the same `nextCoolerStep` / `nextCoolerRemoval`; there is no "install the whole cooler" button or
+one-click cooler swap — taking the other cooler off first is required). Contact-frame coolers (Freezer 36, Liquid
+Freezer III 240/280, LGA1700): backplate support (padding board-outside-case / tape, the learner's choice) → socket
+lever up → load plate open → the board's own frame (ILM) taken off → contact frame placed → 4 frame screws engaged by
+hand, then tightened across the frame → paste/film (film only where the catalog says one exists; pre-applied paste
+respected) → cooler body placed → its two screws engaged then tightened → (AIO) small VRM fan; the radiator needs the
+board in the case, then 8 radiator screws, one per click. Retention-ring coolers (Freezer 7 X): ring, mounting
+position matching the socket, 4 push pins. Removal is the reverse (AIO radiator first, then the body's screws loosened
+and out, then lift). Electrical connections stay a separate stage (robot: "its cables come later"). Undo is distinct
+from physical removal. Old saves migrate in place (`migrateCoolerSteps`): documented prerequisite steps are inserted before
+`place:<cooler>`; version-3 whole-part saves still load (checked in a browser).
+
+**3D scene (reads engine state only).** `scene/cooler-hardware.ts` (`coolerHardwareDraw`) + `SocketMechanism.tsx`:
+with the board's frame removed the plate, lever and tab disappear and four empty screw holes appear at the corners;
+the contact frame appears when placed; each frame/body screw is drawn empty / engaged (standing up) / tight (flat);
+retention ring and pins; the backplate support under the board. Screw 0 and 2 are opposite corners — the same
+indices the controls and the robot use. Reload and undo draw the same picture (checked in a browser through the scene's
+read-only `window.__ytlHardware`). The AIO radiator and its fans use the existing scene; the radiator's own screws
+use the existing fastener markers.
+
+**Hardware references (ARCTIC support pages and spec sheets, read into the catalog's `sources`).**
+support.arctic.de/freezer-36; support.arctic.de/liquid-freezer-III-240-A-RGB and /liquid-freezer-III-280 (manuals and
+spec sheets); support.arctic.de/freezer7xr3 + Spec_Sheet_Freezer_7X_EN.pdf. No compound name or paste quantity is
+asserted; the unverified fields are listed in each entry's `unverifiedFields`; those entries are `partially_verified`.
+
+**Isolation (`PcBuilder.tsx`).** `SimplePcLab` is loaded with `next/dynamic` (`ssr:false`) only when assembly starts or
+resumes; the planner needs only the catalog, plan and saved-state code. The 3D scene was already a separate
+dynamic chunk. Same origin, same storage keys, same `/pc` URL and `?practice=1`/`?advanced=1`. Measured with
+`docs/handoff/2026-11-23/acceptance/perf.mjs` (production build, Chrome with software GL, fresh context per page):
+| | before | after |
+|---|---|---|
+| home JS | 901 KB | 901 KB (unchanged) |
+| /pc planner JS | 1429 KB | 1227 KB (−202 KB) |
+| assembly started JS | 2451 KB | 2455 KB (+4 KB) |
+| WebGL chunk on home / planner | none / none | none / none |
+| enter/exit assembly ×3 | 1 canvas each, 0 new requests | same |
+| rAF callbacks per 3 s idle in assembly | 180 | 181 |
+Not measured: CPU/GPU/memory use. The idle frame rate is the scene's own attention pulses and spinning fans
+(`frameloop="demand"` is already used and re-requests frames while those animate); nothing was changed or reduced there.
+
+**Verification actually run on the final code.**
+- `npx vitest run packages apps/web/components apps/web/lib/targets apps/web/lib/interaction` → 66 files, 852 tests passed, 0 skipped.
+- `npx tsc --noEmit -p apps/web` → 0 errors. `npm run check:messages` → en/ar keys match.
+- `npm run build` → compiled (Next 16.4.6 Turbopack); `apps/web/next-env.d.ts` reverted.
+- Browser (Playwright + Chrome, production build on 127.0.0.1:3001, **software GL**, mouse clicks):
+  `acceptance/cooling.mjs` (Freezer 36 on TUF Z790, planned gaming build) EN 1440 22/22, AR 1440 22/22, EN 430 22/22;
+  `acceptance/aio.mjs` (Liquid Freezer III 280, practice build seeded from a version-3 save) EN 13/13, AR 13/13;
+  Stage 3 regressions on the final build: `cpu-ram-click.mjs` EN 9/9, `m2.mjs` EN 31/31.
+  They cover: scene hardware per step, one step per click, double click, wrong order never auto-corrected, reload mid-frame
+  and mid-flow, undo, removal, camera unchanged, no page errors. The pixel comparison of the canvas is skipped (printed
+  as SKIP, not counted) when the software-GL canvas cannot be captured.
+- Defects found and fixed during verification: robot said "tap the highlighted place" when a cooler was selected
+  (now names the cooler step); the scene looked for a cooler by `hardware` and so drew no body screws until the first screw;
+  the cooler panel's script assumptions (several were my test's, not the page's).
+
+**Not verified / limits.** Touch hardware, a physical device and the protected Vercel preview were not tested by me.
+Arabic was checked for the air cooler and the AIO at desktop width; the 430 px run was English only and covered the air cooler only. Mid-air
+radiator/fan scene states use the existing meshes (no new radiator-screw 3D markers beyond the existing fastener
+markers). Positions of the frame screws, ring, pins and backplate are schematic (educational approximation, not the
+manufacturers' drawings). AMD sockets are not modelled for these coolers. ILM refit/frame removal exist in the
+engine but no page control offers them. Repeated enter/exit was counted for canvases and requests only; heap and GPU
+memory across cycles were not measured. The practice-build tile still says the liquid cooler goes "after the board is in
+the case" (the block now goes on first; only the radiator waits). The full `npm test` run hangs in this environment on
+the execution-runner tests (also on the base worktree); the targeted gate above is what was run.
+
 ## Latest work: Stage 3 — M.2 storage (branch `feat/stage3-m2-storage`, 2026-11-21)
 
 Started from `feat/click-assembly-toolbar` at `2ecd636`. Not merged, not deployed to production.
