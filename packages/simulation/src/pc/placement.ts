@@ -168,6 +168,10 @@ function kindRules(
       }
       return undefined;
     case "radiator_mount":
+      // ARCTIC's Liquid Freezer III manual: a radiator below the pump risks bubbling noise.
+      if (entry.category === "cooling" && entry.spec.type === "aio_liquid" && mount.location === "bottom") {
+        return reject(v, "radiator_below_pump", part, target, p);
+      }
       if (entry.category === "cooling" && (entry.spec.radiatorSizeMm === null || !mount.radiatorSizesMm.includes(entry.spec.radiatorSizeMm))) {
         return reject(v, "radiator_size_unsupported", part, target, p, [
           evidence("Radiator size", "مقاس الرادياتير", entry.spec.radiatorSizeMm === null ? "-" : mm(entry.spec.radiatorSizeMm), mount.radiatorSizesMm.map(mm).join(" / "), entry.id),

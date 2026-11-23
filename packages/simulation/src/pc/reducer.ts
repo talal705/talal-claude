@@ -23,7 +23,7 @@ import type {
 } from "@ytl/contracts";
 import { pcTarget } from "@ytl/contracts";
 import { checkConnect } from "./cabling";
-import { applyHardware, backplateRule } from "./hardware";
+import { applyHardware, backplateRule, bodyScrewCount, coolerMounting, coolerMountingGate, liftedCooler } from "./hardware";
 import { cableSpecOf } from "./catalog";
 import { L, type TextParams } from "./messages";
 import { checkMount } from "./placement";
@@ -350,7 +350,7 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       if (part.attachments.length > 0 && action.prep !== "backplate") return invalid(target, "Take the fan off before turning it round.", "فك المروحة قبل ما تقلبها.");
       if (action.value !== "" && entry.category === "cooling") {
         const paste = entry.spec.paste;
-        if (action.prep === "paste" && paste?.supplied === "pre_applied") return wrong("This cooler's paste is already on its plate. Adding more on top makes too thick a layer.", "المعجون محطوط على قاعدة هالمبرّد من المصنع. إضافة فوقه تخلّي الطبقة سميكة زيادة.");
+        if (action.prep === "paste" && paste?.supplied === "pre_applied" && part.hardware?.contact !== "used") return wrong("This cooler's paste is already on its plate. Adding more on top makes too thick a layer.", "المعجون محطوط على قاعدة هالمبرّد من المصنع. إضافة فوقه تخلّي الطبقة سميكة زيادة.");
         if (action.prep === "paste" && part.prep?.paste === "applied") return wrong("There is paste on already; one small amount is enough.", "فيه معجون من قبل؛ كمية صغيرة وحدة تكفي.");
         if (action.prep === "film" && paste?.film === false) return wrong("This cooler's plate has no protective film to peel.", "قاعدة هالمبرّد ما عليها غلاف حماية ينشال.");
         if (action.prep === "film" && !paste?.film) return wrong("The lab has no record of a film on this cooler's plate. On a real one, look: peel a film if there is one.", "ما عندنا معلومة عن غلاف على قاعدة هالمبرّد. على القطعة الحقيقية شوف بنفسك: إذا فيه غلاف شيله.");
@@ -370,6 +370,9 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       const hostPart = partById(v, action.target.hostInstanceId);
       const hostEntry = hostPart && entryOf(v, hostPart);
       const place = hostEntry?.mountPoints.find((m) => m.id === action.target.mountPointId);
+      const coolerPart = partById(v, action.instanceId);
+      const mountingGate = detailed && place?.kind === "cpu_cooler_mount" && coolerPart ? coolerMountingGate(v, coolerPart) : null;
+      if (mountingGate) return fail(mountingGate.code, pcTarget.mount(action.target), { why: mountingGate.why });
       const gate = detailed && place ? prepGate(v, action.instanceId, place, fail) : null;
       if (gate) return gate;
       if (detailed && hostPart && m2Blocker(hostPart, place)) return fail("retention_blocked", pcTarget.mount(action.target), { why: L("Lift the M.2 heatsink off first; it covers this slot.", "شيل مشتّت M.2 أول؛ هو مغطّي هالفتحة.") });
@@ -438,6 +441,10 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
           if (attachment.fastenersSecured > 0) return invalid(pcTarget.mount(attachment.target), "Remove the bracket screws first.", "فك براغي الحامل أول.");
         }
         if (detailed && hostOf && m2Blocker(hostOf, placeSpec)) return fail("retention_blocked", pcTarget.mount(attachment.target), { why: L("Lift the M.2 heatsink off first; it covers this slot.", "شيل مشتّت M.2 أول؛ هو مغطّي هالفتحة.") });
+        if (detailed && placeSpec?.kind === "cpu_cooler_mount" && coolerMounting(v, part)) {
+          if (part.hardware?.screws && /[12]/.test(part.hardware.screws)) return fail("retention_blocked", pcTarget.mount(attachment.target), { why: L("Loosen and take out the cooler's screws first.", "فكّ براغي المبرّد وطلّعها أول.") });
+          return ok({ parts: state.parts.map((p) => (p.instanceId === part.instanceId ? liftedCooler({ ...p, attachments: others }) : p)) });
+        }
         if (detailed && hostOf?.hardware?.frame === "placed" && placeSpec?.kind === "cpu_socket") return fail("retention_blocked", pcTarget.mount(attachment.target), { why: L("The contact frame is over the CPU. Take the frame off first.", "إطار التلامس فوق المعالج. شيل الإطار أول.") });
         if (held) return fail("retention_closed", pcTarget.mount(attachment.target), { mechanism: retentionName(placeSpec!.retention!.kind) });
         return ok({ parts: withPart(part.instanceId, (p) => ({ ...p, attachments: others })) });
@@ -449,7 +456,8 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
         // Detailed builds: a CPU seats only while its plate is open; a module pressed home snaps its latch shut.
         if (held && !isLatch(placeSpec?.retention?.kind)) return fail("retention_closed", pcTarget.mount(attachment.target), { mechanism: retentionName(placeSpec!.retention!.kind) });
         const latch = detailed && isLatch(placeSpec?.retention?.kind) && action.seating === "seated" ? placeSpec!.retention!.id : null;
-        const next = { seating: action.seating, ...(action.seating === "seated" ? {} : { fastenersSecured: 0 }) };
+        const ringHeld = detailed && placeSpec?.kind === "cpu_cooler_mount" && coolerMounting(v, part)?.kind === "retention_ring";
+        const next = { seating: action.seating, ...(action.seating === "seated" ? (ringHeld ? { fastenersSecured: placeSpec?.fastener?.count ?? 0 } : {}) : { fastenersSecured: 0 }) };
         if (!latch) return update(next);
         return ok({ parts: state.parts.map((p) => {
           if (p.instanceId === part.instanceId) return { ...p, attachments: p.attachments.map((a) => (a === attachment ? { ...a, ...next } : a)) };
@@ -459,6 +467,7 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       }
       // In detailed builds a lever is moved with set_mechanism, so the scene and the count never disagree.
       if (detailed && holder && !isLatch(holder.kind)) return invalid(pcTarget.mount(attachment.target), "Use the lever or latch itself.", "استخدم الذراع أو المشبك نفسه.");
+      if (detailed && placeSpec?.kind === "cpu_cooler_mount" && coolerMounting(v, part)?.bodyScrews) return invalid(pcTarget.mount(attachment.target), "This cooler's screws go in one at a time: a couple of turns each, then tightened.", "براغي هالمبرّد تدخل وحدة وحدة: كم لفّة لكل واحد، وبعدين تنربط.");
       const count = mountSpec(v, attachment.target)?.fastener?.count ?? 0;
       if (count === 0) return invalid(pcTarget.mount(attachment.target), "Nothing needs to be secured at this position.", "ما في شي يحتاج تقفيل في هذا المكان.");
       if (!Number.isInteger(action.secured) || action.secured < 0 || action.secured > count) {

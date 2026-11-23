@@ -955,6 +955,7 @@ export type PCDiagnosticCode =
   | "ram_partially_seated"
   | "cpu_lever_open"
   | "cpu_frame_loose"
+  | "radiator_below_pump"
   | "fasteners_missing"
   | "cooler_not_secured"
   | "wall_power_disconnected"

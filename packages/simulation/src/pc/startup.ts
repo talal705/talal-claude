@@ -27,6 +27,7 @@ import type {
 import { STARTUP_STAGES, pcTarget } from "@ytl/contracts";
 import { cableReachesPsu, feedOf, installedPsu, psuLive, sourceProgress } from "./cabling";
 import { CONNECTOR_NAME, connectorsMate, isMotorHeader, isMotorLead } from "./connectors";
+import { bodyScrewCount } from "./hardware";
 import {
   CATEGORY_NAME,
   DISCLAIMER,
@@ -414,7 +415,7 @@ function analyse(v: View, run: boolean): Analysis {
       const name = displayName(cooler.entry);
       const coolerTarget = pcTarget.part(cooler.part.instanceId);
       const block = cooler.part.attachments.find((a) => mountSpec(v, a.target)?.kind === "cpu_cooler_mount")!;
-      const total = mountSpec(v, block.target)?.fastener?.count ?? 0;
+      const total = bodyScrewCount(v, cooler.part) ?? mountSpec(v, block.target)?.fastener?.count ?? 0;
       if (block.seating !== "seated" || block.fastenersSecured < total) {
         blocking("operating_load", "cooler_not_secured", "assembly", cooler.part.instanceId, coolerTarget, { part: name }, [
           evidence("Seating", "حالة التثبيت", block.seating, "seated"),

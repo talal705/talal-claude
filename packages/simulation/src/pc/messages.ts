@@ -198,6 +198,10 @@ const T: Record<PCDiagnosticCode, Entry> = {
     x: ["In this build every keyed part is aligned by the learner before it goes in.", "في هالتجميعة كل قطعة مفتاحية يحاذيها المتعلم قبل ما تدخل."],
   },
 
+  radiator_below_pump: {
+    m: ["The radiator would sit below the pump, which risks bubbling noise. Mount it with its top above the CPU block: the front or the top of the case.", "الرادياتير بيكون تحت المضخة، وهذا يسبب صوت فقاعات. ركّبه وراسه فوق بلوك المعالج: مقدمة الكيس أو أعلاه."],
+    x: ["ARCTIC's manual marks a radiator below the pump as a risk of bubbling noise: air collects at the highest point, and that should be inside the radiator, not the pump.", "دليل ARCTIC يعتبر الرادياتير تحت المضخة خطر صوت فقاعات: الهوا يتجمّع في أعلى نقطة، ولازم تكون داخل الرادياتير مو المضخة."],
+  },
   mounting_missing: {
     m: ["{why}", "{why}"],
     x: ["A cooler's own mounting hardware has to be ready before it goes on: the manufacturer's order protects the CPU and the board.", "عدّة تثبيت المبرّد لازم تكون جاهزة قبل ما يركب: ترتيب الشركة يحمي المعالج واللوحة."],
