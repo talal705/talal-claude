@@ -7,7 +7,7 @@ import { BuildPlanner } from "./BuildPlanner";
 import { pcCatalog } from "./catalog";
 import { parsePlannedBuild, planModel, rebaseProgress, snapshotFromHistory, type PlannedBuild } from "./plan-model";
 import { checkBuildPlan } from "./planner-data";
-import { SimplePcLab } from "./SimplePcLab";
+import dynamic from "next/dynamic";
 import { activateSimpleModel, LEGACY_MODEL, SIMPLE_SAVE_KEY } from "./simple-model";
 
 /** The planned build and which screen the learner was on. */
@@ -16,6 +16,12 @@ export const PLAN_KEY = "ytl_pc_plan_v1";
 export const PLAN_PROGRESS_KEY = "ytl_pc_plan_progress_v1";
 
 type Phase = "loading" | "plan" | "assemble" | "legacy";
+// The assembly workspace (and, behind it, the 3D scene) is fetched when the learner starts or resumes assembly,
+// not with the planner: the planner needs only the catalog, the plan and the saved-state code.
+const SimplePcLab = dynamic(() => import("./SimplePcLab").then((m) => m.SimplePcLab), {
+  ssr: false,
+  loading: () => <div style={{ minHeight: "60vh" }} role="status" aria-busy="true" />,
+});
 const EMPTY: PlannedBuild = { version: 1, purpose: null, workload: "", parts: { storage: [], fans: [] } };
 
 const read = (key: string): unknown => { try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch { return null; } };

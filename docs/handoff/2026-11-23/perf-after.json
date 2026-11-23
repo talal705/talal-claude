@@ -1,0 +1,6 @@
+{"change":"PcBuilder loads SimplePcLab with next/dynamic (ssr:false) when assembly starts or resumes","tool":"docs/handoff/2026-11-23/acceptance/perf.mjs","browser":"Chrome (swiftshader), fresh context per page, production build, localhost",
+"home":{"requests":21,"totalKB":1245,"jsKB":901},
+"planner":{"requests":30,"totalKB":1577,"jsKB":1227,"canvases":0},
+"assemblyStarted":{"requests":52,"totalKB":3041,"jsKB":2455,"pcAssets":23,"pcAssetKB":219},
+"idleRafPer3s":181,
+"enterExitCycles":"3x: 0 canvases in planner, 1 in assembly, 0 new requests"}
