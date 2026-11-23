@@ -1666,6 +1666,7 @@
       "markCpu": "Match the CPU's gold corner triangle with the socket's mark. The CPU has flat pads; the pins are in the socket, so never touch or slide over them.",
       "markRam": "The notch is off centre: it meets the slot's key only one way round.",
       "takeOther": "The other CPU is in the socket. Open the plate and lift it out first.",
+      "takeOtherCooler": "The other cooler is still on. Take it off first, step by step, then fit this one.",
       "unverified": "The latch arrangement on this board is not shown in its manual; one latch is drawn.",
       "note": "Educational simulation: it does not reproduce insertion force.",
       "closeup": "Close-up",

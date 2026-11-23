@@ -10,15 +10,16 @@ import { CheckIcon, CrossIcon } from "../icons";
 import { BuildCompanion, type CompanionMessage } from "./BuildCompanion";
 import { pcCatalog } from "./catalog";
 import { askCompanionAi, companionAskRequest, fetchTutorStatus, type AiStatus } from "./companion-ai";
-import { buildContext, companionSay, heldLines, intentOf, m2StepLine, nextLine, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
+import { buildContext, companionSay, coolerDoneLine, coolerRemovalLine, coolerStepLine, heldLines, intentOf, m2StepLine, nextLine, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
 import { aimClick, aimTargets, createStepGate, m2LiftPose, nextHandStep, type HandStep } from "./click-assembly";
 import { focusOn, moveCamera, selectPart } from "./scene/scene-store";
+import { applyCoolerStep, coolerStepHistory, nextCoolerRemoval, nextCoolerStep, type CoolerStep } from "./cooler-assembly";
 import {
   ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, connectSimpleCable, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, isM2Key, isRamKey, lastSimpleStep, M2_WHOLE_TILT_DEG, simpleM2Heatsink, simpleM2Slots,
   parseSimpleSnapshot, SIMPLE_PART_LIST, SIMPLE_PARTS, SIMPLE_SAVE_KEY, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot,
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
   simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap,
-  activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
+  hasModelledMounting, withSimpleStep, activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
   withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simplePrepMissing, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
 } from "./simple-model";
 import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-scene";
@@ -302,6 +303,11 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
 
   /** A part fitted with its own preparation and screws goes in only through its panel (not one generic install). */
   function screwedByHand(key: SimplePartKey): boolean {
+    // A cooler with a documented mounting is only ever fitted step by step, even with the other cooler still on.
+    if (hasModelledMounting(key) && !simplePartInstalled(state, key)) {
+      if (!(selection?.kind === "part" && selection.key === key)) choosePart(key);
+      return true;
+    }
     if (!(simpleUsesScrews(key) || simpleIsLiquid(key)) || simplePartInstalled(state, key)) return false;
     const rival = simpleSlotPart(state, slotOf(key));
     if (rival && rival !== key) return false;
@@ -587,19 +593,37 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     else speak({ lines: [{ key: "hands.endIn" }], mood: "point", point: "cables" });
   }
 
-  /** A liquid cooler, once its paste is on: pump block on the CPU and radiator in the case. */
-  function handFitLiquid(key: SimplePartKey) {
-    if (handsOff()) return;
+  /**
+   * One documented step of fitting or taking off a cooler (the toolbar, the panel and the robot all offer the same
+   * `nextCoolerStep` / `nextCoolerRemoval`). A cooler is never fitted in one click.
+   */
+  function takeCoolerStep(key: SimplePartKey, step: CoolerStep, removal = false) {
+    if (handsOff() || !step) return;
     if (!takeStep()) return;
-    if (simplePrepMissing(state, key).length > 0) { speak({ lines: [{ key: "hands.liquidPrep" }], mood: "concerned", point: "scene" }); return; }
-    const step = installSimplePart(state, key);
-    if (!step.ok) { react({ type: "select", selection: { kind: "part", key } }); return; }
-    if (mode === "fault") { if (fault) setFault({ ...fault, state: step.state }); }
-    else setSaved((previous) => withPart(previous, key));
-    setSelection(null);
+    const r = applyCoolerStep(state, key, step);
+    if (!r.ok) {
+      if (r.message) sayEngine(r.message, "closeBlocked");
+      else { const line = coolerStepLine(state, key); speak({ lines: [line ?? { key: "hands.closeBlocked" }], mood: "concerned", point: "scene" }); }
+      return;
+    }
+    const history = coolerStepHistory(state, key, step);
+    if (mode === "fault") { if (fault) setFault({ ...fault, state: r.state }); }
+    else setSaved((previous) => withSimpleStep(previous, history));
     setVerdict(null);
-    if (simpleAllPartsIn(step.state)) setTab("cables");
-    react({ type: "installed", key }, step.state, false, null);
+    if (removal) {
+      const next = nextCoolerRemoval(r.state, key);
+      const line = next ? coolerRemovalLine(next, key) : null;
+      if (line) { speak({ lines: [line], mood: "point", point: "scene" }); return; }
+      setSelection(null);
+      setTab("parts");
+      react({ type: "removed", key }, r.state, false, null);
+      return;
+    }
+    const line = nextCoolerStep(r.state, key) ? coolerStepLine(r.state, key) : coolerDoneLine(r.state, key);
+    if (nextCoolerStep(r.state, key)) { speak({ lines: line ? [line] : [{ key: "hands.closeBlocked" }], mood: "point", point: "scene" }); return; }
+    setSelection(null);
+    if (simpleAllPartsIn(r.state)) setTab("cables");
+    speak({ lines: line ? [line] : [], mood: "happy", point: "scene" });
   }
   function handScrew(key: SimplePartKey, corner: number) {
     if (handsOff()) return;
@@ -665,6 +689,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
 
   /** Replaces the CPU or cooler that is in with its alternative. */
   function swap(from: SimplePartKey, to: SimplePartKey) {
+    if (hasModelledMounting(to)) { speak({ lines: [{ key: "hands.takeOtherCooler" }], mood: "concerned", point: "scene" }); return; }
     const blocked = simpleSwapBlock(state, to);
     if (blocked) { react({ type: "removeBlocked", key: from, reason: blocked }); return; }
     if (!takeStep()) return;
@@ -1120,6 +1145,35 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   }
 
   /** Cooler, board, PSU or fan: the preparation it needs, putting it in place, then its screws one by one. */
+  /** Fitting or taking off a cooler with a documented mounting: the next step, and the choices the manual leaves open. */
+  function CoolerPanel() {
+    const key = selectedPart!;
+    const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved));
+    const words = (l: { key: string; values?: Record<string, unknown> } | null) => (l ? t(`companion.${l.key}`, l.values as never) : "");
+    const step = nextCoolerStep(state, key);
+    const removal = nextCoolerRemoval(state, key);
+    const part = state.parts.find((p) => p.instanceId === partSpec(key).id);
+    const started = Boolean(part?.attachments.length);
+    const choose = (active: boolean, label: string, run: () => void) =>
+      <button type="button" className={styles.installButton} aria-pressed={active} disabled={disabled} onClick={run}>{label}</button>;
+    return (
+      <div className={styles.hands}>
+        {step && (step.kind === "cpuFirst" || step.kind === "boardFirst"
+          ? <p className={styles.hint}>{words(coolerStepLine(state, key))}</p>
+          : step.kind === "backplate"
+            ? <>
+                {choose(false, t("companion.cooler.backplatePadding"), () => takeCoolerStep(key, { kind: "backplate", value: "padding" }))}
+                {choose(false, t("companion.cooler.backplateTape"), () => takeCoolerStep(key, { kind: "backplate", value: "tape" }))}
+              </>
+            : choose(false, words(coolerStepLine(state, key)), () => takeCoolerStep(key, step)))}
+        {removal && started && <button type="button" className={styles.cancel} disabled={disabled} onClick={() => takeCoolerStep(key, removal, true)}>{words(coolerRemovalLine(removal, key))}</button>}
+        {!step && !removal && <p className={styles.handsState}>{words(coolerDoneLine(state, key))}</p>}
+        <p className={styles.hint}>{t("hands.why.cooler")}</p>
+        <p className={styles.cablesNote}>{t("hands.prepNote")}</p>
+      </div>
+    );
+  }
+
   function PrepPanel() {
     const key = selectedPart!;
     const liquid = simpleIsLiquid(key);
@@ -1153,7 +1207,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
             {choice(prep.airflow === "exhaust", t("hands.fanExhaust"), () => handPrep(key, "airflow", "exhaust", "fanTurned"))}
           </>}
           {liquid
-            ? <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handFitLiquid(key)}>{t("hands.place.liquid")}</button>
+            ? <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handPlace(key, "coolerPlaced")}>{t("hands.place.liquid")}</button>
             : <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handPlace(key, role === "cooler" ? "coolerPlaced" : "placedScrews")}>{t(`hands.place.${role}`)}</button>}
         </>}
         {at && secured < spec.screws && (role === "cooler"
@@ -1440,6 +1494,16 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
       if (step.kind === "aim" && (isRamKey(key) || hold?.key !== key)) return { label: stepLabel(key, step), why: t(isRamKey(key) ? "companion.aim.ramFirst" : "companion.aim.first") };
       return { label: stepLabel(key, step), run: () => runStep(key, step) };
     }
+    if (hasModelledMounting(key)) {
+      if (rival) return { label: t("toolbar.more"), run: openPartOptions };
+      const coolerStep = nextCoolerStep(state, key);
+      const line = coolerStep ? coolerStepLine(state, key) : null;
+      if (!coolerStep || !line) return { label: t("installed"), why: t("toolbar.nothing") };
+      const words = t(`companion.${line.key}`, line.values as never);
+      if (coolerStep.kind === "cpuFirst" || coolerStep.kind === "boardFirst") return { label: t("install"), why: words };
+      if (coolerStep.kind === "backplate") return { label: t("toolbar.more"), run: openPartOptions };
+      return { label: words, run: () => takeCoolerStep(key, coolerStep) };
+    }
     if (partInstalled) return { label: t("installed"), why: t("toolbar.nothing") };
     if (partBlocked) return { label: t("install"), why: t(partBlocked) };
     if (rival || simpleUsesScrews(key) || simpleIsLiquid(key)) return { label: t("toolbar.more"), run: openPartOptions };
@@ -1531,7 +1595,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
             </summary>
             <div className={styles.partOptionsBody}>
               {selectedPart ? <div className={styles.install}>
-                {keyed ? HandsPanel() : !partInstalled && !rival && (simpleUsesScrews(selectedPart) || simpleIsLiquid(selectedPart)) ? PrepPanel() : partInstalled && removable
+                {keyed ? HandsPanel() : hasModelledMounting(selectedPart) ? (rival ? <p className={styles.hint}>{t("hands.takeOtherCooler")}</p> : CoolerPanel()) : !partInstalled && !rival && (simpleUsesScrews(selectedPart) || simpleIsLiquid(selectedPart)) ? PrepPanel() : partInstalled && removable
                   ? <button className={styles.installButton} type="button" onClick={() => remove(selectedPart)} disabled={!ready || Boolean(removeBlocked)}>{t("remove")}</button>
                   : rival
                     ? <button className={styles.installButton} type="button" onClick={() => swap(rival, selectedPart)} disabled={!ready || Boolean(swapBlocked)}>{t("swap", { other: label(rival) })}</button>

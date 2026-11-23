@@ -1080,6 +1080,7 @@ const withStep = (snapshot: SimpleSnapshot, step: SimpleStep): SimpleSnapshot =>
   const history = [...snapshot.history, step];
   return { ...snapshot, history, ...deriveSimpleLists(history) };
 };
+export const withSimpleStep = withStep;
 export const withMechanism = (snapshot: SimpleSnapshot, retentionId: string, state: "open" | "closed") => withStep(snapshot, `mech:${retentionId}:${state}`);
 export const withLower = (snapshot: SimpleSnapshot, key: SimplePartKey, pose?: SimpleAlignment) =>
   withStep(snapshot, pose ? `lower:${key}:${pose.rotationDeg}:${pose.offsetMm[0]}:${pose.offsetMm[1]}${pose.tiltDeg === undefined ? "" : `:t${pose.tiltDeg}`}${pose.slotId ? `:s${pose.slotId}` : ""}` : `lower:${key}`);
