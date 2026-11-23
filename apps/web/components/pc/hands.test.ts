@@ -5,6 +5,7 @@ import {
   caseCoversClosed, connectSimpleCable, disconnectSimpleCable, fastenSimplePart, installSimplePart, simpleFastened, SLOT_COVERS_ID, unfastenSimplePart, withFasten, withUnfasten,
   placeSimplePart, prepSimplePart, screwSimplePart, simpleScrewOrder, withPlace, withPrep, withScrew,
 } from "./simple-model";
+import { applyCoolerStep, nextCoolerStep } from "./cooler-assembly";
 
 afterEach(() => activateSimpleModel(LEGACY_MODEL));
 const aligned = { rotationDeg: 0, offsetMm: [0, 0] as [number, number] };
@@ -179,6 +180,9 @@ describe("hands-on preparation, placing and screws", () => {
   };
   it("a cooler needs the paste and the film removal its catalog entry asks for; screws go across the diagonal", () => {
     let s = withBoardReady();
+    // The Freezer 36 is held by its contact frame (ARCTIC's manual): the frame goes on before anything else.
+    expect(placeSimplePart(s, "cooler")).toMatchObject({ ok: false, reason: "mountingMissing" });
+    for (let step = nextCoolerStep(s, "cooler"); step && ["backplate", "lever", "plate", "ilm", "frame", "frameScrew"].includes(step.kind); step = nextCoolerStep(s, "cooler")) s = must(applyCoolerStep(s, "cooler", step));
     expect(placeSimplePart(s, "cooler")).toMatchObject({ ok: false, reason: "prepMissing" });
     s = must(prepSimplePart(s, "cooler", "film", "removed"));
     expect(placeSimplePart(s, "cooler")).toMatchObject({ ok: false, reason: "prepMissing" }); // paste still missing
@@ -186,8 +190,10 @@ describe("hands-on preparation, placing and screws", () => {
     expect(prepSimplePart(s, "cooler", "paste", "applied")).toMatchObject({ ok: false, reason: "prepWrong" });
     s = must(placeSimplePart(s, "cooler"));
     expect(simplePartInstalled(s, "cooler")).toBe(false);
-    for (let i = 0; i < 4; i++) s = must(screwSimplePart(s, "cooler"));
+    expect(screwSimplePart(s, "cooler")).toMatchObject({ ok: false }); // its two screws go in one at a time, not by count
+    for (let step = nextCoolerStep(s, "cooler"); step; step = nextCoolerStep(s, "cooler")) s = must(applyCoolerStep(s, "cooler", step));
     expect(simplePartInstalled(s, "cooler")).toBe(true);
+    // The corner order of the lab's generic fixing (a pure rule on the saved steps).
     const history = ["place:cooler", "screw:cooler:0"] as const;
     expect(simpleScrewOrder([...history], "cooler").next).toBe(2);
     expect(simpleScrewOrder([...history, "screw:cooler:2"], "cooler").next).toBeNull();
