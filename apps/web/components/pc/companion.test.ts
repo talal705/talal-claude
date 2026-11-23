@@ -434,6 +434,13 @@ describe("the robot and a cooler", () => {
     for (const line of [coolerRemovalLine({ kind: "liftBody" }, "cooler")!, coolerRemovalLine({ kind: "screw", index: 0, to: "out", value: "01" }, "cooler")!]) spoken(line);
   });
 
+  it("selecting a cooler names its next documented step, not 'tap its place'", () => {
+    const s = must(installSimplePart(createSimpleBuild(), "cpu"));
+    const say = companionSay({ type: "select", selection: { kind: "part", key: "cooler" } }, s, false, null);
+    expect(say.lines).toEqual([coolerStepLine(s, "cooler")]);
+    expect(say.lines[0]!.key).toBe("cooler.backplatePadding");
+  });
+
   it("a finished cooler says it is mounted and that wiring comes later", () => {
     const s = must(installSimplePart(must(installSimplePart(createSimpleBuild(), "cpu")), "cooler"));
     expect(coolerDoneLine(s, "cooler")).toEqual({ key: "cooler.notWired" });

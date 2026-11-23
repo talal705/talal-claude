@@ -216,6 +216,12 @@ const FASTENER_MATS = { hole: new THREE.MeshBasicMaterial({ color: "#0b0c0e" }) 
 
 /** The contact frame, the retention ring, the pins and the screws, as the engine's state says (schematic proportions). */
 function CoolerHardwareMeshes({ draw, mats }: { draw: HardwareDraw; mats: { nickel: THREE.Material; black: THREE.Material } }) {
+  // Read-only view for browser checks: what this scene is drawing, by fastener id and state.
+  useEffect(() => {
+    const view = () => ({ ilmRemoved: draw.ilmRemoved, frame: Boolean(draw.frame), ring: Boolean(draw.ring), backplate: draw.backplate?.kind ?? null, screws: Object.fromEntries([...draw.frameScrews, ...draw.pins, ...draw.bodyScrews].map((f) => [f.id, f.state])) });
+    (window as unknown as { __ytlHardware?: () => unknown }).__ytlHardware = view;
+    return () => { delete (window as unknown as { __ytlHardware?: () => unknown }).__ytlHardware; };
+  }, [draw]);
   const screw = (f: HardwareDraw["frameScrews"][number], r = 1.8) => f.state === "empty"
     ? <mesh key={f.id} position={[f.at[0], f.at[1] + 0.05, f.at[2]]} rotation={[-Math.PI / 2, 0, 0]} material={FASTENER_MATS.hole} userData={{ fastener: f.id, state: f.state }}><circleGeometry args={[r * 0.7, 14]} /></mesh>
     : <group key={f.id} position={f.at} userData={{ fastener: f.id, state: f.state }}>

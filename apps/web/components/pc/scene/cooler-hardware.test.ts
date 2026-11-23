@@ -49,6 +49,10 @@ describe("what the scene draws of the cooler's hardware", () => {
     const d = coolerHardwareDraw(board({ ilm: "removed", frame: "placed" }), cooler({ screws: "12" }), layout);
     expect(d.bodyScrews.map((s) => s.state)).toEqual(["engaged", "tight"]);
   });
+  it("a placed cooler on the contact frame shows its two screw holes before the first screw is turned", () => {
+    const d = coolerHardwareDraw(board({ ilm: "removed", frame: "placed", frame_screws: "2222" }), cooler(undefined), layout);
+    expect(d.bodyScrews.map((s) => s.state)).toEqual(["empty", "empty"]);
+  });
   it("a retention ring and its pins show their placed and pushed-in states, and no contact frame", () => {
     const d = coolerHardwareDraw(board(), cooler({ position: "1200", ring: "placed", pins: "1100" }, false), layout);
     expect(d.ring).not.toBeNull();

@@ -5,7 +5,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { pcCatalog } from "./catalog";
 import {
-  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, isRamKey, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
+  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, hasModelledMounting, isRamKey, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
   simpleCablesFor, simpleCableOrder, simplePartInstalled, simplePartOrder, simplePrerequisites, simpleRuleBlock, REMOVABLE, simpleRamRecommended, simpleSlotFilled, simpleSlotPart, simpleTarget, slotOf,
   caseCoversClosed, isM2Key, simpleM2Slots, simpleRamSlots, simpleRamTargetFor, simpleRetention,
   type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimpleHeld, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,
@@ -431,6 +431,8 @@ export function companionSay(event: CompanionEvent, state: PCBuildState, powered
           : nextSay([{ key: "already", values: { part: partName(key) } }], "idle");
         const blocked = simpleBlock(state, key);
         if (blocked) return { lines: [blockLine(state, key, blocked)], mood: "concerned" };
+        const coolerLine = hasModelledMounting(key) ? coolerStepLine(state, key) : null;
+        if (coolerLine) return { lines: [coolerLine], mood: "point", point: "scene" };
         const place = placeOf(state, key);
         // A module is placed by hand over the slot of the learner's choice: no slot is named for it here.
         if (isRamKey(key)) return { lines: [{ key: "hands.ramPick" }], mood: "point", point: "scene" };

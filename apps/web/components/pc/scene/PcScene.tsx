@@ -2034,7 +2034,7 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
         const cpuIn = state.parts.some((p) => p.attachments.some((a) => a.target.hostInstanceId === hostId && a.target.mountPointId === s.mountId));
         return (
           <FrameGroup key={`socket-${hostId}`} frame={item.frame} animate={simple} reducedMotion={reducedMotion} moveKey={`${hostId}#socket`}>
-            <SocketMechanism layout={s.layout} board={board} retentionId={s.retentionId} cpuIn={cpuIn} reducedMotion={reducedMotion} onLever={active?.onLever} onPlate={active?.onPlate} highlight={active?.highlight ?? null} hardware={coolerHardwareDraw(board, state.parts.find((p) => p.catalogId !== board.catalogId && p.hardware && (p.attachments.some((a) => a.target.hostInstanceId === hostId) || p.hardware.ring || p.hardware.screws)), s.layout)} />
+            <SocketMechanism layout={s.layout} board={board} retentionId={s.retentionId} cpuIn={cpuIn} reducedMotion={reducedMotion} onLever={active?.onLever} onPlate={active?.onPlate} highlight={active?.highlight ?? null} hardware={coolerHardwareDraw(board, state.parts.find((p) => catalogIndex.byId.get(p.catalogId)?.category === "cooling" && (p.attachments.some((a) => a.target.hostInstanceId === hostId) || p.hardware)), s.layout)} />
           </FrameGroup>
         );
       })}

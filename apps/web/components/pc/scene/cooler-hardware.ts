@@ -46,8 +46,8 @@ export function coolerHardwareDraw(board: InstalledPart, cooler: InstalledPart |
 
   const placed = (cooler?.attachments.length ?? 0) > 0;
   const bodyValue = cooler?.hardware?.screws;
-  const bodyScrews: Fastener[] = placed && bodyValue
-    ? [0, 2].map((corner0, n) => { const s = stateOf(bodyValue[n]); return { id: `body-screw-${n}`, state: s, at: corner(corner0, 3, top + 7 + (s === "engaged" ? 3.5 : 0)) }; })
+  const bodyScrews: Fastener[] = placed && (bodyValue || (ilmRemoved && hw.frame === "placed"))
+    ? [0, 2].map((corner0, n) => { const s = stateOf(bodyValue?.[n]); return { id: `body-screw-${n}`, state: s, at: corner(corner0, 3, top + 7 + (s === "engaged" ? 3.5 : 0)) }; })
     : [];
 
   const ringOn = cooler?.hardware?.ring === "placed";
