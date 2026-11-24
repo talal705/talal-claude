@@ -17,6 +17,7 @@ import {
   checkLabFilter,
   checkSnapshotLabel,
   checkUpdateInput,
+  corruptRecord,
   isProjectRecord,
   isProjectSnapshot,
 } from "./validation";
@@ -42,7 +43,7 @@ function notFound(what: string, id: string): ProjectStoreError {
 }
 
 function corrupt(what: string, id: string): ProjectStoreError {
-  return new ProjectStoreError("corrupt", `${what} ${id} is stored but failed validation; it was left in place`);
+  return corruptRecord(`${what} ${id}`);
 }
 
 function conflict(expected: number, actual: number): ProjectStoreError {

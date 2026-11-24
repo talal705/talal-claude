@@ -5,7 +5,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { pcCatalog } from "./catalog";
 import {
-  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, applySimpleStep, createSimpleBuild, liftSimplePart, placeRadiator, placeSimplePart, prepSimplePart, roleOf, seatedCpuKey,
+  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, applySimpleStep, createSimpleBuild, liftSimplePart, partSpec, placeRadiator, placeSimplePart, prepSimplePart, roleOf, seatedCpuKey,
   setRadiatorScrews, setSimpleHardware, setSimpleMechanism, simpleCableConnected, simpleCoolerMounting, simplePartInstalled, simpleRequiredScrews, simpleRetention,
   type SimpleBlock, type SimplePartKey, type SimpleStep,
 } from "./simple-model";
@@ -26,8 +26,7 @@ export type CoolerStep =
   | { kind: "radiatorUnscrew"; count: number } | { kind: "liftRadiator" } | { kind: "liftBody" }
   | null;
 
-const spec = (key: SimplePartKey) => ALL_SIMPLE_PARTS.find((p) => p.key === key)!;
-const instance = (state: PCBuildState, key: SimplePartKey) => state.parts.find((p) => p.instanceId === spec(key).id);
+const instance = (state: PCBuildState, key: SimplePartKey) => state.parts.find((p) => p.instanceId === partSpec(key).id);
 const swap = (value: string, i: number, c: string) => value.slice(0, i) + c + value.slice(i + 1);
 const indices = (value: string, c: string) => [...value].flatMap((x, i) => (x === c ? [i] : []));
 
@@ -48,7 +47,7 @@ const screwStep = (value: string, move: ScrewMove, i: number) => ({ index: i, to
 
 const boardInCase = (state: PCBuildState) => (instance(state, "motherboard")?.attachments.length ?? 0) > 0;
 const bodyOf = (state: PCBuildState, key: SimplePartKey) =>
-  instance(state, key)?.attachments.find((a) => a.target.hostInstanceId === spec(key).host && a.target.mountPointId === spec(key).mount);
+  instance(state, key)?.attachments.find((a) => a.target.hostInstanceId === partSpec(key).host && a.target.mountPointId === partSpec(key).mount);
 const radiatorOf = (state: PCBuildState, key: SimplePartKey) => instance(state, key)?.attachments.find((a) => a.role === "radiator");
 
 /** The next documented step for a cooler with a modelled mounting; null when it is fitted (or has no modelled mounting). */
@@ -57,7 +56,7 @@ export function nextCoolerStep(state: PCBuildState, key: SimplePartKey): CoolerS
   const part = instance(state, key);
   const board = instance(state, "motherboard");
   const cpu = seatedCpuKey(state);
-  const entry = pcCatalog.entries.find((e) => e.id === spec(key).catalogId);
+  const entry = pcCatalog.entries.find((e) => e.id === partSpec(key).catalogId);
   if (!m || !part || !board || entry?.category !== "cooling") return null;
   if (!cpu) return { kind: "cpuFirst" };
   const hw = part.hardware ?? {};
@@ -100,11 +99,11 @@ export function nextCoolerStep(state: PCBuildState, key: SimplePartKey): CoolerS
     if (screws.includes("0")) return { kind: "screw", ...screwStep(screws, "engaged", screws.indexOf("0")) };
     if (screws.includes("1")) return { kind: "screw", ...screwStep(screws, "tight", nextTight(screws)) };
   }
-  if (spec(key).radiator) {
+  if (partSpec(key).radiator) {
     if (m.kit.some((k) => k.id === "vrm-fan-module") && hw.vrm_fan !== "attached") return { kind: "vrmFan" };
     const radiator = radiatorOf(state, key);
     if (!radiator) return boardInCase(state) ? { kind: "radiator" } : { kind: "boardFirst" };
-    if (radiator.fastenersSecured < spec(key).radiator!.screws) return { kind: "radiatorScrew", count: radiator.fastenersSecured + 1 };
+    if (radiator.fastenersSecured < partSpec(key).radiator!.screws) return { kind: "radiatorScrew", count: radiator.fastenersSecured + 1 };
   }
   return null;
 }
@@ -245,7 +244,7 @@ export function simpleCoolerProgress(state: PCBuildState, key: SimplePartKey): C
     placed: Boolean(bodyOf(state, key)),
     secured: bodyOf(state, key)?.fastenersSecured ?? 0,
     total: simpleRequiredScrews(state, key),
-    mechanicallyComplete: simplePartInstalled(state, key) && (!spec(key).radiator || instance(state, key)?.hardware?.vrm_fan === "attached" || !simpleCoolerMounting(state, key)?.kit.some((k) => k.id === "vrm-fan-module")),
+    mechanicallyComplete: simplePartInstalled(state, key) && (!partSpec(key).radiator || instance(state, key)?.hardware?.vrm_fan === "attached" || !simpleCoolerMounting(state, key)?.kit.some((k) => k.id === "vrm-fan-module")),
     connected: leads.length > 0 && leads.every((c) => simpleCableConnected(state, c.key)),
   };
 }

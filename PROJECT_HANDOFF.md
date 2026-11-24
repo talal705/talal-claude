@@ -4,6 +4,27 @@ Current site brand: **بيئة التدريب الافتراضية (VTE)** in Ar
 **Virtual Training Environment (VTE)** in English. Older references below use the former name.
 The repository and hosting identifiers remain `talal-claude`; saved-data keys are unchanged.
 
+## In progress: concise-code refactor (2026-11-24)
+
+Owner requests concise, readable code for the current project and future projects. Claude implements;
+Codex supervises and reviews. Branch `refactor/concise-code` starts at `2f9ba78`.
+
+- Claude's partial changes reuse part/cable/first-attachment lookups and storage validation/errors,
+  and remove verified unused imports/constants. Net production change so far: 58 added, 75 removed
+  across 17 TypeScript files (17 fewer lines); this is not the completed refactor.
+- Codex verified this checkpoint: 68 test files, 905 tests passed, no failures/skips; type checking,
+  translation parity, and production build passed. No browser/visual verification was performed.
+- Future guidance is in project `CLAUDE.md` and user-level `~/.claude/CLAUDE.md` on this machine.
+  Reduce real duplication; preserve behavior, educational steps, validation, security, data, and tests.
+- Remaining approved audit work: remove the unreachable `HandsPanel` tail; reuse GPU key handling,
+  the existing hands-off predicate, and repeated state-commit logic; remove verified dead internal
+  exports/provider shims; consolidate identical store errors locally if the messages and semantics
+  remain identical. Keep role-specific attachment lookups and meaningful domain content explicit.
+- Claude reached its five-hour usage limit, reported reset at 23:00 Asia/Riyadh on 2026-11-24.
+  The owner explicitly chose to wait for Claude rather than have Codex implement the remainder.
+  Resume with these instructions and inspect the working tree before continuing; do not mark the
+  task complete or publish a finished-refactor claim. This checkpoint has not been preview-published.
+
 ## Latest work: Stage 4 — CPU cooling + PC-section isolation (branch `feat/stage4-cooling`, 2026-11-23)
 
 Started from `feat/stage3-m2-storage` at `f2f78af`. Not merged, not deployed to production. Plan:

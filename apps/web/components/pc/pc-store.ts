@@ -2,7 +2,7 @@
 // and the last refusal, on top of the shared project session. Every change to the build is a
 // PCAction run through the engine; this file decides nothing about what is allowed. No React here.
 import { createStore, type StoreApi } from "zustand/vanilla";
-import type { CableId, InstanceId, PCAction, PCActionResult, PCCatalog, PCDiagnostic, PCHistory, PCPreset, PCProjectData, ProjectStore, RgbPreference } from "@ytl/contracts";
+import type { CableId, InstanceId, PCAction, PCActionResult, PCCatalog, PCDiagnostic, PCHistory, PCProjectData, ProjectStore, RgbPreference } from "@ytl/contracts";
 import { pc } from "@ytl/simulation";
 import {
   assemblyReducer,

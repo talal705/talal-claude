@@ -263,8 +263,12 @@ export const SIMPLE_SAVE_KEY = "ytl_simple_pc_v1";
 export const emptySimpleSnapshot = (): SimpleSnapshot =>
   active.kind === "plan" ? { version: 4, plan: active.plan, placed: [], connected: [], history: [], powered: false } : { version: 3, placed: [], connected: [], history: [], powered: false };
 
-const partSpec = (key: SimplePartKey): PartSpec => ALL_SIMPLE_PARTS.find((p) => p.key === key)!;
-const cableSpec = (key: SimpleCableKey): CableSpec => ALL_SIMPLE_CABLES.find((c) => c.key === key)!;
+/** The spec of a part or lead by key. An unknown key is a programming error (undefined, not a fallback). */
+export const partSpec = (key: SimplePartKey): PartSpec => ALL_SIMPLE_PARTS.find((p) => p.key === key)!;
+export const cableSpec = (key: SimpleCableKey): CableSpec => ALL_SIMPLE_CABLES.find((c) => c.key === key)!;
+/** Where a part is fitted: its first attachment, undefined while it is loose. */
+export const firstAttachment = (state: PCBuildState, key: SimplePartKey) =>
+  state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
 
 function run(state: PCBuildState, actions: readonly PCAction[]): PCBuildState {
   for (const action of actions) {
@@ -502,7 +506,7 @@ export function unfastenSimplePart(state: PCBuildState, key: SimplePartKey): { o
 /** True when a part's bracket or screws are all in. */
 export function simpleFastened(state: PCBuildState, key: SimplePartKey): boolean {
   const spec = partSpec(key);
-  const at = state.parts.find((p) => p.instanceId === spec.id)?.attachments[0];
+  const at = firstAttachment(state, key);
   return Boolean(at && spec.screws && at.fastenersSecured >= spec.screws);
 }
 
@@ -522,7 +526,7 @@ export function simpleTarget(state: PCBuildState, key: SimplePartKey, slotId?: s
   const spec = partSpec(key);
   // An M.2 drive: the slot it is in, else the slot the learner chose, else the plan's slot.
   if (isM2Key(key)) {
-    const own = state.parts.find((p) => p.instanceId === spec.id)?.attachments[0];
+    const own = firstAttachment(state, key);
     return { hostInstanceId: spec.host, mountPointId: own?.target.mountPointId ?? slotId ?? spec.mount };
   }
   if (!isRamKey(key)) return { hostInstanceId: spec.host, mountPointId: spec.mount };
@@ -696,7 +700,7 @@ export function placeSimplePart(state: PCBuildState, key: SimplePartKey): Engine
 /** Tightens one more screw of a placed part. Which screw is the learner's (see simpleScrewOrder). */
 export function screwSimplePart(state: PCBuildState, key: SimplePartKey): Engine {
   const spec = partSpec(key);
-  const at = state.parts.find((p) => p.instanceId === spec.id)?.attachments[0];
+  const at = firstAttachment(state, key);
   if (!at) return { ok: false, reason: "cannotFit" };
   if (at.fastenersSecured >= spec.screws) return { ok: false, reason: "alreadyIn" };
   return engineResult(pc.applyAction(state, { type: "set_fasteners", instanceId: spec.id, secured: at.fastenersSecured + 1 }, pcCatalog));
@@ -709,11 +713,6 @@ export function simpleUsesScrews(key: SimplePartKey): boolean {
 }
 /** A liquid cooler: its paste is the learner's; the pump block and radiator then go in together. */
 export const simpleIsLiquid = (key: SimplePartKey) => Boolean(partSpec(key)?.radiator);
-/** What preparation is still missing on a part (the right values from the catalog), empty when ready. */
-export function simplePrepMissing(state: PCBuildState, key: SimplePartKey): PrepKind[] {
-  const part = state.parts.find((p) => p.instanceId === partSpec(key).id);
-  return simplePrepFor(state, key).filter((p) => part?.prep?.[p.prep] !== p.value).map((p) => p.prep);
-}
 
 /**
  * The cooler's screws go in corner by corner across the diagonal, so the plate meets the CPU evenly:

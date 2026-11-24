@@ -1,7 +1,7 @@
 // Guest lesson progress in IndexedDB: one record per lesson and mode.
-import { ProjectStoreError } from "@ytl/contracts";
 import type { LessonMode, LessonProgress } from "@ytl/curriculum";
 import { LESSON_PROGRESS_STORE, request, type GuestDatabase } from "./guest-db";
+import { corruptRecord } from "./validation";
 import {
   applySave,
   byRecency,
@@ -19,10 +19,6 @@ interface StoredLessonProgress extends LessonProgressRecord {
   mode: LessonMode;
 }
 
-function corrupt(lessonId: string, mode: string): ProjectStoreError {
-  return new ProjectStoreError("corrupt", `progress for lesson ${lessonId} (${mode}) is stored but failed validation; it was left in place`);
-}
-
 export function createGuestLessonProgressStore(db: GuestDatabase, options: { now?: () => Date } = {}): LessonProgressStore {
   const timestamp = () => (options.now?.() ?? new Date()).toISOString();
 
@@ -34,7 +30,7 @@ export function createGuestLessonProgressStore(db: GuestDatabase, options: { now
       );
       if (stored === undefined) return null;
       const record = readLessonProgressRecord(stored);
-      if (record === null) throw corrupt(key.lessonId, key.mode);
+      if (record === null) throw corruptRecord(`progress for lesson ${key.lessonId} (${key.mode})`);
       return record;
     },
 

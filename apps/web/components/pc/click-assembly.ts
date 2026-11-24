@@ -5,14 +5,15 @@
 import type { PCBuildState } from "@ytl/contracts";
 import type { SimpleSceneTarget } from "./simple-scene";
 import {
-  ALL_SIMPLE_PARTS, caseCoversClosed, isM2Key, isRamKey, M2_WHOLE_TILT_DEG, simpleBlock, simpleFastened, simpleKeying, simpleM2Heatsink, simpleM2Slots, simpleRamReference, simpleRamSlotOffsets, simpleRamSlots,
+  ALL_SIMPLE_PARTS, caseCoversClosed, isM2Key, isRamKey, M2_WHOLE_TILT_DEG, partSpec, simpleBlock, simpleFastened, simpleKeying, simpleM2Heatsink, simpleM2Slots, simpleRamReference, simpleRamSlotOffsets, simpleRamSlots,
   simpleRamTargetFor, simpleRetention, simplePartInstalled, type SimpleBlock, type SimpleHeld, type SimplePartKey,
 } from "./simple-model";
 
 /** The tolerance a held part's place accepts when the catalog gives none (the memory slots' 1.5 mm). */
 const DEFAULT_TOLERANCE_MM = 1.5;
 
-const attachmentOf = (state: PCBuildState, key: SimplePartKey) =>
+/** Lenient on purpose (an unknown key reads as no attachment); companion.ts reads the same lookup. */
+export const attachmentOf = (state: PCBuildState, key: SimplePartKey) =>
   state.parts.find((p) => p.instanceId === ALL_SIMPLE_PARTS.find((x) => x.key === key)?.id)?.attachments[0];
 
 export type AimResult =
@@ -113,7 +114,7 @@ export function aimTargets(state: PCBuildState, key: SimplePartKey, held: Simple
   const at = attachmentOf(state, key);
   // An M.2 drive: every M.2 slot answers a click (none is suggested); once in, only its own slot.
   if (isM2Key(key)) {
-    const host = ALL_SIMPLE_PARTS.find((p) => p.key === key)!.host;
+    const host = partSpec(key).host;
     return simpleM2Slots(state, key).filter((slot) => !at || slot.id === at.target.mountPointId)
       .map((slot): SimpleSceneTarget => ({ id: `aim:${slot.id}`, kind: "mount", hostInstanceId: host, placeId: slot.id, role: at ? "target" : "decoy" }));
   }

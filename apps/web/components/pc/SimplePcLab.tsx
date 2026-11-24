@@ -15,12 +15,12 @@ import { aimClick, aimTargets, createStepGate, m2LiftPose, nextHandStep, type Ha
 import { focusOn, moveCamera, selectPart } from "./scene/scene-store";
 import { applyCoolerStep, applyMountingStep, coolerStepHistory, mountingStepHistory, nextCoolerRemoval, nextCoolerStep, nextMountingRemoval, type CoolerStep, type MountingStep } from "./cooler-assembly";
 import {
-  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, connectSimpleCable, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, isM2Key, isRamKey, lastSimpleStep, M2_WHOLE_TILT_DEG, simpleM2Heatsink, simpleM2Slots,
+  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, cableSpec, connectSimpleCable, firstAttachment, partSpec, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, isM2Key, isRamKey, lastSimpleStep, M2_WHOLE_TILT_DEG, simpleM2Heatsink, simpleM2Slots,
   parseSimpleSnapshot, SIMPLE_PART_LIST, SIMPLE_PARTS, SIMPLE_SAVE_KEY, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot,
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
   simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap,
   hasModelledMounting, withSimpleStep, activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
-  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simplePrepMissing, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
+  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
 } from "./simple-model";
 import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-scene";
 import { guideFocus } from "./guide";
@@ -34,8 +34,6 @@ import arLabs from "../../messages/ar/labs.json";
 /** The fix for the liquid-cooling rule, in Arabic, shown on the English page as well. */
 const NEEDS_LIQUID_AR = arLabs.simplePc.needsLiquid;
 
-const partSpec = (key: SimplePartKey) => ALL_SIMPLE_PARTS.find((p) => p.key === key)!;
-const cableSpec = (key: SimpleCableKey) => ALL_SIMPLE_CABLES.find((c) => c.key === key)!;
 const entryOf = (catalogId: string | undefined) => pcCatalog.entries.find((e) => e.id === catalogId);
 /** How long one hand step's animation runs: a repeated click within it is ignored. */
 const HAND_STEP_MS = 450;
@@ -988,7 +986,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const placeName = (key: SimplePartKey) => {
     // A memory module: the slot it is in, else the slot it is held over, else none. Never a default slot.
     if (isRamKey(key)) {
-      const ramIn = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
+      const ramIn = firstAttachment(state, key);
       const over = !ramIn && hold?.key === key ? simpleRamTargetFor(state, hold.offsetMm) : null;
       const id = ramIn?.target.mountPointId ?? over?.slotId;
       if (!id) return t("hands.overNoSlot");
@@ -1046,7 +1044,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   } : null;
   // Memory in hand: the slot it is over, the clip the next step is about, and clip clicks in the view.
   const ramKey = selectedPart && isRamKey(selectedPart) ? selectedPart : null;
-  const ramAt = ramKey ? state.parts.find((p) => p.instanceId === partSpec(ramKey).id)?.attachments[0] : undefined;
+  const ramAt = ramKey ? firstAttachment(state, ramKey) : undefined;
   const ramTarget = ramKey && !ramAt && hold?.key === ramKey ? simpleRamTargetFor(state, hold.offsetMm) : null;
   const ramSlot = ramKey ? simpleRamSlots(state).find((x) => x.id === (ramAt ? ramAt.target.mountPointId : ramTarget?.slotId)) : undefined;
   const ramGlow = ramSlot && (!ramSlot.occupant || ramSlot.occupant === ramKey) && !(ramAt && ramAt.seating !== "seated")
@@ -1074,7 +1072,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const cpu = (kind as string) === "cpu";
     const m2 = kind === "m2";
     const name = (cpuKey: string, ramKey: string, m2Key: string) => t(cpu ? cpuKey : m2 ? m2Key : ramKey);
-    const at = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
+    const at = firstAttachment(state, key);
     const host = state.parts.find((p) => p.instanceId === ret.hostInstanceId);
     const coverOn = cpu && host?.mechanisms?.[`${ret.id}:cover`] !== "open";
     const rival = cpu ? simpleSlotPart(state, "cpu") : null;
@@ -1211,7 +1209,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const key = selectedPart!;
     const liquid = simpleIsLiquid(key);
     const role = liquid ? "cooler" : roleOf(key);
-    const spec = ALL_SIMPLE_PARTS.find((p) => p.key === key)!;
+    const spec = partSpec(key);
     const part = state.parts.find((p) => p.instanceId === spec.id);
     const at = part?.attachments[0];
     const prep = part?.prep ?? {};
@@ -1260,7 +1258,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   function cpuFocus(key: SimplePartKey): "lever" | "plate" | "mark" | null {
     const ret = simpleRetention(state, key);
     if (!ret) return null;
-    const at = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
+    const at = firstAttachment(state, key);
     const lga = Boolean(ret.leverId);
     if (!ret.open && !(lga ? ret.leverOpen : false)) return at && simplePartInstalled(state, key) ? null : "lever";
     if (lga && ret.leverOpen && !ret.open) return at ? "lever" : "plate";
@@ -1273,7 +1271,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const key = selectedPart!;
     const ret = keyed!;
     const lga = Boolean(ret.leverId);
-    const at = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
+    const at = firstAttachment(state, key);
     const host = state.parts.find((p) => p.instanceId === ret.hostInstanceId);
     const coverOn = lga && host?.mechanisms?.[`${ret.id}:cover`] !== "open";
     const rival = simpleSlotPart(state, "cpu");
@@ -1328,7 +1326,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** A memory module: the slot it is over, that slot's clip(s), the module turned and lined up, lowered, then pressed home. */
   function RamHands() {
     const key = selectedPart!;
-    const at = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
+    const at = firstAttachment(state, key);
     const slots = simpleRamSlots(state);
     const target = !at && hold?.key === key ? simpleRamTargetFor(state, hold.offsetMm) : null;
     const slot = slots.find((x) => x.id === (at ? at.target.mountPointId : target?.slotId));
@@ -1398,7 +1396,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   function M2Hands() {
     const key = selectedPart!;
     const ret = keyed!;
-    const at = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
+    const at = firstAttachment(state, key);
     const slotId = at?.target.mountPointId ?? (hold?.key === key ? hold.slotId : undefined);
     const hs = slotId ? simpleM2Heatsink(state, slotId) : null;
     const screw = ret.kind === "m2_screw";
@@ -1441,7 +1439,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   function GpuHands() {
     const key = selectedPart!;
     const ret = keyed!;
-    const at = state.parts.find((p) => p.instanceId === partSpec(key).id)?.attachments[0];
+    const at = firstAttachment(state, key);
     const covered = caseCoversClosed(state);
     // The covers matter once the board is in the case; before that the card has no case opening to meet.
     const boardInCase = simplePartInstalled(state, "motherboard");

@@ -1666,10 +1666,6 @@ function fallbackSize(part: InstalledPart): Vec3 {
   return [dimensions?.lengthMm ?? 120, dimensions?.heightMm ?? 40, dimensions?.widthMm ?? 120];
 }
 
-const standsFirstId = (state: PCBuildState, instanceId: string) => {
-  const part = state.parts.find((item) => item.instanceId === instanceId);
-  return part ? standsFirst(part) : false;
-};
 const isAside = (part: InstalledPart) => catalogIndex.byId.get(part.catalogId)?.category === "monitor";
 /** The case stands first on the workbench: it is where the build happens. */
 const standsFirst = (part: InstalledPart) => catalogIndex.byId.get(part.catalogId)?.category === "case";

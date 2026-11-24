@@ -5,13 +5,13 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { pcCatalog } from "./catalog";
 import {
-  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, hasModelledMounting, isRamKey, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
+  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, hasModelledMounting, isRamKey, partSpec, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
   simpleCablesFor, simpleCableOrder, simplePartInstalled, simplePartOrder, simplePrerequisites, simpleRuleBlock, REMOVABLE, simpleRamRecommended, simpleSlotFilled, simpleSlotPart, simpleTarget, slotOf,
   caseCoversClosed, isM2Key, simpleM2Slots, simpleRamSlots, simpleRamTargetFor, simpleRetention,
   type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimpleHeld, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,
 } from "./simple-model";
-import { nextHandStep } from "./click-assembly";
-import { nextCoolerRemoval, nextCoolerStep, simpleCoolerProgress, type CoolerStep, type MountingStep } from "./cooler-assembly";
+import { attachmentOf, nextHandStep } from "./click-assembly";
+import { nextCoolerStep, simpleCoolerProgress, type CoolerStep, type MountingStep } from "./cooler-assembly";
 
 export type Selection = { kind: "part"; key: SimplePartKey } | { kind: "cable"; key: SimpleCableKey } | null;
 export type CompanionMood = "idle" | "wave" | "point" | "happy" | "concerned" | "thinking" | "celebrate";
@@ -289,7 +289,7 @@ export function pickupLine(state: PCBuildState, key: SimplePartKey): CompanionLi
 export function coolerStepLine(state: PCBuildState, key: SimplePartKey): CompanionLine | null {
   const step = nextCoolerStep(state, key);
   if (!step) return null;
-  const spec = ALL_SIMPLE_PARTS.find((p) => p.key === key)!;
+  const spec = partSpec(key);
   const bodyTotal = state.parts.find((p) => p.instanceId === spec.id)?.hardware?.screws?.length ?? 2;
   switch (step.kind) {
     case "cpuFirst": return { key: "cooler.cpuFirst" };
@@ -350,7 +350,7 @@ function m2SlotName(state: PCBuildState, key: SimplePartKey, id: string): string
 export function m2StepLine(state: PCBuildState, key: SimplePartKey, held: SimpleHeld | null): CompanionLine | null {
   const step = nextHandStep(state, key, held);
   if (!step) return null;
-  const at = state.parts.find((p) => p.instanceId === ALL_SIMPLE_PARTS.find((x) => x.key === key)?.id)?.attachments[0];
+  const at = attachmentOf(state, key);
   const slotId = at?.target.mountPointId ?? (held?.key === key ? held.slotId : undefined);
   const slot = slotId ? { slot: m2SlotName(state, key, slotId) } : null;
   switch (step.kind) {

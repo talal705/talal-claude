@@ -8,7 +8,6 @@ import type {
   InstalledPart,
   LightingStatus,
   Localized,
-  MotherboardEntry,
   PCBuildState,
   PCCatalog,
   PCDiagnostic,
@@ -52,8 +51,6 @@ import {
   makeDiag,
   makeView,
   mountSpec,
-  occupant,
-  partById,
   partsOf,
   socketInfo,
 } from "./view";

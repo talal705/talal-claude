@@ -3,7 +3,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { catalogIndex } from "./catalog";
 import type { Selection } from "./companion";
-import { ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCablesFor, simplePartInstalled, simpleRadiatorTarget, simpleTarget } from "./simple-model";
+import { ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, cableSpec, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCablesFor, simplePartInstalled, simpleRadiatorTarget, simpleTarget } from "./simple-model";
 
 /** The second stick lies beside the first; every other part keeps the place it always had. */
 export const SECOND_RAM_ID = "ram-11";
@@ -58,7 +58,7 @@ export function simpleSceneTargets(state: PCBuildState, selection: Selection): S
     ];
   }
   if (simpleCableConnected(state, selection.key) || simpleCableBlock(state, selection.key)) return [];
-  const own = ALL_SIMPLE_CABLES.find((cable) => cable.key === selection.key)!;
+  const own = cableSpec(selection.key);
   const hostReady = (instanceId: string) => ALL_SIMPLE_PARTS.some((part) => part.id === instanceId && simplePartInstalled(state, part.key));
   const free = (instanceId: string, portId: string) => !state.cables.some((cable) => Object.values(cable.ends).some((end) => end?.kind === "part" && end.instanceId === instanceId && end.portId === portId));
   // Other leads' free ports, and the look-alike headers next to this one (CPU_OPT beside CPU_FAN, EPS_2 beside EPS_1, …).

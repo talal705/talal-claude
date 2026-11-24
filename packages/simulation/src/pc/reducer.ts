@@ -23,7 +23,7 @@ import type {
 } from "@ytl/contracts";
 import { pcTarget } from "@ytl/contracts";
 import { checkConnect } from "./cabling";
-import { applyHardware, backplateRule, bodyScrewCount, coolerMounting, coolerMountingGate, liftedCooler } from "./hardware";
+import { applyHardware, backplateRule, coolerMounting, coolerMountingGate, liftedCooler } from "./hardware";
 import { cableSpecOf } from "./catalog";
 import { L, type TextParams } from "./messages";
 import { checkMount } from "./placement";
@@ -70,7 +70,6 @@ const retentionName = (kind: RetentionSpec["kind"]) =>
   : L("The socket's load plate and lever", "غطا المقبس وذراعه");
 
 const HEATSINK_NAME = L("The M.2 heatsink", "مشتّت M.2");
-const STAND_NAME = L("The M.2 screw stand", "قاعدة برغي M.2");
 /** The M.2 slots of a board under the heatsink with this id. */
 const slotsUnderHeatsink = (entry: CatalogEntry, hsId: string) => entry.mountPoints.filter((m) => m.kind === "m2_slot" && m.heatsink?.id === hsId);
 /** True while an M.2 place cannot be reached: its heatsink is on, or (screw-held) its stand is not fitted. */

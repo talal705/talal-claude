@@ -2,9 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { pc } from "@ytl/simulation";
 import { BuildPlanner } from "./BuildPlanner";
-import { pcCatalog } from "./catalog";
 import { parsePlannedBuild, planModel, rebaseProgress, snapshotFromHistory, type PlannedBuild } from "./plan-model";
 import { checkBuildPlan } from "./planner-data";
 import dynamic from "next/dynamic";

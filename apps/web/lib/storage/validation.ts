@@ -29,7 +29,7 @@ export function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_PATTERN.test(value);
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
+export function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -45,8 +45,13 @@ function isIsoTimestamp(value: unknown): value is string {
   return typeof value === "string" && !Number.isNaN(Date.parse(value));
 }
 
-function invalid(message: string): never {
+export function invalid(message: string): never {
   throw new ProjectStoreError("invalid_input", message);
+}
+
+/** The error for a stored record that failed validation, e.g. `corruptRecord("project 42")`. */
+export function corruptRecord(subject: string): ProjectStoreError {
+  return new ProjectStoreError("corrupt", `${subject} is stored but failed validation; it was left in place`);
 }
 
 // ---------- Input ----------

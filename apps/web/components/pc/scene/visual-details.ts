@@ -109,7 +109,6 @@ export function withVisualDetails(source: PartGeometry): PartGeometry {
 // Coordinates are the part's own frame as generated: radiator x 0..317, y 0..138, z 0..63 (fans on +z);
 // the block's cold plate centred at x 375, z 48, on y 0.
 
-const RL = 317;
 const RW = 138;
 const RT = 38;
 const FAN_T = 25;

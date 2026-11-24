@@ -9,7 +9,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { nextAction, type Selection } from "./companion";
 import {
-  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, isRamKey, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
+  ALL_SIMPLE_CABLES, cableSpec, isRamKey, partSpec, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
   simplePartInstalled, simplePrerequisites, simpleRadiatorTarget, simpleSlotFilled, simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf,
   type SimpleCableKey, type SimplePartKey,
 } from "./simple-model";
@@ -37,9 +37,8 @@ export interface GuideFocus {
   subject?: { part: SimplePartKey } | { cable: SimpleCableKey };
 }
 
-const partId = (key: SimplePartKey) => ALL_SIMPLE_PARTS.find((part) => part.key === key)!.id;
-const cableOf = (key: SimpleCableKey) => ALL_SIMPLE_CABLES.find((cable) => cable.key === key)!;
-const portTarget = (key: SimpleCableKey): GuideTarget => ({ kind: "port", hostInstanceId: cableOf(key).instanceId, placeId: cableOf(key).portId });
+const partId = (key: SimplePartKey) => partSpec(key).id;
+const portTarget = (key: SimpleCableKey): GuideTarget => ({ kind: "port", hostInstanceId: cableSpec(key).instanceId, placeId: cableSpec(key).portId });
 
 /** The places a part goes: its own, and a liquid cooler's radiator place in the case. */
 function placesOf(state: PCBuildState, key: SimplePartKey): GuideTarget[] {

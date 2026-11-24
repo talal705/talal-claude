@@ -1,7 +1,7 @@
 // Lesson progress records: types, validation and the save rule, shared by the guest store
 // (IndexedDB) and the account repository (PostgreSQL). Pure: no browser or Node APIs.
-import { ProjectStoreError } from "@ytl/contracts";
 import type { LessonMode, LessonProgress, StepRecord } from "@ytl/curriculum";
+import { invalid, isObject } from "./validation";
 
 /** One record per lesson and mode. `progress` is the latest run, exactly as the lesson runner produced it. */
 export interface LessonProgressRecord {
@@ -36,10 +36,6 @@ export const LESSON_ID_MAX_LENGTH = 200;
 export const MAX_STEPS = 200;
 export const LESSON_MODES: readonly LessonMode[] = ["learn", "test"];
 const FOLLOW_UPS: readonly StepRecord["followUp"][] = ["not_offered", "pending", "passed", "skipped"];
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function isCount(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
@@ -118,13 +114,13 @@ export function readLessonProgressRecord(value: unknown): LessonProgressRecord |
 /** Validates what a caller wants to save; throws `invalid_input`. */
 export function checkLessonProgress(value: unknown): LessonProgress {
   const progress = readLessonProgress(value);
-  if (progress === null) throw new ProjectStoreError("invalid_input", "the lesson progress is not a valid LessonProgress record");
+  if (progress === null) invalid("the lesson progress is not a valid LessonProgress record");
   return progress;
 }
 
 export function checkLessonKey(lessonId: unknown, mode: unknown): { lessonId: string; mode: LessonMode } {
-  if (!isLessonId(lessonId)) throw new ProjectStoreError("invalid_input", "lessonId must be a string of 1 to 200 characters");
-  if (!isLessonMode(mode)) throw new ProjectStoreError("invalid_input", "mode must be learn or test");
+  if (!isLessonId(lessonId)) invalid("lessonId must be a string of 1 to 200 characters");
+  if (!isLessonMode(mode)) invalid("mode must be learn or test");
   return { lessonId, mode };
 }
 
