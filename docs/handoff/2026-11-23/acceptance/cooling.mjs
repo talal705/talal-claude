@@ -133,6 +133,22 @@ s = await st();
 ok("cooler taken off step by step: screws loosened, then out, then lifted", !s.placed.includes("cooler") && s.history.length > histLen && s.history.at(-1) === "lift:cooler", JSON.stringify(s.history.slice(-6)));
 h = await hw();
 ok("removed cooler leaves its screws out of the picture; the contact frame stays on the board", Object.keys(h.screws).every((k) => !k.startsWith("body-screw")) && h.frame === true, JSON.stringify(h));
+
+// Review correction: after the body is off, the contact frame can be taken off by the learner (optional), one click each.
+const camB = await cam();
+await press(tile(/Freezer 36/)); await opened();
+// The OPTIONAL mounting action only: the secondary (cancel-styled) button inside the cooler panel's `hands` block in
+// the part options. Not matched by label, because once the frame is off the PRIMARY toolbar button ("Place contact
+// frame") and this secondary one ("Refit original ILM") can both match the same words, which stopped the loop at 9.
+const mount = lab.locator("[class*=partOptions] [class*=hands] button[class*=cancel]");
+ok("optional: the page offers one mounting step while the contact frame is still on", (await mount.count()) === 1, String(await mount.count()));
+const mTrail = [];
+for (let i = 0; i < 14; i += 1) { await opened(); if ((await mount.count()) !== 1) break; const n = (await st()).history.length; await press(mount); const s3 = await st(); mTrail.push(s3.history.slice(n)); if (s3.history.length === n) break; }
+s = await st(); h = await hw();
+ok("frame screws loosened, taken out, frame off, original frame back: one history step per click", mTrail.length === 10 && mTrail.every((x) => x.length === 1) && mTrail.at(-2)[0] === "hw:motherboard:frame:" && mTrail.at(-1)[0] === "hw:motherboard:ilm:", JSON.stringify(mTrail));
+ok("the scene draws the socket as original again (no frame, no frame screws, plate back)", h.frame === false && h.ilmRemoved === false && Object.keys(h.screws).every((k) => !k.startsWith("frame-screw")), JSON.stringify(h));
+ok("the CPU stayed in the socket (never lifted for the learner)", s.placed.includes("cpu"));
+ok("mounting steps moved no camera", JSON.stringify(await cam()) === JSON.stringify(camB));
 ok("no page errors", errors.length === 0, errors.join(" | "));
 console.log(`\n${pass} passed, ${fail} failed`);
 await browser.close();

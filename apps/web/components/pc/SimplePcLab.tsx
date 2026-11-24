@@ -10,10 +10,10 @@ import { CheckIcon, CrossIcon } from "../icons";
 import { BuildCompanion, type CompanionMessage } from "./BuildCompanion";
 import { pcCatalog } from "./catalog";
 import { askCompanionAi, companionAskRequest, fetchTutorStatus, type AiStatus } from "./companion-ai";
-import { buildContext, companionSay, coolerDoneLine, coolerRemovalLine, coolerStepLine, heldLines, intentOf, m2StepLine, nextLine, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
+import { buildContext, companionSay, coolerDoneLine, coolerRemovalLine, coolerStepLine, heldLines, intentOf, m2StepLine, mountingRemovalLine, nextLine, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
 import { aimClick, aimTargets, createStepGate, m2LiftPose, nextHandStep, type HandStep } from "./click-assembly";
 import { focusOn, moveCamera, selectPart } from "./scene/scene-store";
-import { applyCoolerStep, coolerStepHistory, nextCoolerRemoval, nextCoolerStep, type CoolerStep } from "./cooler-assembly";
+import { applyCoolerStep, applyMountingStep, coolerStepHistory, mountingStepHistory, nextCoolerRemoval, nextCoolerStep, nextMountingRemoval, type CoolerStep, type MountingStep } from "./cooler-assembly";
 import {
   ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, connectSimpleCable, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, isM2Key, isRamKey, lastSimpleStep, M2_WHOLE_TILT_DEG, simpleM2Heatsink, simpleM2Slots,
   parseSimpleSnapshot, SIMPLE_PART_LIST, SIMPLE_PARTS, SIMPLE_SAVE_KEY, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot,
@@ -625,6 +625,23 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (simpleAllPartsIn(r.state)) setTab("cables");
     speak({ lines: line ? [line] : [], mood: "happy", point: "scene" });
   }
+  /**
+   * One optional step of taking the contact frame off and the original ILM back on (`nextMountingRemoval`), offered
+   * only once no cooler body is on the socket. One engine change and one saved step, through the same step gate.
+   */
+  function takeMountingStep(step: MountingStep) {
+    if (handsOff() || !step) return;
+    if (!takeStep()) return;
+    const r = applyMountingStep(state, step);
+    if (!r.ok) { sayEngine(r.message, "closeBlocked"); return; }
+    if (mode === "fault") { if (fault) setFault({ ...fault, state: r.state }); }
+    else setSaved((previous) => withSimpleStep(previous, mountingStepHistory(step)));
+    setVerdict(null);
+    const next = nextMountingRemoval(r.state);
+    // With the frame off the CPU is free to lift; putting the ILM back is the learner's own choice.
+    const line = step.kind === "ilmRefit" ? { key: "cooler.ilmBack" } : step.kind === "frameOff" ? { key: "cooler.cpuFree" } : mountingRemovalLine(next);
+    if (line) speak({ lines: [line], mood: "point", point: "scene" });
+  }
   function handScrew(key: SimplePartKey, corner: number) {
     if (handsOff()) return;
     if (!takeStep()) return;
@@ -1144,6 +1161,21 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     );
   }
 
+  /**
+   * The optional mounting-hardware step (contact frame screws, frame off, original ILM back), as a secondary choice
+   * under the reason it is optional. Nothing while a cooler body is on the socket or no frame work is left.
+   */
+  function mountingControls(lead: string) {
+    const next = nextMountingRemoval(state);
+    const line = mountingRemovalLine(next);
+    if (!next || !line) return null;
+    const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved));
+    return <>
+      <p className={styles.hint}>{lead}</p>
+      <button type="button" className={styles.cancel} disabled={disabled} onClick={() => takeMountingStep(next)}>{t(`companion.${line.key}`, line.values as never)}</button>
+    </>;
+  }
+
   /** Cooler, board, PSU or fan: the preparation it needs, putting it in place, then its screws one by one. */
   /** Fitting or taking off a cooler with a documented mounting: the next step, and the choices the manual leaves open. */
   function CoolerPanel() {
@@ -1168,6 +1200,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
             : choose(false, words(coolerStepLine(state, key)), () => takeCoolerStep(key, step)))}
         {removal && started && <button type="button" className={styles.cancel} disabled={disabled} onClick={() => takeCoolerStep(key, removal, true)}>{words(coolerRemovalLine(removal, key))}</button>}
         {!step && !removal && <p className={styles.handsState}>{words(coolerDoneLine(state, key))}</p>}
+        {mountingControls(t("hands.mountingOptional"))}
         <p className={styles.hint}>{t("hands.why.cooler")}</p>
         <p className={styles.cablesNote}>{t("hands.prepNote")}</p>
       </div>
@@ -1248,7 +1281,11 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const off = hold ? Math.hypot(hold.offsetMm[0], hold.offsetMm[1]) : 0;
     const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved));
     const leverUp = lga ? ret.leverOpen : ret.open;
-    const btn = (label: string, onClick: () => void, primary = true) => <button className={primary ? styles.installButton : styles.cancel} type="button" disabled={disabled} onClick={onClick}>{label}</button>;
+    // A cooler's contact frame in place of the ILM: the engine refuses the plate and lever, and lifting the CPU under the frame.
+    const boardHw: Record<string, string> = (lga ? host?.hardware : undefined) ?? {};
+    const frameOn = boardHw.frame === "placed";
+    const ilmOff = boardHw.ilm === "removed";
+    const btn =(label: string, onClick: () => void, primary = true) => <button className={primary ? styles.installButton : styles.cancel} type="button" disabled={disabled} onClick={onClick}>{label}</button>;
     return (
       <div className={styles.hands}>
         <div className={styles.handsHead}>
@@ -1275,9 +1312,12 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
             {btn(t("hands.lowerIn"), () => handLower(key))}
           </div>}
           {at && at.seating === "seated" && ret.open && <>
-            {btn(t(lga ? "hands.closePlate" : "hands.lowerZif"), () => handMechanism(key, "closed"))}
-            {btn(t("hands.liftOut"), () => handLift(key), false)}
+            {!ilmOff && btn(t(lga ? "hands.closePlate" : "hands.lowerZif"), () => handMechanism(key, "closed"))}
+            {!frameOn && btn(t("hands.liftOut"), () => handLift(key), false)}
           </>}
+          {/* The way out from under a contact frame: its own optional steps, here as well as on the cooler. */}
+          {frameOn && at && (nextMountingRemoval(state) ? mountingControls(t("hands.frameHoldsCpu")) : <p className={styles.hint}>{t("removeCoolerFirst")}</p>)}
+          {!frameOn && ilmOff && mountingControls(t("hands.ilmOff"))}
         </>}
         <p className={styles.hint}>{t("hands.markCpu")}</p>
         <p className={styles.cablesNote}>{t(lga ? "hands.lgaSource" : "hands.zifSource")}</p>

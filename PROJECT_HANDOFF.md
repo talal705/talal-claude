@@ -71,11 +71,84 @@ Not measured: CPU/GPU/memory use. The idle frame rate is the scene's own attenti
 Arabic was checked for the air cooler and the AIO at desktop width; the 430 px run was English only and covered the air cooler only. Mid-air
 radiator/fan scene states use the existing meshes (no new radiator-screw 3D markers beyond the existing fastener
 markers). Positions of the frame screws, ring, pins and backplate are schematic (educational approximation, not the
-manufacturers' drawings). AMD sockets are not modelled for these coolers. ILM refit/frame removal exist in the
-engine but no page control offers them. Repeated enter/exit was counted for canvases and requests only; heap and GPU
-memory across cycles were not measured. The practice-build tile still says the liquid cooler goes "after the board is in
-the case" (the block now goes on first; only the radiator waits). The full `npm test` run hangs in this environment on
+manufacturers' drawings). AMD sockets are not modelled for these coolers. ~~ILM refit/frame removal exist in the
+engine but no page control offers them.~~ (fixed in the review corrections below). Repeated enter/exit was counted for canvases and requests only; heap and GPU
+memory across cycles were not measured. ~~The practice-build tile still says the liquid cooler goes "after the board is in
+the case"~~ (fixed below). The full `npm test` run hangs in this environment on
 the execution-runner tests (also on the base worktree); the targeted gate above is what was run.
+
+### Stage 4 review corrections (Codex review of `5fe68ca`, 2026-11-23)
+
+**1. CPU removal dead end after a contact-frame cooler came off.** The body's removal leaves the board's contact frame
+tight over the CPU (the engine refuses `unmount_part` on the CPU while `frame === "placed"`), and no page control
+offered the frame's screws, the frame itself or the original ILM, so the CPU could not be lifted from the UI. Fix:
+- `cooler-assembly.ts`: `nextMountingRemoval(state)` / `applyMountingStep` / `mountingStepHistory`. Order: frame screws
+  loosened across (each the opposite of the last, as the engine's `screwStep` requires), then taken out, then the frame
+  off (`hw:motherboard:frame:`), then the original ILM back (`hw:motherboard:ilm:`). Each is one existing engine
+  `set_hardware` action with the engine's own guards; nothing bypasses retention. Null while any cooler body is on the
+  socket, so radiator/body removal stays separate and first.
+- **Optional, never forced:** it is not part of `nextCoolerRemoval` and never the toolbar's next step. With the body
+  off the cooler's own next step is still a refit on the tight frame (clean → paste …); the frame is reusable for
+  either cooler. The page shows it as a secondary button under "Optional: the contact frame can stay for the next cooler…"
+  in the cooler panel, and in the CPU panel ("The cooler's contact frame holds the CPU…") when the frame is on, or
+  ("The original socket frame is off…") when only the ILM is still off.
+- The CPU is never lifted for the learner: after the frame is off the CPU panel's existing "Lift out" appears (it is
+  hidden while the frame is on); after the ILM is back the existing "Close plate" / lock lever retain it again.
+- `click-assembly.ts` `nextHandStep`: with the ILM off on an LGA socket it no longer offers "close the plate" for a
+  seated CPU (the engine always refused it); toolbar, scene click and robot share this.
+- Same click-only step gate (`takeStep`), saved steps (undo pops them; reload replays them), no camera call, backplate
+  support untouched (the engine still refuses removing it before the frame is tight).
+- Spoken lines (en/ar): `companion.cooler.frameScrewLoosen|frameScrewOut|frameOff|cpuFree|ilmRefit|ilmBack`; panel
+  text: `hands.mountingOptional|frameHoldsCpu|ilmOff`.
+- Retention ring (Freezer 7 X): checked, no equivalent dead end. The ring and pins are the cooler's own hardware and
+  the engine does not hold the CPU by them; with the body off the CPU's plate/lever open and the CPU lifts. Unchanged.
+
+**2. `simplePc.partNotes.aio`** (en/ar) now reads "280 mm · block on the bench, radiator once the board is in the
+case" / «280 مم · البلوك على الطاولة، والرادياتير بعد ما اللوحة تدخل الكيس», matching `simpleBlock` (owner decision 15).
+README's cooling bullets were then corrected in the documentation closeout (below): no one-click swap; fitting and
+removal are step by step; the AIO block may be prepared on the bench while the radiator waits for mounting in the case.
+
+**Tests (`apps/web/components/pc/cooler.test.ts`).** New block "the contact frame after its cooler is off": frame blocks
+CPU lift before; optional (cooler's next step still a refit); exact loosen-across/out/frame/ILM order and saved
+strings; CPU stays until lifted and lifts only with the frame off; plate/lever close and retain after ILM refit; plate
+refused and not offered by `nextHandStep` while ILM off; recovery from partial loosening and from frame-off/CPU-lifted;
+undo step by step and JSON reload replay of the whole flow and of a half-dismantled frame; en/ar lines exist; ring
+cooler has no dead end. Plus a part-note test. Watched failing first (missing functions; `nextHandStep` offering the
+plate). Fixed a tautological assertion (`c.key !== "cpuFan" || true`) in "nothing about wiring changes": it now
+compares the build's cables with the CPU-only build and checks no lead is connected.
+
+**Verification actually run.** `npx vitest run` (whole suite, completed this time): first run 84 files, 1103 passed,
+34 skipped (Java runner and PostgreSQL integration tests, environment-gated), 0 failed. After a final one-line type fix
+in `SimplePcLab.tsx` the whole suite ran again: 1102 passed, 1 failed — `services/runner/src/runner.test.ts` "stops an
+infinite loop at the time limit" (timing; untouched by this work), which then passed alone (26/26); `npx vitest run
+apps/web/components packages` → 51 files, 602 passed. **Not run in that pass:** `tsc --noEmit` and
+`scripts/check-messages.mjs` — both were blocked by this session's command-approval layer (run later in the separate
+Codex pass below).
+**Browser verification of the new controls is pending:** no browser automation was run in that session, and nothing
+here claims live UI verification (panel layout, en/ar wording on screen, the scene drawing the frame/ILM states after
+these steps).
+
+**Final Codex review pass (separate, independent; run after the fixes above).** These results are additional to, and do
+not replace, the results above (including the original 852-test targeted run and the timing-test failure history).
+- `npx vitest run packages apps/web/components apps/web/lib/targets apps/web/lib/interaction` → 66 files, 864 tests
+  passed, 0 failed, 0 skipped.
+- `npm run type-check` → passed.
+- `npm run check:messages` → passed.
+- Production build with `SWC_NATIVE_BINDING_CACHE=/private/tmp/talal-review-swc` → passed.
+- **No browser verification was performed by Codex.** Browser verification of the new contact-frame/ILM controls
+  (panel layout, en/ar wording on screen, scene drawing of the frame/ILM states) remains pending; the earlier
+  `acceptance/cooling.mjs` and `acceptance/aio.mjs` results predate these controls.
+- **Updated acceptance scenario not browser-run by Codex.** `docs/handoff/2026-11-23/acceptance/cooling.mjs` gained a
+  mounting-removal block (frame screws loosened, out, frame off, original ILM back: exactly 10 one-step clicks). Its
+  `mount` locator was first matched by button label, which after the frame is off can match both the primary
+  "Place contact frame" and the secondary "Refit original ILM" button (count 2, loop stops at 9). It is now scoped to
+  the optional secondary button in the cooler panel (`[class*=partOptions] [class*=hands] button[class*=cancel]`); the
+  assertions are unchanged. Codex did not run this script or any browser automation after the edit, so neither the
+  scoped locator nor the 10-step result is verified.
+
+**Documentation closeout.** `PROJECT_HANDOFF.md` updated with the Codex pass; `README.md` cooling bullets corrected
+(no one-click swap; step-by-step fitting and removal; AIO block prepared on the bench, radiator mounted once the board is
+in the case). No code, test or acceptance-script changes in this closeout.
 
 ## Latest work: Stage 3 — M.2 storage (branch `feat/stage3-m2-storage`, 2026-11-21)
 

@@ -180,6 +180,8 @@ export function nextHandStep(state: PCBuildState, key: SimplePartKey, held: Simp
   }
   if (at.seating !== "seated") return { kind: "seat" };
   if (gpu) return simpleFastened(state, key) ? null : { kind: "fasten" };
+  // With the ILM off a contact frame holds the CPU (or will): the engine refuses the plate and lever, so they are not offered.
+  if (ret.leverId && state.parts.find((p) => p.instanceId === ret.hostInstanceId)?.hardware?.ilm === "removed") return null;
   if (ret.open && ret.kind !== "dimm_latch") return { kind: "mechanism", desired: "closed" };
   if (ret.leverId && ret.leverOpen) return { kind: "lever", desired: "closed" };
   return null;

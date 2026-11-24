@@ -1,13 +1,17 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { PCBuildState } from "@ytl/contracts";
 import {
-  applyCoolerStep, coolerStepHistory, nextCoolerRemoval, nextCoolerStep, simpleCoolerProgress, type CoolerStep,
+  applyCoolerStep, applyMountingStep, coolerStepHistory, mountingStepHistory, nextCoolerRemoval, nextCoolerStep, nextMountingRemoval, simpleCoolerProgress, type CoolerStep,
 } from "./cooler-assembly";
+import { nextHandStep } from "./click-assembly";
+import { mountingRemovalLine } from "./companion";
 import { planModel, rebaseProgress, snapshotFromHistory } from "./plan-model";
 import {
-  activateSimpleModel, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, installSimplePart, LEGACY_MODEL, parseSimpleSnapshot, simpleBuildFromSnapshot, simplePartInstalled,
-  simpleCablesFor, undoSimpleStep, type SimpleSnapshot, type SimpleStep,
+  activateSimpleModel, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, installSimplePart, LEGACY_MODEL, liftSimplePart, lowerSimplePart, parseSimpleSnapshot, setSimpleMechanism, simpleBuildFromSnapshot, simplePartInstalled,
+  simpleCableConnected, simpleCablesFor, simpleRetention, undoSimpleStep, type SimpleSnapshot, type SimpleStep,
 } from "./simple-model";
+import en from "../../messages/en/labs.json";
+import ar from "../../messages/ar/labs.json";
 
 afterEach(() => activateSimpleModel(LEGACY_MODEL));
 const must = <T,>(r: { ok: true; state: T } | { ok: false; reason?: string }): T => { if (!r.ok) throw new Error(JSON.stringify(r)); return r.state; };
@@ -69,7 +73,9 @@ describe("Freezer 36 on the TUF board: the contact-frame mounting, one documente
     expect(nextCoolerStep(bare, "cooler")).toEqual({ kind: "cpuFirst" });
     const { state } = walk(withCpu(), "cooler");
     expect(simpleCoolerProgress(state, "cooler")).toMatchObject({ placed: true, secured: 2, total: 2, mechanicallyComplete: true, connected: false });
-    expect(simpleCablesFor(state).filter((c) => /fan/i.test(c.key)).every((c) => c.key !== "cpuFan" || true)).toBe(true);
+    // Fitting the cooler plugs nothing in: the build's leads are exactly as they were with only the CPU in.
+    expect(state.cables).toEqual(withCpu().cables);
+    expect(simpleCablesFor(state).some((c) => simpleCableConnected(state, c.key))).toBe(false);
   });
 
   it("a wrong choice is refused by the engine with a reason: tape for a board on the bench", () => {
@@ -130,6 +136,17 @@ describe("Liquid Freezer III 280 (the practice build's liquid cooler): block, ra
     expect(kinds(steps).filter((k) => k === "radiatorScrew").length).toBe(8);
     expect(simplePartInstalled(state, "aio")).toBe(true);
     expect(simpleCoolerProgress(state, "aio")).toMatchObject({ mechanicallyComplete: true, connected: false });
+  });
+
+  it("the part note matches that order: the block on the bench, only the radiator after the board is in the case (en and ar)", () => {
+    expect(en.simplePc.partNotes.aio).toMatch(/block on the bench/);
+    expect(en.simplePc.partNotes.aio).toMatch(/radiator once the board is in the case/);
+    expect(ar.simplePc.partNotes.aio).toMatch(/البلوك على الطاولة/);
+    expect(ar.simplePc.partNotes.aio).toMatch(/الرادياتير بعد/);
+    // And the workflow it describes: the block is placeable with the board on the bench; the radiator waits.
+    const block = walk(withCpu(), "aio");
+    expect(block.steps.some((s) => s?.kind === "place")).toBe(true);
+    expect(nextCoolerStep(block.state, "aio")).toEqual({ kind: "boardFirst" });
   });
 
   it("the AIO's own radiator fans are not extra case fans", () => {
@@ -227,5 +244,165 @@ describe("taking a cooler off (physical removal, never Undo)", () => {
     expect(out.taken.indexOf("liftRadiator")).toBeLessThan(out.taken.indexOf("liftBody"));
     expect(out.taken.at(-1)).toBe("liftBody");
     expect(out.history).toContain("lift:aio:rad");
+  });
+});
+
+describe("the contact frame after its cooler is off: optional removal, CPU out, original ILM back (review fix)", () => {
+  /** Fitted, then the body taken off by its own removal steps (never Undo): the frame stays tight over the CPU. */
+  function bodyOff() {
+    const fitted = walk(withCpu(), "cooler");
+    let s = fitted.state;
+    const history: SimpleStep[] = ["part:cpu" as SimpleStep, ...fitted.history];
+    for (let step = nextCoolerRemoval(s, "cooler"); step; step = nextCoolerRemoval(s, "cooler")) {
+      history.push(coolerStepHistory(s, "cooler", step));
+      s = must(applyCoolerStep(s, "cooler", step));
+    }
+    return { state: s, history };
+  }
+  /** Takes every optional mounting step the page offers, as the page does: one engine change and one saved step each. */
+  function dismantle(state: PCBuildState) {
+    const taken: string[] = [];
+    const history: SimpleStep[] = [];
+    let s = state;
+    for (let step = nextMountingRemoval(s); step; step = nextMountingRemoval(s)) {
+      taken.push(step.kind === "frameScrew" ? `frameScrew:${step.to}:${step.index}` : step.kind);
+      history.push(mountingStepHistory(step));
+      s = must(applyMountingStep(s, step));
+    }
+    return { state: s, taken, history };
+  }
+  const boardOf = (s: PCBuildState) => s.parts.find((p) => p.catalogId === "asus-tuf-gaming-z790-plus-wifi" || p.instanceId.startsWith("motherboard"))!;
+  const inSocket = (s: PCBuildState) => s.parts.some((p) => p.attachments.some((a) => a.target.mountPointId === "cpu-socket"));
+
+  it("before: the frame blocks lifting the CPU, and nothing of the frame is offered while a cooler body is still on", () => {
+    const fitted = walk(withCpu(), "cooler").state;
+    expect(nextMountingRemoval(fitted)).toBeNull(); // the body sits over the frame
+    const { state } = bodyOff();
+    expect(simplePartInstalled(state, "cpu")).toBe(true);
+    const lift = liftSimplePart(state, "cpu");
+    expect(lift.ok).toBe(false);
+    expect(JSON.stringify(lift)).toMatch(/contact frame is over the CPU/);
+  });
+
+  it("is optional: with the body off, the cooler's own next step is still a refit on the tight frame", () => {
+    const { state } = bodyOff();
+    expect(nextCoolerStep(state, "cooler")).toEqual({ kind: "clean" });
+    expect(nextMountingRemoval(state)).toMatchObject({ kind: "frameScrew", to: "loosened" });
+  });
+
+  it("frame screws loosened across (each the opposite of the last), then taken out, then the frame off, then the ILM back", () => {
+    const { state } = bodyOff();
+    expect(boardOf(state).hardware).toMatchObject({ ilm: "removed", frame: "placed", frame_screws: "2222" });
+    const out = dismantle(state);
+    expect(out.taken).toEqual([
+      "frameScrew:loosened:0", "frameScrew:loosened:2", "frameScrew:loosened:1", "frameScrew:loosened:3",
+      "frameScrew:out:0", "frameScrew:out:1", "frameScrew:out:2", "frameScrew:out:3",
+      "frameOff", "ilmRefit",
+    ]);
+    expect(out.history.slice(-2)).toEqual(["hw:motherboard:frame:", "hw:motherboard:ilm:"]);
+    expect(boardOf(out.state).hardware ?? {}).not.toHaveProperty("frame");
+    expect(boardOf(out.state).hardware ?? {}).not.toHaveProperty("ilm");
+    // The backplate support was never taken away during the work.
+    expect(boardOf(out.state).prep?.backplate).toBe("padding");
+  });
+
+  it("the CPU stays put until the learner lifts it, and lifts only once the frame is actually off", () => {
+    const { state } = bodyOff();
+    let s = state;
+    for (let step = nextMountingRemoval(s); step && step.kind !== "frameOff"; step = nextMountingRemoval(s)) {
+      s = must(applyMountingStep(s, step));
+      expect(inSocket(s)).toBe(true);
+      expect(liftSimplePart(s, "cpu").ok).toBe(false); // the frame (loose or not) is still over it
+    }
+    const frameOff = must(applyMountingStep(s, nextMountingRemoval(s)));
+    expect(inSocket(frameOff)).toBe(true); // not lifted for the learner
+    expect(inSocket(must(liftSimplePart(frameOff, "cpu")))).toBe(false);
+  });
+
+  it("with the ILM back, the original plate and lever close over the CPU again and retain it", () => {
+    const { state } = dismantle(bodyOff().state);
+    expect(simplePartInstalled(state, "cpu")).toBe(false); // the frame no longer holds it
+    const ret = simpleRetention(state, "cpu")!;
+    const closed = must(setSimpleMechanism(must(setSimpleMechanism(state, ret.id, "closed")), ret.leverId!, "closed"));
+    expect(simplePartInstalled(closed, "cpu")).toBe(true);
+  });
+
+  it("the plate stays refused while the ILM is off, even with the frame gone, so the shared next step never offers it", () => {
+    let s = bodyOff().state;
+    for (let step = nextMountingRemoval(s); step && step.kind !== "ilmRefit"; step = nextMountingRemoval(s)) s = must(applyMountingStep(s, step));
+    expect(nextMountingRemoval(s)).toEqual({ kind: "ilmRefit" });
+    expect(setSimpleMechanism(s, simpleRetention(s, "cpu")!.id, "closed").ok).toBe(false);
+    expect(nextHandStep(s, "cpu", null)).toBeNull(); // toolbar, scene click and robot: no refused "close the plate"
+    // With the ILM back, the same shared step closes the plate again.
+    expect(nextHandStep(must(applyMountingStep(s, { kind: "ilmRefit" })), "cpu", null)).toEqual({ kind: "mechanism", desired: "closed" });
+  });
+
+  it("any point of the dismantling can be recovered: the cooler's steps refit the frame, or a lifted CPU goes back and the frame follows", () => {
+    const { state } = bodyOff();
+    // Two screws loosened: the fitting steps tighten them back (across) and the cooler goes on again.
+    let s = must(applyMountingStep(state, nextMountingRemoval(state)));
+    s = must(applyMountingStep(s, nextMountingRemoval(s)));
+    expect(nextCoolerStep(s, "cooler")).toMatchObject({ kind: "frameScrew", to: "tight" });
+    expect(simplePartInstalled(walk(s, "cooler").state, "cooler")).toBe(true);
+    // Frame off, CPU lifted and lowered back (ILM still off): the next cooler step is the frame again.
+    let t = state;
+    for (let step = nextMountingRemoval(t); step && step.kind !== "ilmRefit"; step = nextMountingRemoval(t)) t = must(applyMountingStep(t, step));
+    t = must(lowerSimplePart(must(liftSimplePart(t, "cpu")), "cpu", { rotationDeg: 0, offsetMm: [0, 0] }));
+    expect(nextCoolerStep(t, "cooler")).toEqual({ kind: "frame" });
+    expect(simplePartInstalled(walk(t, "cooler").state, "cooler")).toBe(true);
+  });
+
+  it("every mounting step and the CPU lift are saved steps: undo restores each previous state and a reload replays them exactly", () => {
+    const off = bodyOff();
+    const out = dismantle(off.state);
+    const lifted = must(liftSimplePart(out.state, "cpu"));
+    const history = [...off.history, ...out.history, "lift:cpu"] as SimpleStep[];
+    const snap: SimpleSnapshot = { ...emptySimpleSnapshot(), history, ...deriveSimpleLists(history) };
+    expect(snap.placed).not.toContain("cpu");
+    // Reload: the save is parsed from JSON and replayed to the same build.
+    const reloaded = parseSimpleSnapshot(JSON.parse(JSON.stringify({ ...snap, version: 3 })));
+    expect(reloaded?.history).toEqual(history);
+    expect(simpleBuildFromSnapshot(reloaded!)).toEqual(lifted);
+    // Undo, one step at a time: the CPU lift first, then each mounting step, back to the frame tight.
+    let u: SimpleSnapshot = undoSimpleStep(snap)!;
+    expect(simpleBuildFromSnapshot(u)).toEqual(out.state);
+    for (let i = 0; i < out.history.length; i += 1) u = undoSimpleStep(u)!;
+    expect(simpleBuildFromSnapshot(u)).toEqual(off.state);
+    expect(nextMountingRemoval(simpleBuildFromSnapshot(u))).toMatchObject({ kind: "frameScrew", to: "loosened" });
+  });
+
+  it("a half-dismantled frame reloads half-dismantled, with the same next step", () => {
+    const off = bodyOff();
+    let s = off.state;
+    const history = [...off.history];
+    for (let i = 0; i < 5; i += 1) { const step = nextMountingRemoval(s)!; history.push(mountingStepHistory(step)); s = must(applyMountingStep(s, step)); }
+    const reloaded = simpleBuildFromSnapshot(parseSimpleSnapshot(JSON.parse(JSON.stringify({ ...emptySimpleSnapshot(), version: 3, history, ...deriveSimpleLists(history) })))!);
+    expect(reloaded).toEqual(s);
+    // Four loosened and the first taken out ("0111"): the second comes out next.
+    expect(nextMountingRemoval(reloaded)).toEqual({ kind: "frameScrew", to: "out", index: 1, value: "0011" });
+  });
+
+  it("every mounting step has a robot line in both languages", () => {
+    let s = bodyOff().state;
+    const keys = new Set<string>();
+    for (let step = nextMountingRemoval(s); step; step = nextMountingRemoval(s)) { keys.add(mountingRemovalLine(step)!.key); s = must(applyMountingStep(s, step)); }
+    expect([...keys].sort()).toEqual(["cooler.frameOff", "cooler.frameScrewLoosen", "cooler.frameScrewOut", "cooler.ilmRefit"]);
+    const at = (m: unknown, key: string) => key.split(".").reduce<unknown>((o, k) => (o as Record<string, unknown>)?.[k], m);
+    for (const key of keys) {
+      expect(typeof at(en.simplePc.companion, key)).toBe("string");
+      expect(typeof at(ar.simplePc.companion, key)).toBe("string");
+    }
+  });
+
+  it("a retention-ring cooler leaves no such dead end: with its body off the CPU's own plate opens and the CPU lifts", () => {
+    activateSimpleModel(planModel({ version: 1, purpose: "study", workload: "", parts: { case: "fractal-pop-mini-air-rgb-black-tg", motherboard: "asus-h81m-k", cpu: "intel-core-i5-4590", cooler: "arctic-freezer-7-x", psu: "corsair-rm650e-2025", gpu: null, ram: { id: "corsair-vengeance-lp-ddr3-1600-16gb-kit", modules: 2 }, storage: ["samsung-870-evo-1tb"], fans: [] } }));
+    let s = walk(must(installSimplePart(createSimpleBuild(), "cpu")), "cooler").state;
+    for (let step = nextCoolerRemoval(s, "cooler"); step; step = nextCoolerRemoval(s, "cooler")) s = must(applyCoolerStep(s, "cooler", step));
+    expect(simplePartInstalled(s, "cooler")).toBe(false);
+    expect(nextMountingRemoval(s)).toBeNull();
+    const ret = simpleRetention(s, "cpu")!;
+    s = must(setSimpleMechanism(s, ret.leverId!, "open"));
+    s = must(setSimpleMechanism(s, ret.id, "open"));
+    expect(inSocket(must(liftSimplePart(s, "cpu")))).toBe(false);
   });
 });

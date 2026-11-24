@@ -123,6 +123,53 @@ export function nextCoolerRemoval(state: PCBuildState, key: SimplePartKey): Cool
   return { kind: "liftBody" };
 }
 
+/**
+ * Optional, after a contact-frame cooler's body is off: taking the board's mounting hardware back off, in the
+ * reverse of the manual's order (frame screws loosened across, then out; the frame off; the original ILM back on).
+ * The frame is reusable, so this is never the next step of removing a cooler; the learner chooses it to lift the
+ * CPU (the engine refuses that while the frame is over it) or to return the socket to its own mechanism.
+ */
+export type MountingStep = Extract<CoolerStep, { kind: "frameScrew" }> | { kind: "frameOff" } | { kind: "ilmRefit" } | null;
+const COOLER_ROLES = new Set(["cooler", "aio"]);
+
+/** The next step of taking the contact frame off and the ILM back on; null while a cooler body is on the socket, or when there is none. */
+export function nextMountingRemoval(state: PCBuildState): MountingStep {
+  if (state.mechanics !== "detailed") return null;
+  const board = instance(state, "motherboard");
+  if (!board) return null;
+  // Anything on the socket's cooler mount sits over the frame: it comes off first, through its own removal.
+  if (ALL_SIMPLE_PARTS.some((p) => COOLER_ROLES.has(roleOf(p.key)) && bodyOf(state, p.key))) return null;
+  const hw = board.hardware ?? {};
+  if (hw.frame === "placed") {
+    const screws = hw.frame_screws ?? "0000";
+    if (screws.includes("2")) return { kind: "frameScrew", ...screwStep(screws, "loosened", nextLoosen(screws)) };
+    if (screws.includes("1")) return { kind: "frameScrew", ...screwStep(screws, "out", screws.indexOf("1")) };
+    return { kind: "frameOff" };
+  }
+  if (hw.ilm === "removed") return { kind: "ilmRefit" };
+  return null;
+}
+
+/** Takes one mounting step: one engine `set_hardware` change on the board, with the engine's own guards. */
+export function applyMountingStep(state: PCBuildState, step: MountingStep): Result {
+  switch (step?.kind) {
+    case "frameScrew": return setSimpleHardware(state, "motherboard", "frame_screws", step.value);
+    case "frameOff": return setSimpleHardware(state, "motherboard", "frame", "");
+    case "ilmRefit": return setSimpleHardware(state, "motherboard", "ilm", "");
+    default: return { ok: false, reason: "cannotFit" };
+  }
+}
+
+/** The mounting step as it is saved: replayed on reload, popped by Undo, like every other step. */
+export function mountingStepHistory(step: MountingStep): SimpleStep {
+  switch (step?.kind) {
+    case "frameScrew": return `hw:motherboard:frame_screws:${step.value}`;
+    case "frameOff": return "hw:motherboard:frame:";
+    case "ilmRefit": return "hw:motherboard:ilm:";
+    default: throw new Error("not a savable mounting step");
+  }
+}
+
 /** Takes one step. Hardware and fastener steps are one engine change each. */
 export function applyCoolerStep(state: PCBuildState, key: SimplePartKey, step: CoolerStep): Result {
   if (!step) return { ok: false, reason: "cannotFit" };

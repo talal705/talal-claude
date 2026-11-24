@@ -11,7 +11,7 @@ import {
   type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimpleHeld, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,
 } from "./simple-model";
 import { nextHandStep } from "./click-assembly";
-import { nextCoolerRemoval, nextCoolerStep, simpleCoolerProgress, type CoolerStep } from "./cooler-assembly";
+import { nextCoolerRemoval, nextCoolerStep, simpleCoolerProgress, type CoolerStep, type MountingStep } from "./cooler-assembly";
 
 export type Selection = { kind: "part"; key: SimplePartKey } | { kind: "cable"; key: SimpleCableKey } | null;
 export type CompanionMood = "idle" | "wave" | "point" | "happy" | "concerned" | "thinking" | "celebrate";
@@ -313,6 +313,15 @@ export function coolerRemovalLine(step: CoolerStep, key: SimplePartKey): Compani
     case "liftRadiator": return { key: "cooler.liftRadiator" };
     case "screw": return { key: step.to === "loosened" ? "cooler.looseScrew" : "cooler.outScrew", values: { n: step.index + 1 } };
     case "liftBody": return { key: "cooler.liftBody" };
+    default: return null;
+  }
+}
+/** The line for one optional step of taking the contact frame off and the original ILM back on. */
+export function mountingRemovalLine(step: MountingStep): CompanionLine | null {
+  switch (step?.kind) {
+    case "frameScrew": return { key: step.to === "out" ? "cooler.frameScrewOut" : "cooler.frameScrewLoosen", values: { n: step.index + 1, total: 4 } };
+    case "frameOff": return { key: "cooler.frameOff" };
+    case "ilmRefit": return { key: "cooler.ilmRefit" };
     default: return null;
   }
 }

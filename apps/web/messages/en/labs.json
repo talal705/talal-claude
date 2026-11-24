@@ -1076,6 +1076,12 @@
         "looseScrew": "Loosen cooler screw {n}.",
         "outScrew": "Take cooler screw {n} out.",
         "liftBody": "Lift the cooler straight up and off.",
+        "frameScrewLoosen": "Loosen frame screw {n} of {total}, working across the frame.",
+        "frameScrewOut": "Take frame screw {n} of {total} out.",
+        "frameOff": "Lift the contact frame off. The CPU stays in the socket until you lift it.",
+        "ilmRefit": "Put the original socket frame (ILM) back on, with its plate and lever open.",
+        "cpuFree": "The frame is off, so the CPU can be lifted out now. Put the original socket frame back only to close its plate and lever again.",
+        "ilmBack":"The original socket frame is back. Close the plate and lock the lever over the CPU, or lift the CPU out.",
         "done": "The cooler is on and connected.",
         "notWired": "The cooler is mounted. Its cables come later, in the wiring stage."
       },
@@ -1350,7 +1356,7 @@
       "cpu": "i5-14600K · air or liquid cooler",
       "cpu2": "i9-14900K · needs the liquid cooler here",
       "cooler": "Freezer 36 · on the bench",
-      "aio": "280 mm · after the board is in the case"
+      "aio": "280 mm · block on the bench, radiator once the board is in the case"
     },
     "socketTaken": "The other CPU is in the socket. Press Swap to replace it.",
     "coolerTaken": "The other cooler is on the CPU. Press Swap to replace it.",
@@ -1667,6 +1673,9 @@
       "markRam": "The notch is off centre: it meets the slot's key only one way round.",
       "takeOther": "The other CPU is in the socket. Open the plate and lift it out first.",
       "takeOtherCooler": "The other cooler is still on. Take it off first, step by step, then fit this one.",
+      "mountingOptional": "Optional: the contact frame can stay for the next cooler. Take it off only to lift the CPU out or to put the original socket frame back.",
+      "frameHoldsCpu": "The cooler's contact frame holds the CPU. To lift it out, take the frame off first with the steps below.",
+      "ilmOff": "The original socket frame is off: put it back (below) to close the plate and lever.",
       "unverified": "The latch arrangement on this board is not shown in its manual; one latch is drawn.",
       "note": "Educational simulation: it does not reproduce insertion force.",
       "closeup": "Close-up",
