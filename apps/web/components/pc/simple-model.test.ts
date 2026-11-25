@@ -253,7 +253,8 @@ describe("the CPU and cooler alternatives", () => {
       ["block", "motherboard-2", "cooler-mount", "seated"],
       ["radiator", "case-1", "rad-front", "seated"],
     ]);
-    expect(state.parts.filter((p) => p.instanceId === "fan-9" || p.instanceId === "fan-10").map((p) => p.attachments[0]!.target.mountPointId)).toEqual(["fan-top-1", "fan-top-2"]);
+    // The case's own front fan moves up; its rear fan (a supplied fan at the rear, per Corsair) stays where it is.
+    expect(state.parts.filter((p) => p.instanceId === "fan-9" || p.instanceId === "fan-10").map((p) => p.attachments[0]!.target.mountPointId)).toEqual(["fan-top-1", "fan-rear-1"]);
     expect(simpleCablesFor(state).map((c) => c.key)).toEqual(["atx", "cpuPower", "gpuPower", "powerSwitch", "caseFan1", "caseFan2", "aioPump", "aioFan"]);
   });
 

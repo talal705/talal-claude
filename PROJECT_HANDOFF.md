@@ -4,6 +4,33 @@ Current site brand: **بيئة التدريب الافتراضية (VTE)** in Ar
 **Virtual Training Environment (VTE)** in English. Older references below use the former name.
 The repository and hosting identifiers remain `talal-claude`; saved-data keys are unchanged.
 
+## Current work — assembly completion checkpoint (2026-11-25)
+
+The owner authorized continuing the full agreed PC-assembly roadmap through Stage 11, with Claude implementing and
+Codex reviewing. Older stage-by-stage stop instructions no longer block this authorized work. Other site sections stay intact.
+Work is isolated in `/Users/most/Documents/Codex/VTE-completion-2026-11-25`, branch `feat/assembly-completion`.
+The original workspace remains on the working cooling-fix branch; no `main` merge or production deployment was made.
+
+- Based on `4c1b333`; local WIP checkpoint `d58ef7b` adds staged SATA/PSU/fan placement, position choices, per-screw removal,
+  scene fastener visibility and tests. Cooling repair `afd162e` was cherry-picked as `3dce2b5`.
+- A second pass adds preliminary fan-bank constraints and corrected supplied-fan positions, and changes physically valid
+  PSU/fan orientations from forced choices to advice. These are partial implementation changes, **not accepted release work**.
+- Claude hit its five-hour usage limit while implementing; the CLI reports reset at **20:40 Asia/Riyadh on 2026-11-25**.
+  Per the owner's established role split and previous preference to wait for Claude, Codex completed review/checkpoint work
+  rather than silently taking over product implementation.
+- Independent checks on the saved product source: `npm run type-check`, `npm run check:messages`, `npm run build` passed;
+  `npx vitest run apps/web packages`: **83 files, 1064 passed, 21 skipped** (unconfigured database/provider integration).
+- **Additional review reproduction FAILED:** a motherboard with its own cooler lead connected internally is refused for
+  lifting even after all its screws are removed (`unplugFirst`). Both ends travel with the board. This defect is not covered by
+  the green broad suite. Run `npx vitest run --config docs/handoff/2026-11-25/review/vitest.config.mjs` to reproduce.
+- Remaining work includes that confirmed blocker, actual alternate mount targets/robot consistency, fault-mode removal
+  intent, save/rebase migrations, verifying fan-bank claims, individual GPU covers/bracket screws, wiring/final-readiness
+  completion and the final EN/AR desktop/430px browser/visual checks. Earlier/interrupted browser runs do not verify this source.
+
+Read `docs/handoff/2026-11-25/review/CODEX_REVIEW.md` for findings and evidence, `IMPLEMENTATION_SCOPE.txt` for the full
+authorized scope, and `RESUME_CLAUDE.txt` for a ready continuation instruction. The broad checks passing do not mean this
+checkpoint is ready to release. Preserve all current work and complete review findings before publishing a final preview.
+
 ## Concise-code refactor — locally reviewed and checked (2026-11-25)
 
 Owner requests concise, readable code for the current project and future projects. Claude implements;

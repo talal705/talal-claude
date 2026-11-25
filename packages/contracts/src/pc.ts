@@ -326,7 +326,13 @@ export type MountPointSpec =
       bottomVent?: { present: boolean; source: string } | null;
     })
   | (MountPointBase & { kind: "drive_bay"; sizes: ("2.5_inch" | "3.5_inch")[] })
-  | (MountPointBase & { kind: "fan_mount"; location: CaseLocation; sizesMm: number[] })
+  | (MountPointBase & {
+      kind: "fan_mount";
+      location: CaseLocation;
+      sizesMm: number[];
+      /** Places that share one bank of the case (e.g. the front): one fan size at a time, up to the count for that size. */
+      bank?: { id: string; capacityBySizeMm: Record<string, number> };
+    })
   | (MountPointBase & {
       kind: "radiator_mount";
       location: CaseLocation;

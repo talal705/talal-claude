@@ -5,7 +5,7 @@ import type { pc } from "@ytl/simulation";
 import { planModel, rebaseProgress, snapshotFromHistory, type PlannedBuild } from "./plan-model";
 import {
   activateSimpleModel, applySimpleStep, createSimpleBuild, firstAttachment, LEGACY_MODEL, parseSimpleSnapshot, placeSimplePart, simpleBlock, simpleBuildFromSnapshot,
-  placeRadiator, simpleLiftBlock, simplePartInstalled, simplePositions, simpleRequiredScrews, withSimpleStep, emptySimpleSnapshot, type SimpleSnapshot, type SimpleStep,
+  placeRadiator, simpleLiftBlock, simpleOrientationAdvice, simplePartInstalled, simplePositions, simpleRequiredScrews, withSimpleStep, emptySimpleSnapshot, type SimpleSnapshot, type SimpleStep,
 } from "./simple-model";
 
 const plan = (over: Partial<pc.BuildPlan> = {}): PlannedBuild => ({
@@ -38,18 +38,14 @@ describe("power supply (stage 6)", () => {
     expect(simplePartInstalled(state, "motherboard")).toBe(false);
   });
 
-  it("follows the case's vent: a filtered bottom vent refuses fan-up, a case with no recorded vent accepts either way", () => {
+  it("accepts either fan direction (Corsair: it changes airflow, not fit), needs a choice, and only advises fan-down over a filtered vent", () => {
     activateSimpleModel(planModel(plan()));
-    const before = steps("prep:psu:psu_fan:up").state;
-    const refused = placeSimplePart(before, "psu");
-    expect(refused.ok).toBe(false);
-    if (!refused.ok) { expect(refused.reason).toBe("prepWrong"); expect(refused.message?.en).toMatch(/fan faces down/); }
-
+    const start = createSimpleBuild();
+    expect(placeSimplePart(start, "psu")).toMatchObject({ ok: false, reason: "prepMissing" });
+    expect(simpleOrientationAdvice(start, "psu")).toBe("psuDown");
+    for (const way of ["up", "down"]) expect(placeSimplePart(steps(`prep:psu:psu_fan:${way}` as SimpleStep).state, "psu").ok, way).toBe(true);
     activateSimpleModel(planModel(plan({ case: "fractal-north-charcoal-black-mesh" })));
-    for (const way of ["up", "down"]) {
-      const ok = placeSimplePart(steps(`prep:psu:psu_fan:${way}` as SimpleStep).state, "psu");
-      expect(ok.ok, way).toBe(true);
-    }
+    expect(simpleOrientationAdvice(createSimpleBuild(), "psu")).toBeNull();
   });
 
   it("comes out by unscrewing one screw at a time, then lifting; the lift is refused while a screw or a lead is in", () => {
@@ -136,14 +132,14 @@ describe("case fans (stage 9)", () => {
     expect(placeSimplePart(createSimpleBuild(), "fan1", "fan-front-1")).toMatchObject({ ok: false, reason: "positionTaken" });
   });
 
-  it("explains a wrong airflow through the engine, and accepts the airflow the chosen place needs", () => {
+  it("needs the airflow chosen, accepts either direction at any place, and advises the usual one for the chosen place", () => {
     activateSimpleModel(planModel(plan()));
-    const wrong = placeSimplePart(steps("prep:fan1:airflow:intake").state, "fan1", "fan-top-1");
-    expect(wrong.ok).toBe(false);
-    if (!wrong.ok) { expect(wrong.reason).toBe("prepWrong"); expect(wrong.message?.en).toMatch(/blows air out/); }
-    const right = steps("prep:fan1:airflow:exhaust", "place:fan1@fan-top-1", ...screws("fan1", 4));
-    expect(simplePartInstalled(right.state, "fan1")).toBe(true);
-    expect(firstAttachment(right.state, "fan1")?.target.mountPointId).toBe("fan-top-1");
+    expect(placeSimplePart(createSimpleBuild(), "fan1", "fan-top-1")).toMatchObject({ ok: false, reason: "prepMissing" });
+    expect(simpleOrientationAdvice(createSimpleBuild(), "fan1", "fan-top-1")).toBe("exhaust");
+    expect(simpleOrientationAdvice(createSimpleBuild(), "fan1", "fan-front-3")).toBe("intake");
+    const against = steps("prep:fan1:airflow:intake", "place:fan1@fan-top-1", ...screws("fan1", 4));
+    expect(simplePartInstalled(against.state, "fan1")).toBe(true);
+    expect(firstAttachment(against.state, "fan1")?.target.mountPointId).toBe("fan-top-1");
   });
 
   it("does not move a fan the learner fitted for a liquid cooler's radiator: it is refused until that fan is out", () => {

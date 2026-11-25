@@ -68,8 +68,9 @@ export const pcCatalog: PCCatalog = {
  */
 export const SUPPLIED_PARTS: Readonly<Record<string, readonly { catalogId: string; mountPointId: string }[]>> = {
   "corsair-4000d-airflow-black": [
+    // Corsair's 4000D AIRFLOW comparison page: one included fan at the front and one at the rear.
     { catalogId: "corsair-airguide-120-4000d", mountPointId: "fan-front-1" },
-    { catalogId: "corsair-airguide-120-4000d", mountPointId: "fan-front-2" },
+    { catalogId: "corsair-airguide-120-4000d", mountPointId: "fan-rear-1" },
   ],
   "fractal-north-charcoal-black-mesh": [
     { catalogId: "fractal-aspect-14-pwm-north", mountPointId: "fan-front-1" },

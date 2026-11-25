@@ -76,20 +76,19 @@ describe("the 280 mm liquid cooler in the 3D view", () => {
   const placed = place(state);
   const boxes = solids(state, placed);
 
-  it("mounts the radiator upright in the front position and moves both case fans to the top", () => {
+  it("mounts the radiator upright in the front position and moves the case's front fan to the top and leaves its rear fan", () => {
     const aio = placed.get("cooling-13")!;
     expect(Object.keys(aio.groupFrames).sort()).toEqual(["block", "radiator"]);
     const radiator = boxes.filter((b) => b.id.startsWith("cooling-13/radiator-core"))[0]!;
     // Its 277 mm core stands vertical, behind the front panel.
     expect(radiator.max[1]! - radiator.min[1]!).toBeGreaterThan(270);
-    for (const fan of ["fan-9", "fan-10"]) {
-      const part = state.parts.find((p) => p.instanceId === fan)!;
-      expect(part.attachments[0]!.target.mountPointId, fan).toMatch(/^fan-top-/);
-    }
+    expect(state.parts.find((p) => p.instanceId === "fan-9")!.attachments[0]!.target.mountPointId).toMatch(/^fan-top-/);
+    // The other fan arrived at the rear (Corsair's 4000D AIRFLOW page) and is not in the radiator's way.
+    expect(state.parts.find((p) => p.instanceId === "fan-10")!.attachments[0]!.target.mountPointId).toBe("fan-rear-1");
   });
 
-  it("touches nothing: radiator, block, moved fans and the rest of the build stay clear of each other", () => {
-    const own = (b: Box) => b.id.startsWith("cooling-13/") || b.id.startsWith("fan-9/") || b.id.startsWith("fan-10/");
+  it("touches nothing: radiator, block, the moved fan and the rest of the build stay clear of each other", () => {
+    const own = (b: Box) => b.id.startsWith("cooling-13/") || b.id.startsWith("fan-9/");
     const clashes: string[] = [];
     for (const a of boxes.filter(own)) {
       for (const b of boxes.filter((x) => !x.id.startsWith(a.id.split("/")[0]!))) {

@@ -87,7 +87,6 @@ function prepGate(v: View, instanceId: string, place: MountPointSpec, fail: (cod
   const prep = part.prep ?? {};
   const target = pcTarget.part(instanceId);
   const missing = (en: string, ar: string) => fail("prep_missing", target, { what: L(en, ar) });
-  const wrong = (en: string, ar: string) => fail("prep_wrong", target, { why: L(en, ar) });
   if (place.kind === "cpu_cooler_mount" && entry.category === "cooling" && entry.spec.paste) {
     if (entry.spec.paste.film && prep.film !== "removed") return missing("Peel the protective film off the cooler's plate first.", "شيل غلاف الحماية عن قاعدة المبرّد أول.");
     if (entry.spec.paste.supplied === "tube" && prep.paste !== "applied") return missing("Put a small amount of thermal paste on the CPU first.", "حط كمية صغيرة من المعجون الحراري على المعالج أول.");
@@ -98,15 +97,11 @@ function prepGate(v: View, instanceId: string, place: MountPointSpec, fail: (cod
   }
   if (place.kind === "psu_bay" && entry.category === "psu") {
     if (!prep.psu_fan) return missing("Decide which way the PSU's fan faces before sliding it in.", "حدّد اتجاه مروحة مزوّد الطاقة قبل ما تدخله.");
-    if (place.bottomVent?.present && prep.psu_fan === "up") return wrong("This case has a filtered vent under the PSU: turn the PSU so its fan faces down and draws cool air from outside.", "هالكيس فيه فتحة تهوية بفلتر تحت مزوّد الطاقة: اقلبه لين تصير مروحته تحت وتسحب هوا بارد من برّا.");
+    // Fan up or down both fit (Corsair: the choice affects airflow, not fit); the page only advises a direction.
   }
   if ((place.kind === "fan_mount" || place.kind === "radiator_mount") && entry.category === "fan") {
-    const want = place.location === "rear" || place.location === "top" ? "exhaust" : "intake";
-    if (!prep.airflow) return missing("Check the arrows on the fan frame and turn it for the airflow this position needs first.", "شوف الأسهم على إطار المروحة واقلبها حسب اتجاه الهوا اللي يحتاجه المكان أول.");
-    if (prep.airflow !== want) return wrong(
-      want === "intake" ? "This position pulls air in: turn the fan so its airflow arrow points into the case." : "This position blows air out: turn the fan so its airflow arrow points out of the case.",
-      want === "intake" ? "هالمكان يسحب الهوا للداخل: اقلب المروحة لين يصير سهم الهوا داخل الكيس." : "هالمكان يطلّع الهوا: اقلب المروحة لين يصير سهم الهوا طالع من الكيس.",
-    );
+    if (!prep.airflow) return missing("Check the arrows on the fan frame and choose which way its air will move first.", "شوف الأسهم على إطار المروحة وحدّد وين يمشي الهوا أول.");
+    // The arrows can be set either way: front/bottom intake and rear/top exhaust are the usual advice, not a mounting limit.
   }
   return null;
 }

@@ -335,9 +335,11 @@ describe("starter kits", () => {
       expect(data.state.rgbPreference).toBe(kit.rgb);
       // Disassembled: no part sits anywhere except the case's factory-fitted fans, and no cable end is plugged in.
       const fitted = data.state.parts.filter((part) => part.attachments.length > 0);
+      // The 4000D AIRFLOW comes with one front and one rear fan; the North with two front fans.
+      const second = kit.id === "i5-ddr4-air" ? "fan-rear-1" : "fan-front-2";
       expect(fitted.map((part) => [part.catalogId, part.attachments[0]!.target.hostInstanceId, part.attachments[0]!.target.mountPointId])).toEqual([
         [fitted[0]!.catalogId, "case-1", "fan-front-1"],
-        [fitted[0]!.catalogId, "case-1", "fan-front-2"],
+        [fitted[0]!.catalogId, "case-1", second],
       ]);
       expect(data.state.parts.length).toBeGreaterThanOrEqual(11);
       expect(data.log.filter((a) => a.type === "add_part").length).toBe(data.state.parts.length);

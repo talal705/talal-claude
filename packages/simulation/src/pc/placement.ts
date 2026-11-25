@@ -160,13 +160,27 @@ function kindRules(
         ]);
       }
       return undefined;
-    case "fan_mount":
-      if (entry.category === "fan" && !mount.sizesMm.includes(entry.spec.sizeMm)) {
+    case "fan_mount": {
+      if (entry.category !== "fan") return undefined;
+      if (!mount.sizesMm.includes(entry.spec.sizeMm)) {
         return reject(v, "fan_size_unsupported", part, target, p, [
           evidence("Fan size", "مقاس المروحة", mm(entry.spec.sizeMm), mount.sizesMm.map(mm).join(" / "), entry.id),
         ]);
       }
+      // A bank takes one fan size at a time, up to its capacity for that size (front: 3 x 120 mm or 2 x 140 mm).
+      const bank = mount.bank;
+      if (bank) {
+        const sizes = hostEntry.mountPoints.flatMap((m) => {
+          if (m.kind !== "fan_mount" || m.id === mount.id || m.bank?.id !== bank.id) return [];
+          const other = occupant(v, { hostInstanceId: host.instanceId, mountPointId: m.id });
+          const fan = other && entryOf(v, other.part);
+          return fan?.category === "fan" ? [fan.spec.sizeMm] : [];
+        });
+        const size = entry.spec.sizeMm;
+        if (sizes.some((s) => s !== size) || sizes.length + 1 > (bank.capacityBySizeMm[String(size)] ?? 0)) return reject(v, "mount_blocked", part, target, p);
+      }
       return undefined;
+    }
     case "radiator_mount":
       // ARCTIC's Liquid Freezer III manual: a radiator below the pump risks bubbling noise.
       if (entry.category === "cooling" && entry.spec.type === "aio_liquid" && mount.location === "bottom") {

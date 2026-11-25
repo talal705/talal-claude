@@ -43,3 +43,7 @@ These replace earlier, less specific requirements in `docs/BRIEF.md` where they 
 ## 2026-11-10 — Manual compact cables
 
 20. **Compact PC cabling and visual detail.** The owner requested visible, learner-connected GPU/motherboard/cooler and case leads, plus better-looking components and case. Keep the one-PC flow simple with Parts/Cables tabs. Five required startup connections use the existing engine; two case fan leads affect fan motion without inventing a boot failure. Preserve centred camera, motherboard-first assembly and old saves. Version-1 powered builds migrate with their former automatic connections. Refined original procedural geometry remains educational, not manufacturer-accurate.
+
+## 2026-11-25 — Complete the agreed detailed assembly roadmap
+
+21. **Continue through Stage 11 with Claude implementing and Codex reviewing.** The owner requested direct coordination with Claude, completion of the agreed project work and correction of errors. Continue the remaining motherboard/case, PSU, SATA storage, GPU, fan, wiring and final-startup stages; older stage-specific stop instructions do not require fresh approval between these stages. Preserve the current planner, click/tap interactions, still centered camera, EN/AR, save/undo, model detail, RGB choice and unrelated site features. Keep concise readable code. Explanatory videos remain deferred. Preserve the existing boundary against merging `main` or deploying production before the final owner review.

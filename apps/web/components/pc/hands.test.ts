@@ -3,7 +3,7 @@ import {
   activateSimpleModel, createSimpleBuild, emptySimpleSnapshot, LEGACY_MODEL, liftSimplePart, lowerSimplePart, parseSimpleSnapshot, reseatSimplePart, setSimpleMechanism, simpleBuildFromSnapshot,
   simplePartInstalled, simpleRetention, undoSimpleStep, withLift, withLower, withMechanism,
   caseCoversClosed, connectSimpleCable, disconnectSimpleCable, fastenSimplePart, installSimplePart, simpleFastened, SLOT_COVERS_ID, unfastenSimplePart, withFasten, withUnfasten,
-  placeSimplePart, prepSimplePart, screwSimplePart, simpleScrewOrder, withPlace, withPrep, withScrew,
+  placeSimplePart, prepSimplePart, screwSimplePart, simpleOrientationAdvice, simpleScrewOrder, withPlace, withPrep, withScrew,
 } from "./simple-model";
 import { applyCoolerStep, nextCoolerStep } from "./cooler-assembly";
 
@@ -207,12 +207,13 @@ describe("hands-on preparation, placing and screws", () => {
     for (let i = 0; i < 9; i++) s = must(screwSimplePart(s, "motherboard"));
     expect(simplePartInstalled(s, "motherboard")).toBe(true);
   });
-  it("the PSU's fan faces down over the 4000D's filtered vent; the steps replay from a save", () => {
+  it("the PSU's fan direction is the learner's choice (either fits; the vent only makes down the advice); the steps replay from a save", () => {
     let snap = emptySimpleSnapshot();
     for (const k of ["cpu", "ram", "ram2", "storage", "cooler", "motherboard"]) snap = { ...snap, history: [...snap.history, `part:${k}` as const] };
     let s = simpleBuildFromSnapshot(snap);
-    s = must(prepSimplePart(s, "psu", "psu_fan", "up"));
-    expect(placeSimplePart(s, "psu")).toMatchObject({ ok: false, reason: "prepWrong" });
+    expect(placeSimplePart(s, "psu")).toMatchObject({ ok: false, reason: "prepMissing" });
+    expect(simpleOrientationAdvice(s, "psu")).toBe("psuDown");
+    expect(placeSimplePart(must(prepSimplePart(s, "psu", "psu_fan", "up")), "psu").ok).toBe(true);
     snap = withPrep(snap, "psu", "psu_fan", "down");
     snap = withPlace(snap, "psu");
     for (let i = 0; i < 4; i++) snap = withScrew(snap, "psu", i);

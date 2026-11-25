@@ -41,13 +41,13 @@ const LEGACY_PARTS = [
  * that names one) so nothing older moves. Only one part of each slot can be in at a time: a CPU in
  * the socket, a cooler on it. The liquid cooler's block goes on the CPU like the air cooler; its
  * radiator goes in the case's front radiator position (Corsair lists 240, 280 and 360 mm there), so
- * it is fitted once the board is in the case. That position covers the front fan places, so the two
- * fans the case came with move to its top fan places, as exhaust, while the radiator is in; their
- * leads stay on CHA_FAN1 and CHA_FAN2.
+ * it is fitted once the board is in the case. That position covers the front fan places, so the
+ * case's own front fan moves to a top fan place, as exhaust, while the radiator is in (its rear fan stays);
+ * their leads stay on CHA_FAN1 and CHA_FAN2.
  */
 const LEGACY_ALTERNATIVES = [
   { key: "cpu2", id: "cpu-12", catalogId: "intel-core-i9-14900k", host: "motherboard-2", mount: "cpu-socket", screws: 1, slot: "cpu" },
-  { key: "aio", id: "cooling-13", catalogId: "arctic-liquid-freezer-iii-280", host: "motherboard-2", mount: "cooler-mount", screws: 4, slot: "cooler", radiator: { host: "case-1", mount: "rad-front", screws: 8, moveFans: [["fan-9", "fan-top-1"], ["fan-10", "fan-top-2"]] } },
+  { key: "aio", id: "cooling-13", catalogId: "arctic-liquid-freezer-iii-280", host: "motherboard-2", mount: "cooler-mount", screws: 4, slot: "cooler", radiator: { host: "case-1", mount: "rad-front", screws: 8, moveFans: [["fan-9", "fan-top-1"]] } },
 ] as const;
 
 /** A learner-installed part, by key. `cpu`, `ram2`, `storage2`, `fan1`, `aio` … */
@@ -664,6 +664,18 @@ export function simplePrepFor(state: PCBuildState, key: SimplePartKey): { prep: 
   if (entry.category === "psu") return [{ prep: "psu_fan", value: "down" }];
   if (entry.category === "fan" && place && (place.kind === "fan_mount" || place.kind === "radiator_mount")) return [{ prep: "airflow", value: airflowFor(place.location) }];
   return [];
+}
+/**
+ * The usual advice for the way a power supply or fan faces, or null. Advice only: both ways fit and nothing
+ * refuses either. A power supply over the case's filtered vent faces down; a fan at the front or bottom
+ * draws air in, one at the rear or top blows it out (`positionId`: the place the learner chose).
+ */
+export function simpleOrientationAdvice(state: PCBuildState, key: SimplePartKey, positionId?: string): "psuDown" | "intake" | "exhaust" | null {
+  const target = simpleTarget(state, key, positionId);
+  const host = pcCatalog.entries.find((e) => e.id === state.parts.find((p) => p.instanceId === target.hostInstanceId)?.catalogId);
+  const place = host?.mountPoints.find((m) => m.id === target.mountPointId);
+  if (place?.kind === "psu_bay") return place.bottomVent?.present ? "psuDown" : null;
+  return place && (place.kind === "fan_mount" || place.kind === "radiator_mount") ? airflowFor(place.location) : null;
 }
 const prepActions = (state: PCBuildState, key: SimplePartKey): PCAction[] => {
   const part = state.parts.find((p) => p.instanceId === partSpec(key).id);

@@ -251,7 +251,7 @@ export const lgaSocketDetail = (note: string) => ({
 
 // ---------- Case ----------
 
-export const fanMounts = (location: "front" | "top" | "rear" | "side", count: number, sizesMm: number[], en: string, ar: string): MountPointSpec[] =>
+export const fanMounts = (location: "front" | "top" | "rear" | "side", count: number, sizesMm: number[], en: string, ar: string, bank?: { id: string; capacityBySizeMm: Record<string, number> }): MountPointSpec[] =>
   Array.from({ length: count }, (_, i) => ({
     id: `fan-${location}-${i + 1}`,
     kind: "fan_mount" as const,
@@ -259,6 +259,7 @@ export const fanMounts = (location: "front" | "top" | "rear" | "side", count: nu
     sizesMm,
     label: L(`${en} fan position ${i + 1}`, `مكان مروحة ${ar} رقم ${i + 1}`),
     fastener: { kind: "fan_screw" as const, count: 4 },
+    ...(bank ? { bank } : {}),
   }));
 
 // ---------- CPU cooler mounting (from the coolers' own manuals) ----------

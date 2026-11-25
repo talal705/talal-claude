@@ -20,7 +20,7 @@ import {
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
   simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap,
   hasModelledMounting, withSimpleStep, activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
-  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, unscrewSimplePart, withUnscrew, isPositionKey, simplePositions, simpleLiftBlock, simpleRequiredScrews, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
+  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, unscrewSimplePart, withUnscrew, isPositionKey, simplePositions, simpleLiftBlock, simpleOrientationAdvice, simpleRequiredScrews, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
 } from "./simple-model";
 import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-scene";
 import { guideFocus } from "./guide";
@@ -1222,6 +1222,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const disabled = !ready || handsOff();
     const secured = at?.fastenersSecured ?? 0;
     const required = simpleRequiredScrews(state, key);
+    const advice = !at && (role === "psu" || role === "fan") ? simpleOrientationAdvice(state, key, position?.key === key ? position.id : undefined) : null;
     const order = simpleScrewOrder(saved.history, key);
     const choice = (active: boolean, label: string, onClick: () => void) =>
       <button type="button" className={active ? styles.installButton : styles.cancel} aria-pressed={active} disabled={disabled || Boolean(at)} onClick={onClick}>{active ? "✓ " : ""}{label}</button>;
@@ -1261,6 +1262,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
           : <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handScrew(key, secured)}>{t("hands.nextScrew", { n: secured + 1, total: required })}</button>)}
         {at && <p className={styles.handsState}>{t("hands.screwsState", { n: secured, total: required })}</p>}
         <p className={styles.hint}>{t(`hands.why.${role}`)}</p>
+        {advice && <p className={styles.hint}>{t(`hands.advice.${advice}`)}</p>}
         {liquid && <p className={styles.cablesNote}>{t("hands.liquidNote")}</p>}
         <p className={styles.cablesNote}>{t("hands.prepNote")}</p>
       </div>

@@ -128,7 +128,8 @@ export function planModel(build: PlannedBuild): SimpleModel {
   });
 
   // Fan places already taken by the case's own fans.
-  const suppliedFans = supplied.instanceIds.map((instanceId) => ({ instanceId, mount: initial.parts.find((p) => p.instanceId === instanceId)!.attachments[0]!.target.mountPointId }));
+  const fanSizeOf = (instanceId: string) => { const e = entry(initial.parts.find((p) => p.instanceId === instanceId)?.catalogId, "fan"); return e?.spec.sizeMm ?? 0; };
+  const suppliedFans = supplied.instanceIds.map((instanceId) => ({ instanceId, mount: initial.parts.find((p) => p.instanceId === instanceId)!.attachments[0]!.target.mountPointId, sizeMm: fanSizeOf(instanceId) }));
   const takenFan = new Set(suppliedFans.map((f) => f.mount));
   let radiator: PartSpec["radiator"];
   if (liquid) {
@@ -166,11 +167,24 @@ export function planModel(build: PlannedBuild): SimpleModel {
   if (gpu) add({ key: "gpu", id: idOf.get("gpu")!, catalogId: gpu.id, host: boardId, mount: "pcie-x16-1", screws: screws(board, "pcie-x16-1") });
   add({ key: "psu", id: psuId, catalogId: psu.id, host: "case-1", mount: "psu-bay", screws: screws(caseE, "psu-bay") });
   const fanKeys: string[] = [];
+  // A fan bank (the front) takes one size at a time, up to its capacity: the sizes already in it, the case's own fans included.
+  const bankSizes = (bankId: string) => [...takenFan].flatMap((id) => {
+    const m = caseE.mountPoints.find((x) => x.id === id);
+    const at = suppliedFans.find((x) => x.mount === id) ?? plannedFans.find((x) => x.mount === id);
+    return m?.kind === "fan_mount" && m.bank?.id === bankId && at ? [at.sizeMm] : [];
+  });
+  const plannedFans: { mount: string; sizeMm: number }[] = [];
+  const bankAllows = (m: (typeof caseE.mountPoints)[number], sizeMm: number) => {
+    if (m.kind !== "fan_mount" || !m.bank) return true;
+    const sizes = bankSizes(m.bank.id);
+    return sizes.every((s) => s === sizeMm) && sizes.length + 1 <= (m.bank.capacityBySizeMm[String(sizeMm)] ?? 0);
+  };
   fanEntries.forEach((f, i) => {
     const key = `fan${i + 1}`;
-    const place = caseE.mountPoints.find((m) => m.kind === "fan_mount" && !takenFan.has(m.id) && m.sizesMm.includes(f.spec.sizeMm));
+    const place = caseE.mountPoints.find((m) => m.kind === "fan_mount" && !takenFan.has(m.id) && m.sizesMm.includes(f.spec.sizeMm) && bankAllows(m, f.spec.sizeMm));
     if (!place) throw new Error("Planned PC: no fan position");
     takenFan.add(place.id);
+    plannedFans.push({ mount: place.id, sizeMm: f.spec.sizeMm });
     fanKeys.push(key);
     add({ key, id: idOf.get(key)!, catalogId: f.id, host: "case-1", mount: place.id, screws: place.fastener?.count ?? 0 });
   });

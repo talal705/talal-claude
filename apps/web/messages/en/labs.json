@@ -1758,8 +1758,8 @@
       "why": {
         "cooler": "Paste fills the tiny gaps between the CPU and the cooler. Tighten the screws across the diagonal so the plate meets the CPU evenly. Note: ARCTIC's own LGA1700 instructions for the Freezer 36 and Liquid Freezer III replace the socket's loading mechanism with a contact frame (support.arctic.de); the lab keeps the board's plate and models only the four screws.",
         "motherboard": "The board sits on standoffs so it never touches the metal tray. Some boards come with the I/O shield already fixed to them (the TUF GAMING Z790-PLUS WIFI does); fitting a separate one then is a mistake.",
-        "psu": "With a filtered vent under the bay, the fan faces down and draws cool air from outside (Corsair's guidance; the 4000D Airflow has that filter). Where the vent is not recorded, either way is accepted.",
-        "fan": "The arrows on the fan's frame show which way air moves. Front and bottom positions pull air in; rear and top blow it out.",
+        "psu": "Corsair: the supply fits fan up or fan down; the choice changes airflow, not fit. Over a filtered vent under the bay (the 4000D Airflow has one) fan down usually draws cooler air.",
+        "fan": "The arrows on the fan's frame show which way air moves. Front and bottom places usually draw air in; rear and top usually blow it out. The other way also fits.",
         "storage": "A 2.5-inch drive fits a 2.5-inch tray or a combined 3.5/2.5-inch tray; a 3.5-inch drive needs a combined one. Each bay has its own screws and takes one drive. The bay screw counts are schematic: the case's manual does not list them."
       },
       "prepNote": "Each step changes the build and is saved; Undo takes it back. The screw count is the place's own; the force is not simulated.",
@@ -1834,6 +1834,11 @@
         "psu": "Unplug the leads that join the supply to other parts, take its screws out one at a time, then slide it out.",
         "storage": "Unplug its data and power cables, take its screws out one at a time, then slide it out of its bay.",
         "fan": "Unplug its lead, take its screws out one at a time, then lift it out."
+      },
+      "advice": {
+        "psuDown": "Advice: this case has a filtered vent under the power supply bay, so the fan usually faces down to draw cool air from outside. Facing up also fits.",
+        "intake": "Advice for this place: the fan usually draws air into the case. Turning it the other way also fits.",
+        "exhaust": "Advice for this place: the fan usually blows air out of the case. Turning it the other way also fits."
       }
     }
   },

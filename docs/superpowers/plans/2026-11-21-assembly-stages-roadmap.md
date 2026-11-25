@@ -8,13 +8,18 @@ models' documents. A stage is "done" only when its verification gate (brief, sec
 |---|---|---|
 | 3 — M.2 storage | `2026-11-21-stage3-m2-storage.md` | implemented and verified locally; awaiting review |
 | 4 — CPU cooling (air, AIO) | `2026-11-22-stage4-cpu-cooling.md` | implemented, awaiting Codex review (`feat/stage4-cooling`) |
-| 5 — Motherboard into case | not written | not started |
-| 6 — Power supply | not written | not started |
-| 7 — SATA SSD / HDD | not written | not started |
-| 8 — Graphics card | not written | not started |
-| 9 — Case fans | not written | not started |
-| 10 — Wiring | not written | not started |
-| 11 — Final check and startup | not written | not started |
+| 5 — Motherboard into case | 2026-11-25 completion scope / review | existing fitting + new removal under review; carried-assembly cable blocker confirmed |
+| 6 — Power supply | 2026-11-25 completion scope / review | independent fitting and per-screw removal implemented; final acceptance pending |
+| 7 — SATA SSD / HDD | 2026-11-25 completion scope / review | selectable bay + staged fasteners implemented; scene/robot targets and final acceptance pending |
+| 8 — Graphics card | 2026-11-25 completion scope / review | existing flow audited; individual slot covers/bracket screw steps remain |
+| 9 — Case fans | 2026-11-25 completion scope / review | position choices and orientation advice implemented; bank limits/migration/visual review pending |
+| 10 — Wiring | 2026-11-25 completion scope / review | existing per-end flow retained; remaining review and final acceptance pending |
+| 11 — Final check and startup | 2026-11-25 completion scope / review | existing engine startup retained; final readiness actions and full acceptance pending |
+
+2026-11-25: the owner authorized continuing through Stage 11 without another stage-approval pause.
+The isolated branch is `feat/assembly-completion`. This is a **partial checkpoint**, not a release.
+See `docs/handoff/2026-11-25/review/IMPLEMENTATION_SCOPE.txt`, `CODEX_REVIEW.md` and `RESUME_CLAUDE.txt`.
+Claude is temporarily quota-limited; the independent review reproduction for internal carried-board cables still fails.
 
 ## Already present before Stage 3 (to audit, not rebuild)
 
