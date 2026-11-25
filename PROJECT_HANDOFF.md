@@ -14,8 +14,19 @@ actionable issue. Checks: `npm run type-check`, `npm run check:messages` and the
 (72 files, 948 passed, 21 skipped for the unconfigured database/provider) passed, and the production `npm run build`
 passed. Codex confirmed the total against `2f9ba78`: 21 production TS/TSX files, +125/−227 = net 102 fewer lines
 (helpers included); `SimplePcLab.tsx` went from 1791 to 1725 lines. A local production server was restarted on port 3001.
-**Not done:** no browser/visual checks, the deployed preview is untested, and the second pass is still uncommitted and
-unpushed. Next: Codex commits and pushes this branch for a preview. No merge into `main` and no production deploy
+**Verification of `606dc4e` (2026-11-25, production build `npm run build`, local server port 3001, software-GL Chrome, fresh
+test-browser storage).** `npm run type-check`, `npm run check:messages` and `npm run build` exit 0. Vitest `apps/web packages`:
+82 files, 1051 passed, 21 skipped (database/provider integration, unconfigured). Browser acceptance, all passed with no page
+errors: `cooling.mjs` 27/27 in en, ar, en at 430 px and ar at 430 px (frame, screws, undo, reload, double click, cooler removal,
+then the optional contact-frame removal and original-ILM refit, camera unchanged); `aio.mjs` 13/13 en and ar (old-format save
+migrates); `cpu-ram-click.mjs` 9/9; `m2.mjs` 31/31. The earlier interrupted run was a harness defect: the script's locator matched
+the cooler's own "Tighten frame screw" refit step as well as the optional removal button; the committed locator targets only
+the optional removal buttons (the optional step is by design not the cooler's next step). **Not verified:** the deployed preview
+(Vercel status `success` for `606dc4e`, dashboard link only; the dashboard needs a Vercel login, so no hostname was obtained or
+opened); looks of the 3D scene beyond one canvas-pixel comparison (the picture changes when the socket frame comes off, 4 runs; no screenshots were saved or reviewed);
+touch hardware; planner Add/Remove and storage-device removal were covered by unit tests only, not re-run in the browser this
+pass; retention-ring/AMD coolers are engine-only (not reachable in the planner). The branch is committed and pushed
+(`origin/refactor/concise-code` = `606dc4e` at the start of this pass). No merge into `main` and no production deploy
 without the owner's approval.
 
 ### History — first checkpoint (`81bfb14`)
