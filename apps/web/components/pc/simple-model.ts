@@ -1090,9 +1090,6 @@ export function loweredPose(step: string): SimpleHeld | null {
   if (!m) return null;
   return { key: m[1]!, rotationDeg: Number(m[2]), offsetMm: [Number(m[3]), Number(m[4])], ...(m[5] === undefined ? {} : { tiltDeg: Number(m[5]) }), ...(m[6] ? { slotId: m[6] } : {}) };
 }
-export const withHardware = (snapshot: SimpleSnapshot, who: SimplePartKey, key: string, value: string) => withStep(snapshot, `hw:${who}:${key}:${value}`);
-export const withRadiator = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `rad:${key}`);
-export const withRadiatorScrews = (snapshot: SimpleSnapshot, key: SimplePartKey, count: number) => withStep(snapshot, `radscrew:${key}:${count}`);
 export const withSeat = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `seat:${key}`);
 export const withLift = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `lift:${key}`);
 export const withFasten = (snapshot: SimpleSnapshot, key: SimplePartKey) => withStep(snapshot, `fasten:${key}`);

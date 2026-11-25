@@ -89,7 +89,3 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): Tuto
     },
   };
 }
-
-
-// Kept here for importers written before providers.ts existed (the root layout).
-export { isTutorAiConfigured, providerFromEnv } from "./providers";

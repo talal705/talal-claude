@@ -54,6 +54,28 @@ export function corruptRecord(subject: string): ProjectStoreError {
   return new ProjectStoreError("corrupt", `${subject} is stored but failed validation; it was left in place`);
 }
 
+/** Also the answer for another owner's project: its existence is not revealed. */
+export function notFound(what: string, id: string): ProjectStoreError {
+  return new ProjectStoreError("not_found", `${what} ${id} was not found`);
+}
+
+export function conflict(expected: number, actual: number): ProjectStoreError {
+  return new ProjectStoreError(
+    "revision_conflict",
+    `expected revision ${expected} but the project is at revision ${actual}; nothing was written`,
+  );
+}
+
+/** Maps a failure from the account database onto the contract's error codes. */
+export function toStoreError(error: unknown, database: "project" | "progress"): ProjectStoreError {
+  if (error instanceof ProjectStoreError) return error;
+  const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+  const message = error instanceof Error ? error.message : String(error);
+  // Class 22 (data exception, e.g. \u0000 inside jsonb) and class 23 (constraint violation).
+  if (/^2[23]/.test(code)) return new ProjectStoreError("invalid_input", message);
+  return new ProjectStoreError("unavailable", `The ${database} database is unavailable (${message})`);
+}
+
 // ---------- Input ----------
 
 function checkTitle(title: unknown): string {

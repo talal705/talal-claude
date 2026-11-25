@@ -4,10 +4,21 @@ Current site brand: **بيئة التدريب الافتراضية (VTE)** in Ar
 **Virtual Training Environment (VTE)** in English. Older references below use the former name.
 The repository and hosting identifiers remain `talal-claude`; saved-data keys are unchanged.
 
-## In progress: concise-code refactor (2026-11-24)
+## Concise-code refactor — locally reviewed and checked (2026-11-25)
 
 Owner requests concise, readable code for the current project and future projects. Claude implements;
 Codex supervises and reviews. Branch `refactor/concise-code` starts at `2f9ba78`.
+
+**Status as of 2026-11-25.** The second pass (below) is complete locally: Codex's independent review found no
+actionable issue. Checks: `npm run type-check`, `npm run check:messages` and the focused Vitest command below
+(72 files, 948 passed, 21 skipped for the unconfigured database/provider) passed, and the production `npm run build`
+passed. Codex confirmed the total against `2f9ba78`: 21 production TS/TSX files, +125/−227 = net 102 fewer lines
+(helpers included); `SimplePcLab.tsx` went from 1791 to 1725 lines. A local production server was restarted on port 3001.
+**Not done:** no browser/visual checks, the deployed preview is untested, and the second pass is still uncommitted and
+unpushed. Next: Codex commits and pushes this branch for a preview. No merge into `main` and no production deploy
+without the owner's approval.
+
+### History — first checkpoint (`81bfb14`)
 
 - Claude's partial changes reuse part/cable/first-attachment lookups and storage validation/errors,
   and remove verified unused imports/constants. Net production change so far: 58 added, 75 removed
@@ -16,14 +27,28 @@ Codex supervises and reviews. Branch `refactor/concise-code` starts at `2f9ba78`
   translation parity, and production build passed. No browser/visual verification was performed.
 - Future guidance is in project `CLAUDE.md` and user-level `~/.claude/CLAUDE.md` on this machine.
   Reduce real duplication; preserve behavior, educational steps, validation, security, data, and tests.
-- Remaining approved audit work: remove the unreachable `HandsPanel` tail; reuse GPU key handling,
-  the existing hands-off predicate, and repeated state-commit logic; remove verified dead internal
-  exports/provider shims; consolidate identical store errors locally if the messages and semantics
-  remain identical. Keep role-specific attachment lookups and meaningful domain content explicit.
-- Claude reached its five-hour usage limit, reported reset at 23:00 Asia/Riyadh on 2026-11-24.
-  The owner explicitly chose to wait for Claude rather than have Codex implement the remainder.
-  Resume with these instructions and inspect the working tree before continuing; do not mark the
-  task complete or publish a finished-refactor claim. This checkpoint has not been preview-published.
+- Second pass (Claude, uncommitted on top of `81bfb14`; since reviewed by Codex and built — see status above):
+  - `SimplePcLab`: removed the unreachable `HandsPanel` tail (the four `handKind` branches keep their plain-function
+    calls); `GpuHands` now uses `holdKeys` (identical key map for a GPU: Q/E flip, arrows nudge, Enter lowers);
+    the existing `handsOff()` replaces the repeated `lockedOn || (mode === "fault" && …)` guards and `disabled`
+    expressions; one `commit(state, step)` helper replaces nine copies of "fault state, else saved step" (`keepHand`
+    uses it; order of state updates, null-fault handling and one saved step per action are unchanged).
+  - Removed unused exports `withHardware`/`withRadiator`/`withRadiatorScrews` (no users) and the provider
+    compatibility re-export in `tutor/anthropic.ts`; the root layout now imports `providers` directly.
+  - `lib/storage/validation.ts` now holds the shared `notFound`, `conflict` and `toStoreError(error, "project" | "progress")`
+    next to `corruptRecord`/`invalid`; both guest and account stores use them. Codes and message strings are identical
+    (the progress repository's corrupt-record message is built by `corruptRecord` with the same text). Not in
+    `packages/contracts`; no schema, migration, SQL or sandbox change. New `lib/storage/store-errors.test.ts` pins the
+    messages, error identity pass-through, SQLSTATE 22/23 mapping, the "unavailable" wording per database and non-Error inputs.
+  - Left unchanged on purpose: role-specific attachment `.find` (not `firstAttachment`), `attachmentOf`'s lenient
+    unknown-key lookup, non-equivalent validators, and the distinct `"the saved progress did not read back…"` message.
+  - Measured against `2f9ba78` (`git diff --numstat`, production TypeScript, 21 files incl. the shared helpers in
+    `validation.ts`): 125 added, 227 removed = 102 fewer lines. Tests: +57 (new file). Docs: this section plus `CLAUDE.md`.
+  - Checks run: `npm run type-check`, `npm run check:messages` passed; vitest on packages, `apps/web/components`,
+    `lib/targets`, `lib/interaction`, `lib/storage`, `lib/server/tutor`, `lib/server/db`: 72 files, 948 passed, 21 skipped
+    (PostgreSQL integration needs `TEST_DATABASE_URL`; the real AI call needs a provider) — so the database error
+    mapping is covered by the new unit test, not by a live database. At the time of writing the build, browser/visual
+    checks and preview deployment had not been run (the build has since passed; the other two still have not been).
 
 ## Latest work: Stage 4 — CPU cooling + PC-section isolation (branch `feat/stage4-cooling`, 2026-11-23)
 

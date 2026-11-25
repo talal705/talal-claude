@@ -343,21 +343,25 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
 
   // ---------- Hands-on: mechanisms and alignment (CPU, memory) ----------
 
-  /** Keeps a mechanism or seating change: a step in the saved progress, or the fault build's state. */
-  function keepHand(next: ReturnType<typeof createSimpleBuild>, step: (s: SimpleSnapshot) => SimpleSnapshot, line: string, mood: "happy" | "point" | "concerned" = "point", values?: Record<string, string>) {
+  /** Keeps an engine change: the fault build's state, or one step in the saved progress. */
+  function commit(next: ReturnType<typeof createSimpleBuild>, step: (s: SimpleSnapshot) => SimpleSnapshot) {
     if (mode === "fault") { if (fault) setFault({ ...fault, state: next }); }
     else setSaved((previous) => step(previous));
+  }
+  /** Keeps a mechanism or seating change, then says what happened. */
+  function keepHand(next: ReturnType<typeof createSimpleBuild>, step: (s: SimpleSnapshot) => SimpleSnapshot, line: string, mood: "happy" | "point" | "concerned" = "point", values?: Record<string, string>) {
+    commit(next, step);
     setVerdict(null);
     speak({ lines: [values ? { key: `hands.${line}`, values } : { key: `hands.${line}` }], mood, point: "scene" });
   }
   function handMechanism(key: SimplePartKey, desired: "open" | "closed") {
-    if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
+    if (handsOff()) return;
     if (!takeStep()) return;
     const ret = retOf(key);
     if (ret && isM2Key(key)) {
       const r = setSimpleMechanism(state, ret.id, desired);
       if (!r.ok) { sayEngine(r.message, desired === "open" ? "closeBlocked" : "m2LowerFirst"); return; }
-      if (mode === "fault") { if (fault) setFault({ ...fault, state: r.state }); } else setSaved((previous) => withMechanism(previous, ret.id, desired));
+      commit(r.state, (sn) => withMechanism(sn, ret.id, desired));
       setVerdict(null);
       m2Say(r.state, key, hold?.key === key ? hold : null, desired === "closed" ? "happy" : "point");
       return;
@@ -381,7 +385,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   }
   /** The Intel socket's load lever: released from its tab and lifted, or pushed down and locked under it. */
   function handLever(key: SimplePartKey, desired: "open" | "closed") {
-    if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
+    if (handsOff()) return;
     if (!takeStep()) return;
     const ret = simpleRetention(state, key);
     if (!ret?.leverId) return;
@@ -398,7 +402,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** Clamps a dragged pose to the reach over the board (it never leaves the socket area or goes through parts). */
   /** A memory slot's clip, clicked in the view or with its button: opens it, or closes it over an empty slot. */
   function handClip(slotId: string, near: boolean) {
-    if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
+    if (handsOff()) return;
     if (!takeStep()) return;
     const slot = simpleRamSlots(state).find((x) => x.id === slotId);
     const id = slot ? (near ? slot.nearId : slot.clipId) : null;
@@ -425,7 +429,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     }
     const pose = { rotationDeg: hold.rotationDeg, offsetMm: hold.offsetMm };
     setHold(null);
-    if (mode === "fault") { if (fault) setFault({ ...fault, state: r.state }); } else setSaved((previous) => withLower(previous, key, pose));
+    commit(r.state, (sn) => withLower(sn, key, pose));
     setVerdict(null);
     // A slot the manual does not recommend for this many modules still works: it is explained, not refused.
     const count = ALL_SIMPLE_PARTS.filter((p) => isRamKey(p.key) && (r.state.parts.find((x) => x.instanceId === p.id)?.attachments.length ?? 0) > 0).length;
@@ -469,7 +473,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (!r.ok) { sayEngine(r.message, r.reason === "turnPart" ? "m2Turn" : r.reason === "centrePart" ? "m2Centre" : "m2OpenFirst"); return; }
     const pose = { rotationDeg: hold.rotationDeg, offsetMm: hold.offsetMm, ...(hold.tiltDeg === undefined ? {} : { tiltDeg: hold.tiltDeg }), ...(hold.slotId ? { slotId: hold.slotId } : {}) };
     setHold(null);
-    if (mode === "fault") { if (fault) setFault({ ...fault, state: r.state }); } else setSaved((previous) => withLower(previous, key, pose));
+    commit(r.state, (sn) => withLower(sn, key, pose));
     setVerdict(null);
     m2Say(r.state, key, null);
   }
@@ -480,7 +484,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const [id, desired] = ({ screws: [`${hsId}:screws`, "open"], lift: [hsId, "open"], film: [`${hsId}:film`, "open"], fit: [hsId, "closed"], tighten: [`${hsId}:screws`, "closed"] } as const)[step];
     const r = setSimpleMechanism(state, id, desired);
     if (!r.ok) { sayEngine(r.message, "closeBlocked"); return; }
-    if (mode === "fault") { if (fault) setFault({ ...fault, state: r.state }); } else setSaved((previous) => withMechanism(previous, id, desired));
+    commit(r.state, (sn) => withMechanism(sn, id, desired));
     setVerdict(null);
     m2Say(r.state, key, hold?.key === key ? hold : null, step === "tighten" ? "happy" : "point");
     if (step === "tighten" && simplePartInstalled(r.state, key)) { setSelection(null); setHold(null); }
@@ -493,7 +497,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (!ret?.standId) return;
     const r = setSimpleMechanism(state, ret.standId, "closed");
     if (!r.ok) { sayEngine(r.message, "closeBlocked"); return; }
-    if (mode === "fault") { if (fault) setFault({ ...fault, state: r.state }); } else setSaved((previous) => withMechanism(previous, ret.standId!, "closed"));
+    commit(r.state, (sn) => withMechanism(sn, ret.standId!, "closed"));
     setVerdict(null);
     m2Say(r.state, key, hold?.key === key ? hold : null);
   }
@@ -583,8 +587,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     }
     const ends = simpleCableEnds(key);
     const all = ends.every((e) => simpleEndPlugged(r.state, e));
-    if (mode === "fault") { if (fault) setFault({ ...fault, state: r.state }); }
-    else setSaved((previous) => withPlug(previous, key, endIndex));
+    commit(r.state, (sn) => withPlug(sn, key, endIndex));
     setVerdict(null);
     setPlugHold({ key, portId: null, reversed: true });
     if (all) { setSelection(null); setPlugHold(null); react({ type: "connected", key }, r.state, false, null); }
@@ -605,8 +608,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
       return;
     }
     const history = coolerStepHistory(state, key, step);
-    if (mode === "fault") { if (fault) setFault({ ...fault, state: r.state }); }
-    else setSaved((previous) => withSimpleStep(previous, history));
+    commit(r.state, (sn) => withSimpleStep(sn, history));
     setVerdict(null);
     if (removal) {
       const next = nextCoolerRemoval(r.state, key);
@@ -632,8 +634,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (!takeStep()) return;
     const r = applyMountingStep(state, step);
     if (!r.ok) { sayEngine(r.message, "closeBlocked"); return; }
-    if (mode === "fault") { if (fault) setFault({ ...fault, state: r.state }); }
-    else setSaved((previous) => withSimpleStep(previous, mountingStepHistory(step)));
+    commit(r.state, (sn) => withSimpleStep(sn, mountingStepHistory(step)));
     setVerdict(null);
     const next = nextMountingRemoval(r.state);
     // With the frame off the CPU is free to lift; putting the ILM back is the learner's own choice.
@@ -657,14 +658,14 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
 
   /** The case's expansion-slot covers beside the card's slot: out before a card, back once no card is there. */
   function handCovers(desired: "open" | "closed") {
-    if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
+    if (handsOff()) return;
     if (!takeStep()) return;
     const r = setSimpleMechanism(state, SLOT_COVERS_ID, desired);
     if (!r.ok) { speak({ lines: [{ key: "hands.coversBlocked" }], mood: "concerned", point: "scene" }); return; }
     keepHand(r.state, (sn) => withMechanism(sn, SLOT_COVERS_ID, desired), desired === "open" ? "coversOut" : "coversIn");
   }
   function handFasten(key: SimplePartKey) {
-    if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
+    if (handsOff()) return;
     if (!takeStep()) return;
     const r = fastenSimplePart(state, key);
     if (!r.ok) { speak({ lines: [{ key: "hands.gpuSeatFirst" }], mood: "concerned", point: "scene" }); return; }
@@ -673,7 +674,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (simpleAllPartsIn(r.state)) setTab("cables");
   }
   function handUnfasten(key: SimplePartKey) {
-    if (lockedOn || (mode === "fault" && (!fault || fault.solved))) return;
+    if (handsOff()) return;
     if (!takeStep()) return;
     const r = unfastenSimplePart(state, key);
     if (!r.ok) return;
@@ -1061,71 +1062,11 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
 
   /** The CPU's or module's own mechanism, alignment and lowering, one honest step at a time. */
   function HandsPanel() {
-    const key = selectedPart!;
-    const ret = keyed!;
-    const kind = handKind(ret.kind);
+    const kind = handKind(keyed!.kind);
     if (kind === "gpu") return GpuHands();
     if (kind === "cpu") return CpuHands();
     if (kind === "ram") return RamHands();
-    if (kind === "m2") return M2Hands();
-    // The CPU has its own panel (CpuHands); this one is memory and M.2.
-    const cpu = (kind as string) === "cpu";
-    const m2 = kind === "m2";
-    const name = (cpuKey: string, ramKey: string, m2Key: string) => t(cpu ? cpuKey : m2 ? m2Key : ramKey);
-    const at = firstAttachment(state, key);
-    const host = state.parts.find((p) => p.instanceId === ret.hostInstanceId);
-    const coverOn = cpu && host?.mechanisms?.[`${ret.id}:cover`] !== "open";
-    const rival = cpu ? simpleSlotPart(state, "cpu") : null;
-    const otherIn = rival && rival !== key ? rival : null;
-    const off = hold ? Math.hypot(hold.offsetMm[0], hold.offsetMm[1]) : 0;
-    const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved));
-    const onKeys = (e: React.KeyboardEvent) => {
-      const k = e.key.toLowerCase();
-      const map: Record<string, () => void> = { q: () => turn(cpu ? -90 : 180), e: () => turn(cpu ? 90 : 180), arrowleft: () => nudge(-1, 0), arrowright: () => nudge(1, 0), arrowup: () => nudge(0, -1), arrowdown: () => nudge(0, 1), enter: () => handLower(key) };
-      if (map[k]) { e.preventDefault(); e.stopPropagation(); map[k](); }
-    };
-    return (
-      <div className={styles.hands}>
-        <div className={styles.handsHead}>
-          <p className={styles.handsState}>{t(cpu ? "hands.plate" : m2 ? "hands.qlatch" : "hands.latch", { state: t(ret.open ? "hands.open" : "hands.closed") })}{coverOn ? ` · ${t("hands.cover")}` : ""}</p>
-          <button type="button" className={styles.closeup} onClick={() => focusOn(ret.hostInstanceId, ret.mountPointId)}>{t("hands.closeup")}</button>
-        </div>
-        {otherIn ? <p className={styles.hint}>{t("hands.takeOther")}</p> : <>
-          {!at && <>
-            {!ret.open && <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handMechanism(key, "open")}>{name("hands.openPlate", "hands.openLatch", "hands.openQLatch")}</button>}
-            {hold && <div className={styles.holdControls} role="group" aria-label={t("hands.title")} tabIndex={0} onKeyDown={onKeys}>
-              <p className={styles.alignState} aria-live="polite">{t("hands.turned", { deg: hold.rotationDeg })} · {off < 0.05 ? t("hands.aligned") : t("hands.off", { mm: Math.round(off * 10) / 10 })}</p>
-              <div className={styles.holdRow}>
-                {cpu ? <>
-                  <button type="button" onClick={() => turn(-90)} aria-label={t("hands.rotateLeft")}>⟲</button>
-                  <button type="button" onClick={() => turn(90)} aria-label={t("hands.rotateRight")}>⟳</button>
-                </> : <button type="button" onClick={() => turn(180)}>{t("hands.flip")}</button>}
-                <button type="button" onClick={() => nudge(-1, 0)} aria-label={t("hands.nudgeLeft")}>←</button>
-                <button type="button" onClick={() => nudge(1, 0)} aria-label={t("hands.nudgeRight")}>→</button>
-                {cpu && <>
-                  <button type="button" onClick={() => nudge(0, -1)} aria-label={t("hands.nudgeUp")}>↑</button>
-                  <button type="button" onClick={() => nudge(0, 1)} aria-label={t("hands.nudgeDown")}>↓</button>
-                </>}
-              </div>
-              <p className={styles.cablesNote}>{t("hands.keys")}</p>
-              <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handLower(key)}>{name("hands.lowerIn", "hands.pressIn", "hands.slideIn")}</button>
-            </div>}
-          </>}
-          {at && at.seating !== "seated" && <>
-            <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handSeat(key)}>{t("hands.pressIn")}</button>
-            <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handLift(key)}>{t("hands.liftOut")}</button>
-          </>}
-          {at && at.seating === "seated" && (cpu || m2) && ret.open && <>
-            <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handMechanism(key, "closed")}>{t(m2 ? "hands.closeQLatch" : "hands.closePlate")}</button>
-            <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handLift(key)}>{t("hands.liftOut")}</button>
-          </>}
-          {at && at.seating === "seated" && !ret.open && <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handMechanism(key, "open")}>{name("hands.openPlate", "hands.openLatch", "hands.openQLatch")}</button>}
-        </>}
-        <p className={styles.hint}>{name("hands.markCpu", "hands.markRam", "hands.markM2")}</p>
-        {m2 && <p className={styles.cablesNote}>{t("hands.m2Source")}</p>}
-        <p className={styles.cablesNote}>{t("hands.note")}</p>
-      </div>
-    );
+    return M2Hands();
   }
 
   /** One lead: each end into a port the learner picks, turned the right way. */
@@ -1134,7 +1075,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const ends = simpleCableEnds(key);
     const next = ends.findIndex((e) => !simpleEndPlugged(state, e));
     const end = ends[next];
-    const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved)) || Boolean(cableBlocked);
+    const disabled = !ready || handsOff() || Boolean(cableBlocked);
     const hold = plugHold?.key === key ? plugHold : { key, portId: null, reversed: true };
     const choices = end ? simplePortChoices(state, end) : [];
     const hostName = (instanceId: string) => { const p = ALL_SIMPLE_PARTS.find((x) => x.id === instanceId); return p ? label(p.key) : t("hands.theDrive"); };
@@ -1167,7 +1108,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const next = nextMountingRemoval(state);
     const line = mountingRemovalLine(next);
     if (!next || !line) return null;
-    const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved));
+    const disabled = !ready || handsOff();
     return <>
       <p className={styles.hint}>{lead}</p>
       <button type="button" className={styles.cancel} disabled={disabled} onClick={() => takeMountingStep(next)}>{t(`companion.${line.key}`, line.values as never)}</button>
@@ -1178,7 +1119,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** Fitting or taking off a cooler with a documented mounting: the next step, and the choices the manual leaves open. */
   function CoolerPanel() {
     const key = selectedPart!;
-    const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved));
+    const disabled = !ready || handsOff();
     const words = (l: { key: string; values?: Record<string, unknown> } | null) => (l ? t(`companion.${l.key}`, l.values as never) : "");
     const step = nextCoolerStep(state, key);
     const removal = nextCoolerRemoval(state, key);
@@ -1213,7 +1154,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const part = state.parts.find((p) => p.instanceId === spec.id);
     const at = part?.attachments[0];
     const prep = part?.prep ?? {};
-    const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved));
+    const disabled = !ready || handsOff();
     const secured = at?.fastenersSecured ?? 0;
     const order = simpleScrewOrder(saved.history, key);
     const choice = (active: boolean, label: string, onClick: () => void) =>
@@ -1277,7 +1218,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const rival = simpleSlotPart(state, "cpu");
     const otherIn = rival && rival !== key ? rival : null;
     const off = hold ? Math.hypot(hold.offsetMm[0], hold.offsetMm[1]) : 0;
-    const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved));
+    const disabled = !ready || handsOff();
     const leverUp = lga ? ret.leverOpen : ret.open;
     // A cooler's contact frame in place of the ILM: the engine refuses the plate and lever, and lifting the CPU under the frame.
     const boardHw: Record<string, string> = (lga ? host?.hardware : undefined) ?? {};
@@ -1333,7 +1274,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const name = ramSlotName;
     const count = slots.filter((x) => x.occupant && x.occupant !== key).length + 1;
     const rec = simpleRamRecommended(state, count);
-    const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved));
+    const disabled = !ready || handsOff();
     const btn = (label: string, onClick: () => void, primary = true) => <button className={primary ? styles.installButton : styles.cancel} type="button" disabled={disabled} onClick={onClick}>{label}</button>;
     const clipLine = (sl: typeof slot) => sl ? `${t(sl.clipOpen ? "hands.clipOpen" : "hands.clipClosed")}${sl.nearId ? ` · ${t(sl.nearOpen ? "hands.nearOpen" : "hands.nearClosed")}` : ""}` : "";
     const off = target ? Math.hypot(target.residual[0], target.residual[1]) : null;
@@ -1445,12 +1386,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const boardInCase = simplePartInstalled(state, "motherboard");
     const screwed = simpleFastened(state, key);
     const off = hold ? Math.hypot(hold.offsetMm[0], hold.offsetMm[1]) : 0;
-    const disabled = !ready || lockedOn || (mode === "fault" && (!fault || fault.solved));
-    const onKeys = (e: React.KeyboardEvent) => {
-      const k = e.key.toLowerCase();
-      const map: Record<string, () => void> = { q: () => turn(180), e: () => turn(180), arrowleft: () => nudge(-1, 0), arrowright: () => nudge(1, 0), arrowup: () => nudge(0, -1), arrowdown: () => nudge(0, 1), enter: () => handLower(key) };
-      if (map[k]) { e.preventDefault(); e.stopPropagation(); map[k](); }
-    };
+    const disabled = !ready || handsOff();
     const st = (open: boolean) => t(open ? "hands.open" : "hands.closed");
     return (
       <div className={styles.hands}>
@@ -1461,7 +1397,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
         {!at && <>
           {covered && <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handCovers("open")}>{t("hands.removeCovers")}</button>}
           {!ret.open && <button className={covered ? styles.cancel : styles.installButton} type="button" disabled={disabled} onClick={() => handMechanism(key, "open")}>{t("hands.openPcie")}</button>}
-          {hold && <div className={styles.holdControls} role="group" aria-label={t("hands.title")} tabIndex={0} onKeyDown={onKeys}>
+          {hold && <div className={styles.holdControls} role="group" aria-label={t("hands.title")} tabIndex={0} onKeyDown={(e) => holdKeys(e, key)}>
             <p className={styles.alignState} aria-live="polite">{t(hold.rotationDeg === 0 ? "hands.bracketToCase" : "hands.bracketAway")} · {off < 0.05 ? t("hands.aligned") : t("hands.off", { mm: Math.round(off * 10) / 10 })}</p>
             <div className={styles.holdRow}>
               <button type="button" onClick={() => turn(180)}>{t("hands.flip")}</button>

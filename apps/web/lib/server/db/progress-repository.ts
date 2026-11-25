@@ -15,7 +15,7 @@ import {
   type LessonProgressRecord,
   type LessonProgressStore,
 } from "../../storage/progress";
-import { isUuid } from "../../storage/validation";
+import { corruptRecord, invalid, isUuid, toStoreError } from "../../storage/validation";
 import type { Db } from "./client";
 import type { LessonProgressRow } from "./schema";
 
@@ -42,20 +42,12 @@ function toRecord(row: LessonProgressRow): LessonProgressRecord | null {
   });
 }
 
-function toStoreError(error: unknown): ProjectStoreError {
-  if (error instanceof ProjectStoreError) return error;
-  const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
-  const message = error instanceof Error ? error.message : String(error);
-  if (/^2[23]/.test(code)) return new ProjectStoreError("invalid_input", message);
-  return new ProjectStoreError("unavailable", `The progress database is unavailable (${message})`);
-}
-
 function isUniqueViolation(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "23505";
 }
 
 export function createLessonProgressRepository(db: Db, ownerId: string, options: { now?: () => Date } = {}): LessonProgressStore {
-  if (!isUuid(ownerId)) throw new ProjectStoreError("invalid_input", "ownerId must be a UUID");
+  if (!isUuid(ownerId)) invalid("ownerId must be a UUID");
   const timestamp = () => (options.now?.() ?? new Date()).toISOString();
 
   async function saveOnce(progress: LessonProgress): Promise<LessonProgressRecord> {
@@ -98,10 +90,10 @@ export function createLessonProgressRepository(db: Db, ownerId: string, options:
         const row = await db.selectFrom("lesson_progress").selectAll().where("user_id", "=", ownerId).where("lesson_id", "=", key.lessonId).where("mode", "=", key.mode).executeTakeFirst();
         if (!row) return null;
         const record = toRecord(row);
-        if (record === null) throw new ProjectStoreError("corrupt", `progress for lesson ${key.lessonId} (${key.mode}) is stored but failed validation; it was left in place`);
+        if (record === null) throw corruptRecord(`progress for lesson ${key.lessonId} (${key.mode})`);
         return record;
       } catch (error) {
-        throw toStoreError(error);
+        throw toStoreError(error, "progress");
       }
     },
 
@@ -116,7 +108,7 @@ export function createLessonProgressRepository(db: Db, ownerId: string, options:
           return await saveOnce(checked);
         }
       } catch (error) {
-        throw toStoreError(error);
+        throw toStoreError(error, "progress");
       }
     },
 
@@ -132,7 +124,7 @@ export function createLessonProgressRepository(db: Db, ownerId: string, options:
         }
         return { records: records.sort(byRecency), corruptKeys };
       } catch (error) {
-        throw toStoreError(error);
+        throw toStoreError(error, "progress");
       }
     },
 
@@ -141,7 +133,7 @@ export function createLessonProgressRepository(db: Db, ownerId: string, options:
       try {
         await db.deleteFrom("lesson_progress").where("user_id", "=", ownerId).where("lesson_id", "=", key.lessonId).where("mode", "=", key.mode).execute();
       } catch (error) {
-        throw toStoreError(error);
+        throw toStoreError(error, "progress");
       }
     },
   };

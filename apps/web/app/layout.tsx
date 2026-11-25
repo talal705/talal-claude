@@ -5,7 +5,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteTutor } from "@/components/SiteTutor";
 import { directionOf, type Locale } from "@/lib/i18n/config";
-import { isTutorAiConfigured } from "@/lib/server/tutor/anthropic";
+import { isTutorAiConfigured } from "@/lib/server/tutor/providers";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
