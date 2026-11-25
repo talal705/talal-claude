@@ -1169,7 +1169,7 @@ const hotspotRects = new Map<string, () => TargetRect | null>();
 const FASTENER_RADIUS = 7;
 
 /** One marker per fastener of the selected part: a click secures one more, or loosens one that is secured. */
-function Fasteners({ part, markers }: { part: InstalledPart; markers: FastenerMarker[] }) {
+function Fasteners({ part, markers, interactive = true }: { part: InstalledPart; markers: FastenerMarker[]; interactive?: boolean }) {
   useEffect(() => {
     for (const marker of markers) {
       const r = FASTENER_RADIUS + 3;
@@ -1188,8 +1188,10 @@ function Fasteners({ part, markers }: { part: InstalledPart; markers: FastenerMa
           scale={FASTENER_RADIUS}
           renderOrder={9}
           userData={{ fastener: `${marker.role}#${marker.index}` }}
+          // The simple page draws the state only: its panel and toolbar take each screw as one checked step.
+          {...(interactive ? {} : { raycast: noRaycast })}
           onClick={(event) => {
-            if (pcStore.getState().assembly.phase !== "idle") return;
+            if (!interactive || pcStore.getState().assembly.phase !== "idle") return;
             event.stopPropagation();
             const attachment = part.attachments.find((item) => item.role === marker.role);
             if (!attachment) return;
@@ -2094,7 +2096,7 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
         <GuideRobot focus={guide} placed={placed} geometry={geometry} state={state} obstacles={cableObstacles} caseId={state.parts.find(standsFirst)?.instanceId ?? null} animate={guideAnimate && !reducedMotion} />
       )}
       <Candidates markers={markers} />
-      {!simple && selectedPart && <Fasteners part={selectedPart} markers={fasteners} />}
+      {selectedPart && (!simple || catalogIndex.byId.get(selectedPart.catalogId)?.category !== "cooling") && <Fasteners part={selectedPart} markers={fasteners} interactive={!simple} />}
       {!simple && <Hotspots spots={spots} state={state} />}
     </>
   );

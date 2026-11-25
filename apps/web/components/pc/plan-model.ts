@@ -7,7 +7,7 @@
 import type { CatalogEntry, PCAction, PCBuildState, PortSpec } from "@ytl/contracts";
 import { pc } from "@ytl/simulation";
 import { pcCatalog, suppliedPartActions } from "./catalog";
-import { applySimpleStep, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, type SimpleStep, type CableExtraEnd, type CableSpec, type PartSpec, type SimpleModel, type SimplePartKey, type SimpleSnapshot } from "./simple-model";
+import { applySimpleStep, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, isPositionKey, type SimpleStep, type CableExtraEnd, type CableSpec, type PartSpec, type SimpleModel, type SimplePartKey, type SimpleSnapshot } from "./simple-model";
 
 /** What the learner is building for. */
 export type BuildPurpose = "study" | "gaming" | "creator";
@@ -337,7 +337,8 @@ export function rebaseProgress(snapshot: { placed: string[]; connected: string[]
   const changed = new Set<string>();
   for (const [key, p] of fromPart) {
     const q = toPart.get(key);
-    if (!q || q.catalogId !== p.catalogId || q.mount !== p.mount || hostKey(toKeys, q.host) !== hostKey(fromKeys, p.host)) changed.add(key);
+    // A bay or fan place is the learner's choice, so the plan's suggested one moving does not undo the part's steps.
+    if (!q || q.catalogId !== p.catalogId || (q.mount !== p.mount && !isPositionKey(key)) || hostKey(toKeys, q.host) !== hostKey(fromKeys, p.host)) changed.add(key);
   }
   const fromCase = from.createActions().find((a) => a.type === "add_part");
   const toCase = to.createActions().find((a) => a.type === "add_part");
@@ -373,8 +374,8 @@ export function rebaseProgress(snapshot: { placed: string[]; connected: string[]
     if (kind === "plug") return keepCable(key.slice(0, key.lastIndexOf(":")));
     // Levers and latches belong to the board: they stay unless the board itself changed.
     if (kind === "mech") return !changed.has("motherboard");
-    // prep:<part>:<what>:<value> and screw:<part>:<corner> belong to their part.
-    const part = key.split(":")[0]!;
+    // prep:<part>:<what>:<value>, screw:<part>:<corner> and place:<part>@<position> belong to their part.
+    const part = key.split(/[:@]/)[0]!;
     return toPart.has(part) && !changed.has(part);
   });
   return { history, changed: [...changed] };

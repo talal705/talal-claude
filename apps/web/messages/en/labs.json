@@ -1069,7 +1069,7 @@
         "screwEngage": "Start cooler screw {n} of {total}. Don't tighten yet.",
         "screwTight": "Tighten cooler screw {n} of {total}, working across.",
         "vrmFan": "Clip the small fan onto the cooler to cool the board's power parts.",
-        "radiator": "Mount the radiator in the case.",
+        "radiator": "Mount the radiator in the case. The case's own front fans move to its top as exhaust fans to make room; a fan you fitted yourself in that place is never moved, so take it out first.",
         "radiatorScrew": "Screw the radiator down: {n} of {total}.",
         "unscrewRadiator": "Undo radiator screw {n} of {total}.",
         "liftRadiator": "Lift the radiator out of the case.",
@@ -1081,7 +1081,7 @@
         "frameOff": "Lift the contact frame off. The CPU stays in the socket until you lift it.",
         "ilmRefit": "Put the original socket frame (ILM) back on, with its plate and lever open.",
         "cpuFree": "The frame is off, so the CPU can be lifted out now. Put the original socket frame back only to close its plate and lever again.",
-        "ilmBack":"The original socket frame is back. Close the plate and lock the lever over the CPU, or lift the CPU out.",
+        "ilmBack": "The original socket frame is back. Close the plate and lock the lever over the CPU, or lift the CPU out.",
         "done": "The cooler is on and connected.",
         "notWired": "The cooler is mounted. Its cables come later, in the wiring stage."
       },
@@ -1131,7 +1131,8 @@
         "unplugCoolerFirst": "Unplug the {part}'s leads first, in the Cables tab.",
         "turnOffFirst": "Turn the PC off before swapping the {part}.",
         "notSwappable": "Use Undo to take the {part} back out.",
-        "substeps": "First tick the steps in the panel, then fit it."
+        "substeps": "First tick the steps in the panel, then fit it.",
+        "fanInTheWay": "A fan you fitted sits where the radiator goes. Take that fan out first, then fit the radiator."
       },
       "installed": {
         "cpu": "The processor is seated and its lever is closed.",
@@ -1180,7 +1181,8 @@
         "plate": "The load plate is back where it was.",
         "covers": "The slot covers are back as they were.",
         "latch": "The latch is back as it was.",
-        "step": "I undid the last step."
+        "step": "I undid the last step.",
+        "unscrew": "I put the {part}'s last screw back in."
       },
       "restart": "Fresh start! Everything is back on the bench.",
       "power": {
@@ -1349,7 +1351,16 @@
         "ramResting": "It rests in {slot}. Now press it straight down until the clip locks.",
         "ramNotRecommended": "It fits. For {n} module(s) the manual recommends {rec}; this slot works, but may not give the best (dual-channel) setup.",
         "ramLifted": "Out of the slot and in your hand, right above it.",
-        "m2Lifted": "Out of {slot} and in your hand, still at its angle over that slot."
+        "m2Lifted": "Out of {slot} and in your hand, still at its angle over that slot.",
+        "pickPosition": "Choose where the {part} goes first: tap one of the places listed in the part controls.",
+        "positionTaken": "That place already holds a part. Choose a free one.",
+        "positionWrong": "That place is not made for this part's size. Choose one marked as fitting.",
+        "positionRadiator": "The liquid cooler's radiator covers that fan place. Choose another.",
+        "positionPicked": "{place} chosen. Place the part there, then put its screws in one at a time.",
+        "unscrewedOne": "One screw is out and {left} still hold it. Take the next one out.",
+        "unscrewedAll": "Every screw is out. Now lift it out.",
+        "liftUnplug": "Unplug every lead that joins the {part} to another part first, in the Cables tab.",
+        "liftUnscrew": "Take the {part}'s screws out first, one at a time. A board also needs its card's bracket screws and any radiator off."
       }
     },
     "partNotes": {
@@ -1731,7 +1742,8 @@
         "motherboard": "Lower the board onto the standoffs",
         "psu": "Slide the PSU into its bay",
         "fan": "Hold the fan to its mount",
-        "liquid": "Fit the pump block and the radiator"
+        "liquid": "Fit the pump block and the radiator",
+        "storage": "Slide the drive into the chosen bay"
       },
       "screwsTitle": "Cooler screws",
       "corner0": "top-left",
@@ -1744,7 +1756,8 @@
         "cooler": "Paste fills the tiny gaps between the CPU and the cooler. Tighten the screws across the diagonal so the plate meets the CPU evenly. Note: ARCTIC's own LGA1700 instructions for the Freezer 36 and Liquid Freezer III replace the socket's loading mechanism with a contact frame (support.arctic.de); the lab keeps the board's plate and models only the four screws.",
         "motherboard": "The board sits on standoffs so it never touches the metal tray. Some boards come with the I/O shield already fixed to them (the TUF GAMING Z790-PLUS WIFI does); fitting a separate one then is a mistake.",
         "psu": "With a filtered vent under the bay, the fan faces down and draws cool air from outside (Corsair's guidance; the 4000D Airflow has that filter). Where the vent is not recorded, either way is accepted.",
-        "fan": "The arrows on the fan's frame show which way air moves. Front and bottom positions pull air in; rear and top blow it out."
+        "fan": "The arrows on the fan's frame show which way air moves. Front and bottom positions pull air in; rear and top blow it out.",
+        "storage": "A 2.5-inch drive fits a 2.5-inch tray or a combined 3.5/2.5-inch tray; a 3.5-inch drive needs a combined one. Each bay has its own screws and takes one drive. The bay screw counts are schematic: the case's manual does not list them."
       },
       "prepNote": "Each step changes the build and is saved; Undo takes it back. The screw count is the place's own; the force is not simulated.",
       "liquidNote": "The pump block and radiator go in as one step here (block screws, radiator screws, and the case fans the radiator displaces are moved for you). Tube routing is not modelled.",
@@ -1795,7 +1808,30 @@
       "ramPartial": "It rests in the slot but is not in yet: press it straight down until the clip locks.",
       "ramSeatedHint": "Home and locked. To take it out: open the clip, then lift it straight up.",
       "clipsUnverified": "Clips: {note}",
-      "clipsSource": "Clips: {note}"
+      "clipsSource": "Clips: {note}",
+      "positionTitle": {
+        "storage": "Choose a drive bay",
+        "fan": "Choose a fan place"
+      },
+      "positionTag": {
+        "taken": "taken",
+        "supplied": "the case's own fan",
+        "wrong": "does not fit",
+        "radiator": "under the radiator"
+      },
+      "unscrewNext": "Take out screw {n} of {total}",
+      "liftOutOf": {
+        "motherboard": "Lift the board out of the case",
+        "psu": "Slide the power supply out",
+        "storage": "Slide the drive out of its bay",
+        "fan": "Lift the fan out"
+      },
+      "removeWhy": {
+        "motherboard": "Unplug every lead that joins the board or its card to another part, take the card's bracket screws and any radiator off, then the board's own screws one at a time. Its CPU, memory, M.2 drive and cooler block stay on it and come out with it.",
+        "psu": "Unplug the leads that join the supply to other parts, take its screws out one at a time, then slide it out.",
+        "storage": "Unplug its data and power cables, take its screws out one at a time, then slide it out of its bay.",
+        "fan": "Unplug its lead, take its screws out one at a time, then lift it out."
+      }
     }
   },
   "learning": {

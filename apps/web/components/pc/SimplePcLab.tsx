@@ -20,7 +20,7 @@ import {
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
   simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap,
   hasModelledMounting, withSimpleStep, activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
-  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
+  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, unscrewSimplePart, withUnscrew, isPositionKey, simplePositions, simpleLiftBlock, simpleRequiredScrews, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
 } from "./simple-model";
 import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-scene";
 import { guideFocus } from "./guide";
@@ -148,6 +148,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const built = useMemo(() => simpleBuildFromSnapshot(saved), [saved]);
   /** The lead in hand: which port the learner has picked for its next end, and whether the plug is turned the wrong way. */
   const [plugHold, setPlugHold] = useState<{ key: string; portId: string | null; reversed: boolean } | null>(null);
+  /** The bay or fan place the learner chose for a SATA drive or a case fan, until it is placed (then the build says where it is). */
+  const [position, setPosition] = useState<{ key: SimplePartKey; id: string } | null>(null);
   /** Physical steps ticked for the part in hand (they reset when another part is picked up). */
   const [ticked, setTicked] = useState(0);
   /** How the learner holds a keyed part (CPU, memory) over its place: turned and off centre until they line it up. */
@@ -266,6 +268,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const next: Selection = { kind: "part", key };
     setSelection(next);
     setTicked(0);
+    setPosition(null);
     // A keyed part is picked up turned and off centre: lining it up is the learner's job.
     const inPlace = (state.parts.find((p) => p.instanceId === partSpec(key)?.id)?.attachments.length ?? 0) > 0;
     const picked = simpleRetention(state, key);
@@ -294,6 +297,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   function cancel() {
     if (!selection) return;
     setSelection(null);
+    setPosition(null);
     // Put down: nothing is in hand, so a reload does not bring the part back into it.
     if (selection.kind === "part") setHold(null);
     react({ type: "cancel" }, state, saved.powered, null);
@@ -561,13 +565,51 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   function handPlace(key: SimplePartKey, line: string) {
     if (handsOff()) return;
     if (!takeStep()) return;
-    const r = placeSimplePart(state, key);
+    const positionId = isPositionKey(key) && position?.key === key ? position.id : undefined;
+    if (isPositionKey(key) && !positionId) { speak({ lines: [{ key: "hands.pickPosition", values: { part: roleLabel(key) } }], mood: "point", point: "scene" }); return; }
+    const r = placeSimplePart(state, key, positionId);
     if (!r.ok) {
       if (r.reason === "prepMissing" || r.reason === "prepWrong") sayEngine(r.message, "closeBlocked");
+      else if (r.reason === "positionTaken" || r.reason === "positionWrong") speak({ lines: [{ key: `hands.${r.reason}` }], mood: "concerned", point: "scene" });
       else react({ type: "select", selection: { kind: "part", key } });
       return;
     }
-    keepHand(r.state, (sn) => withPlace(sn, key), line);
+    keepHand(r.state, (sn) => withPlace(sn, key, positionId), line);
+    setPosition(null);
+  }
+  /** Chooses the bay or fan place a part will go in; a taken, too small or covered one is refused with its reason. */
+  function choosePosition(key: SimplePartKey, id: string) {
+    if (handsOff()) return;
+    const place = simplePositions(state, key).find((x) => x.id === id);
+    if (!place) return;
+    if (place.occupant) { speak({ lines: [{ key: "hands.positionTaken" }], mood: "concerned", point: "scene" }); return; }
+    if (!place.fits) { speak({ lines: [{ key: place.radiator ? "hands.positionRadiator" : "hands.positionWrong" }], mood: "concerned", point: "scene" }); return; }
+    setPosition({ key, id });
+    speak({ lines: [{ key: "hands.positionPicked", values: { place: place.label[lang] } }], mood: "point", point: "scene" });
+  }
+  /** Takes one screw of a fitted board, power supply, drive or fan out again. */
+  function handUnscrew(key: SimplePartKey) {
+    if (handsOff()) return;
+    if (!takeStep()) return;
+    const r = unscrewSimplePart(state, key);
+    if (!r.ok) return;
+    const left = firstAttachment(r.state, key)?.fastenersSecured ?? 0;
+    keepHand(r.state, (sn) => withUnscrew(sn, key), left === 0 ? "unscrewedAll" : "unscrewedOne", "point", { left: String(left) });
+  }
+  /** Lifts a fitted board, power supply, drive or fan out to the bench once its screws (and leads) are out. */
+  function handLiftOut(key: SimplePartKey) {
+    if (handsOff()) return;
+    if (!takeStep()) return;
+    const r = liftSimplePart(state, key);
+    if (!r.ok) {
+      speak({ lines: [{ key: r.reason === "unplugFirst" ? "hands.liftUnplug" : "hands.liftUnscrew", values: { part: roleLabel(key) } }], mood: "concerned", point: r.reason === "unplugFirst" ? "cables" : "scene" });
+      return;
+    }
+    commit(r.state, (sn) => withLift(sn, key));
+    setVerdict(null);
+    setSelection(null);
+    setTab("parts");
+    react({ type: "removed", key }, r.state, false, null);
   }
   function handPlug(key: SimpleCableKey, endIndex: number) {
     if (handsOff() || !plugHold || plugHold.key !== key) return;
@@ -604,6 +646,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const r = applyCoolerStep(state, key, step);
     if (!r.ok) {
       if (r.message) sayEngine(r.message, "closeBlocked");
+      else if (r.reason === "fanInTheWay") speak({ lines: [{ key: "blocked.fanInTheWay" }], mood: "concerned", point: "scene" });
       else { const line = coolerStepLine(state, key); speak({ lines: [line ?? { key: "hands.closeBlocked" }], mood: "concerned", point: "scene" }); }
       return;
     }
@@ -1019,6 +1062,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     cables: leads.map((c) => cableName(c.key)),
   } : null;
   const removable = selectedPart ? REMOVABLE.includes(selectedPart) : false;
+  /** A board, power supply, drive or fan already in its place (its screws are in, partly in or out). */
+  const placedScrewed = Boolean(selectedPart && simpleUsesScrews(selectedPart) && roleOf(selectedPart) !== "cooler" && !simpleIsLiquid(selectedPart) && firstAttachment(state, selectedPart));
   const removeBlocked = selectedPart && partInstalled && removable ? simpleRemoveBlock(state, selectedPart) : null;
   /** The part this one would replace: the other CPU or cooler, when that one is in. */
   const rival = selectedPart && !partInstalled && SWAPPABLE.includes(selectedPart) ? simpleSlotPart(state, slotOf(selectedPart)) : null;
@@ -1156,6 +1201,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const prep = part?.prep ?? {};
     const disabled = !ready || handsOff();
     const secured = at?.fastenersSecured ?? 0;
+    const required = simpleRequiredScrews(state, key);
     const order = simpleScrewOrder(saved.history, key);
     const choice = (active: boolean, label: string, onClick: () => void) =>
       <button type="button" className={active ? styles.installButton : styles.cancel} aria-pressed={active} disabled={disabled || Boolean(at)} onClick={onClick}>{active ? "✓ " : ""}{label}</button>;
@@ -1178,19 +1224,44 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
             {choice(prep.airflow === "intake", t("hands.fanIntake"), () => handPrep(key, "airflow", "intake", "fanTurned"))}
             {choice(prep.airflow === "exhaust", t("hands.fanExhaust"), () => handPrep(key, "airflow", "exhaust", "fanTurned"))}
           </>}
+          {isPositionKey(key) && <div className={styles.holdRow} role="group" aria-label={t(`hands.positionTitle.${role}`)}>
+            {simplePositions(state, key).map((place) => {
+              const tag = place.occupant ? t(place.supplied ? "hands.positionTag.supplied" : "hands.positionTag.taken") : place.radiator ? t("hands.positionTag.radiator") : !place.fits ? t("hands.positionTag.wrong") : "";
+              return <button key={place.id} type="button" disabled={disabled} aria-pressed={position?.key === key && position.id === place.id} onClick={() => choosePosition(key, place.id)}><bdi>{place.label[lang]}</bdi>{tag && <small> · {tag}</small>}</button>;
+            })}
+          </div>}
           {liquid
             ? <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handPlace(key, "coolerPlaced")}>{t("hands.place.liquid")}</button>
             : <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handPlace(key, role === "cooler" ? "coolerPlaced" : "placedScrews")}>{t(`hands.place.${role}`)}</button>}
         </>}
-        {at && secured < spec.screws && (role === "cooler"
+        {at && secured < required && (role === "cooler"
           ? <div className={styles.holdRow} role="group" aria-label={t("hands.screwsTitle")}>
               {[0, 1, 2, 3].map((c) => <button key={c} type="button" disabled={disabled || order.done.includes(c)} aria-pressed={order.done.includes(c)} onClick={() => handScrew(key, c)}>{order.done.includes(c) ? "✓ " : ""}{t(`hands.corner${c}`)}</button>)}
             </div>
-          : <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handScrew(key, secured)}>{t("hands.nextScrew", { n: secured + 1, total: spec.screws })}</button>)}
-        {at && <p className={styles.handsState}>{t("hands.screwsState", { n: secured, total: spec.screws })}</p>}
+          : <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handScrew(key, secured)}>{t("hands.nextScrew", { n: secured + 1, total: required })}</button>)}
+        {at && <p className={styles.handsState}>{t("hands.screwsState", { n: secured, total: required })}</p>}
         <p className={styles.hint}>{t(`hands.why.${role}`)}</p>
         {liquid && <p className={styles.cablesNote}>{t("hands.liquidNote")}</p>}
         <p className={styles.cablesNote}>{t("hands.prepNote")}</p>
+      </div>
+    );
+  }
+
+  /** A board, power supply, drive or fan that is in its place: tighten the next screw, take one out, or (screws out) lift it to the bench. */
+  function PlacedPanel() {
+    const key = selectedPart!;
+    const secured = firstAttachment(state, key)?.fastenersSecured ?? 0;
+    const required = simpleRequiredScrews(state, key);
+    const disabled = !ready || handsOff();
+    const role = roleOf(key);
+    return (
+      <div className={styles.hands}>
+        <p className={styles.handsState}>{t("hands.screwsState", { n: secured, total: required })}</p>
+        {secured < required && <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handScrew(key, secured)}>{t("hands.nextScrew", { n: secured + 1, total: required })}</button>}
+        {secured > 0
+          ? <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handUnscrew(key)}>{t("hands.unscrewNext", { n: secured, total: required })}</button>
+          : <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handLiftOut(key)}>{t(`hands.liftOutOf.${role}`)}</button>}
+        <p className={styles.hint}>{t(`hands.removeWhy.${role}`)}</p>
       </div>
     );
   }
@@ -1569,7 +1640,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
             </summary>
             <div className={styles.partOptionsBody}>
               {selectedPart ? <div className={styles.install}>
-                {keyed ? HandsPanel() : hasModelledMounting(selectedPart) ? (rival ? <p className={styles.hint}>{t("hands.takeOtherCooler")}</p> : CoolerPanel()) : !partInstalled && !rival && (simpleUsesScrews(selectedPart) || simpleIsLiquid(selectedPart)) ? PrepPanel() : partInstalled && removable
+                {keyed ? HandsPanel() : hasModelledMounting(selectedPart) ? (rival ? <p className={styles.hint}>{t("hands.takeOtherCooler")}</p> : CoolerPanel()) : placedScrewed ? PlacedPanel() : !partInstalled && !rival && (simpleUsesScrews(selectedPart) || simpleIsLiquid(selectedPart)) ? PrepPanel() : partInstalled && removable
                   ? <button className={styles.installButton} type="button" onClick={() => remove(selectedPart)} disabled={!ready || Boolean(removeBlocked)}>{t("remove")}</button>
                   : rival
                     ? <button className={styles.installButton} type="button" onClick={() => swap(rival, selectedPart)} disabled={!ready || Boolean(swapBlocked)}>{t("swap", { other: label(rival) })}</button>

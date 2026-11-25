@@ -5,7 +5,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { pcCatalog } from "./catalog";
 import {
-  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, hasModelledMounting, isRamKey, partSpec, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
+  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, hasModelledMounting, isPositionKey, isRamKey, partSpec, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
   simpleCablesFor, simpleCableOrder, simplePartInstalled, simplePartOrder, simplePrerequisites, simpleRuleBlock, REMOVABLE, simpleRamRecommended, simpleSlotFilled, simpleSlotPart, simpleTarget, slotOf,
   caseCoversClosed, isM2Key, simpleM2Slots, simpleRamSlots, simpleRamTargetFor, simpleRetention,
   type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimpleHeld, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,
@@ -167,6 +167,7 @@ function helpLines(state: PCBuildState, powered: boolean, selection: Selection):
     if (blocked) return { lines: [blockLine(state, selection.key, blocked)], mood: "thinking" };
     // A memory module: no glowing default slot; how to choose one, and what the manual recommends.
     if (isRamKey(selection.key)) return { lines: [ramLine(state, "help")], mood: "point", point: "scene" };
+    if (isPositionKey(selection.key)) return { lines: [{ key: "hands.pickPosition", values: { part: partName(selection.key) } }], mood: "point", point: "scene" };
     return { lines: [{ key: "help.part", values: { part: partName(selection.key), place: { place: placeOf(state, selection.key) } } }], mood: "point", point: "scene" };
   }
   if (selection?.kind === "cable") {
@@ -190,7 +191,7 @@ export function undoLine(step: string): CompanionLine {
   const colon = step.indexOf(":");
   const kind = step.slice(0, colon);
   const rest = step.slice(colon + 1);
-  const key = rest.split(":")[0] ?? "";
+  const key = rest.split(/[:@]/)[0] ?? "";
   const part = () => (ALL_SIMPLE_PARTS.some((p) => p.key === key) ? { part: partName(key as SimplePartKey) } : null);
   const cable = (k: string) => (ALL_SIMPLE_CABLES.some((c) => c.key === k) ? { cable: { cable: k as SimpleCableKey } } : null);
   const withPart = (line: string) => { const v = part(); return v ? { key: `undo.${line}`, values: v } : { key: "undo.step" }; };
@@ -203,6 +204,7 @@ export function undoLine(step: string): CompanionLine {
     case "lift": return withPart("lift");
     case "place": return withPart("place");
     case "screw": return withPart("screw");
+    case "unscrew": return withPart("unscrew");
     case "fasten": return withPart("fasten");
     case "unfasten": return withPart("unfasten");
     case "prep": return withPart("prep");
@@ -443,6 +445,8 @@ export function companionSay(event: CompanionEvent, state: PCBuildState, powered
         const coolerLine = hasModelledMounting(key) ? coolerStepLine(state, key) : null;
         if (coolerLine) return { lines: [coolerLine], mood: "point", point: "scene" };
         const place = placeOf(state, key);
+        // A SATA drive or a case fan goes where the learner chooses: the plan's own place is not suggested as the only one.
+        if (isPositionKey(key)) return { lines: [{ key: "hands.pickPosition", values: { part: partName(key) } }], mood: "point", point: "scene" };
         // A module is placed by hand over the slot of the learner's choice: no slot is named for it here.
         if (isRamKey(key)) return { lines: [{ key: "hands.ramPick" }], mood: "point", point: "scene" };
         return { lines: [{ key: "selected.part", values: { part: partName(key), place: { place } } }], mood: "point", point: "scene" };

@@ -43,7 +43,8 @@ describe("the guide robot's focus", () => {
     // The liquid cooler's pump block goes on the bench (owner decision 15): only its CPU is a prerequisite, not the case.
     expect(guideFocus(built(["cpu2", "ram", "ram2", "storage"]), { kind: "part", key: "aio" }, false, false)?.reason).not.toBe("prerequisite");
     expect(guideFocus(createSimpleBuild(), { kind: "part", key: "aio" }, false, false)).toMatchObject({ reason: "prerequisite", targets: [{ kind: "part", instanceId: "cpu-3" }] });
-    expect(guideFocus(createSimpleBuild(), { kind: "cable", key: "gpuPower" }, false, false)).toMatchObject({ reason: "prerequisite", subject: { part: "cpu" } });
+    // The power supply needs no board, so the first part this lead waits for is the supply itself.
+    expect(guideFocus(createSimpleBuild(), { kind: "cable", key: "gpuPower" }, false, false)).toMatchObject({ reason: "prerequisite", subject: { part: "psu" } });
   });
 
   it("guides a swap: the fan lead to unplug, then the cooler to take off, before the CPU", () => {
