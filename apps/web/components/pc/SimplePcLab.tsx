@@ -13,7 +13,7 @@ import { askCompanionAi, companionAskRequest, fetchTutorStatus, type AiStatus } 
 import { buildContext, companionSay, coolerDoneLine, coolerRemovalLine, coolerStepLine, heldLines, intentOf, m2StepLine, mountingRemovalLine, nextLine, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
 import { aimClick, aimTargets, createStepGate, m2LiftPose, nextHandStep, type HandStep } from "./click-assembly";
 import { focusOn, moveCamera, selectPart } from "./scene/scene-store";
-import { applyCoolerStep, applyMountingStep, coolerStepHistory, mountingStepHistory, nextCoolerRemoval, nextCoolerStep, nextMountingRemoval, type CoolerStep, type MountingStep } from "./cooler-assembly";
+import { applyCoolerStep, applyMountingStep, coolerStepHistory, mountingDismantling, mountingStepHistory, nextCoolerRemoval, nextCoolerStep, nextMountingRemoval, type CoolerStep, type MountingStep } from "./cooler-assembly";
 import {
   ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, cableSpec, connectSimpleCable, firstAttachment, partSpec, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, isM2Key, isRamKey, lastSimpleStep, M2_WHOLE_TILT_DEG, simpleM2Heatsink, simpleM2Slots,
   parseSimpleSnapshot, SIMPLE_PART_LIST, SIMPLE_PARTS, SIMPLE_SAVE_KEY, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot,
@@ -184,8 +184,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     setMessage((previous) => ({ id: previous.id + 1, say: { ...say, lines: lines.length ? lines : say.lines.slice(0, 1) }, ...extra }));
   }, []);
   const react = useCallback((event: CompanionEvent, after = state, powered = saved.powered, inHand: Selection = selection) => {
-    speak(companionSay(event, after, powered, inHand));
-  }, [speak, state, saved.powered, selection]);
+    speak(companionSay(event, after, powered, inHand, mountingDismantling(saved.history)));
+  }, [speak, state, saved.powered, saved.history, selection]);
 
   useEffect(() => {
     let restored: SimpleSnapshot | null = null;
@@ -203,7 +203,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     }
     // The welcome back speaks from what was saved: the part in hand and its pose, else the build's progress.
     const held = restored?.held ?? null;
-    speak(companionSay(snapshot.history.length > 0 || held ? { type: "resume", held } : { type: "start" }, simpleBuildFromSnapshot(snapshot), snapshot.powered, held ? { kind: "part", key: held.key } : null));
+    speak(companionSay(snapshot.history.length > 0 || held ? { type: "resume", held } : { type: "start" }, simpleBuildFromSnapshot(snapshot), snapshot.powered, held ? { kind: "part", key: held.key } : null, mountingDismantling(snapshot.history)));
     try { setView(parseSimpleView(JSON.parse(localStorage.getItem(SIMPLE_VIEW_KEY) ?? "null"))); } catch { /* Defaults. */ }
     setWebgl(supportsWebgl());
     setReady(true);
@@ -1111,7 +1111,9 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const disabled = !ready || handsOff();
     return <>
       <p className={styles.hint}>{lead}</p>
-      <button type="button" className={styles.cancel} disabled={disabled} onClick={() => takeMountingStep(next)}>{t(`companion.${line.key}`, line.values as never)}</button>
+      <div role="group" aria-label={t("hands.mountingGroup")}>
+        <button type="button" className={styles.cancel} disabled={disabled} onClick={() => takeMountingStep(next)}>{t(`companion.${line.key}`, line.values as never)}</button>
+      </div>
     </>;
   }
 
@@ -1127,6 +1129,24 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const started = Boolean(part?.attachments.length);
     const choose = (active: boolean, label: string, run: () => void) =>
       <button type="button" className={styles.installButton} aria-pressed={active} disabled={disabled} onClick={run}>{label}</button>;
+    // Taking the frame off has been chosen: its next step leads, and the fitting step it replaced stays as the way back.
+    const dismantle = mountingDismantling(saved.history) ? nextMountingRemoval(state) : null;
+    if (dismantle) {
+      return (
+        <div className={styles.hands}>
+          <div role="group" aria-label={t("hands.mountingGroup")}>
+            <button type="button" className={styles.installButton} disabled={disabled} onClick={() => takeMountingStep(dismantle)}>{words(mountingRemovalLine(dismantle))}</button>
+          </div>
+          {step && <>
+            <p className={styles.hint}>{t("hands.refitInstead")}</p>
+            <div role="group" aria-label={t("hands.refitGroup")}>
+              <button type="button" className={styles.cancel} disabled={disabled} onClick={() => takeCoolerStep(key, step)}>{words(coolerStepLine(state, key))}</button>
+            </div>
+          </>}
+          <p className={styles.hint}>{t("hands.why.cooler")}</p>
+        </div>
+      );
+    }
     return (
       <div className={styles.hands}>
         {step && (step.kind === "cpuFirst" || step.kind === "boardFirst"
@@ -1470,6 +1490,10 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     }
     if (hasModelledMounting(key)) {
       if (rival) return { label: t("toolbar.more"), run: openPartOptions };
+      // Taking the frame off has been chosen: the next removal step leads, whatever the cooler's own next fitting step is.
+      const removal = mountingDismantling(saved.history) ? nextMountingRemoval(state) : null;
+      const removalLine = mountingRemovalLine(removal);
+      if (removal && removalLine) return { label: t(`companion.${removalLine.key}`, removalLine.values as never), run: () => takeMountingStep(removal) };
       const coolerStep = nextCoolerStep(state, key);
       const line = coolerStep ? coolerStepLine(state, key) : null;
       if (!coolerStep || !line) return { label: t("installed"), why: t("toolbar.nothing") };
