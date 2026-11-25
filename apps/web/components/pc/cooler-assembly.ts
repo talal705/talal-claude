@@ -149,6 +149,25 @@ export function nextMountingRemoval(state: PCBuildState): MountingStep {
   return null;
 }
 
+/**
+ * Whether the learner is taking the board's mounting hardware off, read from the last saved step on it: a frame
+ * screw loosened or out (fewer turns than the screw state before it), the frame lifted off, or the original ILM
+ * put back. Fitting steps (a screw engaged or tightened, the frame placed, the ILM removed) mean they are fitting.
+ * The engine states alone cannot say (a loosened screw and an engaged one are both "1"); the saved steps can.
+ */
+export function mountingDismantling(history: readonly SimpleStep[]): boolean {
+  const turns = (v: string) => [...v].reduce((n, c) => n + Number(c), 0);
+  let screws = "0000";
+  let removing = false;
+  for (const h of history) {
+    const [, part, field, value = ""] = h.split(":");
+    if (!h.startsWith("hw:") || part !== "motherboard") continue;
+    if (field === "frame_screws") { removing = turns(value) < turns(screws); screws = value; }
+    else if (field === "frame" || field === "ilm") removing = value === "";
+  }
+  return removing;
+}
+
 /** Takes one mounting step: one engine `set_hardware` change on the board, with the engine's own guards. */
 export function applyMountingStep(state: PCBuildState, step: MountingStep): Result {
   switch (step?.kind) {

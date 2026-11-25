@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { PCBuildState } from "@ytl/contracts";
 import {
-  applyCoolerStep, applyMountingStep, coolerStepHistory, mountingStepHistory, nextCoolerRemoval, nextCoolerStep, nextMountingRemoval, simpleCoolerProgress, type CoolerStep,
+  applyCoolerStep, applyMountingStep, coolerStepHistory, mountingDismantling, mountingStepHistory, nextCoolerRemoval, nextCoolerStep, nextMountingRemoval, simpleCoolerProgress, type CoolerStep,
 } from "./cooler-assembly";
 import { nextHandStep } from "./click-assembly";
-import { mountingRemovalLine } from "./companion";
+import { companionSay, mountingRemovalLine } from "./companion";
 import { planModel, rebaseProgress, snapshotFromHistory } from "./plan-model";
 import {
   activateSimpleModel, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, installSimplePart, LEGACY_MODEL, liftSimplePart, lowerSimplePart, parseSimpleSnapshot, setSimpleMechanism, simpleBuildFromSnapshot, simplePartInstalled,
@@ -288,6 +288,31 @@ describe("the contact frame after its cooler is off: optional removal, CPU out, 
     const { state } = bodyOff();
     expect(nextCoolerStep(state, "cooler")).toEqual({ kind: "clean" });
     expect(nextMountingRemoval(state)).toMatchObject({ kind: "frameScrew", to: "loosened" });
+  });
+
+  it("once the learner chooses removal, the guidance follows removal; any install step hands it back (direction from the saved steps)", () => {
+    const { state, history } = bodyOff();
+    expect(mountingDismantling(history)).toBe(false); // fitted only: nothing taken off yet
+    const first = nextMountingRemoval(state)!;
+    const after = must(applyMountingStep(state, first));
+    const saved = [...history, mountingStepHistory(first)];
+    expect(saved.at(-1)).toBe("hw:motherboard:frame_screws:1222");
+    expect(mountingDismantling(saved)).toBe(true);
+    // The cooler's own next step is still the refit (tighten), so the guidance must be told which way the learner is going.
+    expect(nextCoolerStep(after, "cooler")).toMatchObject({ kind: "frameScrew", to: "tight" });
+    const select = { type: "select", selection: { kind: "part", key: "cooler" } } as const;
+    expect(companionSay(select, after, false, null).lines[0]!.key).toBe("cooler.frameScrewTight");
+    expect(companionSay(select, after, false, null, true).lines[0]).toMatchObject({ key: "cooler.frameScrewLoosen", values: { n: 3, total: 4 } });
+    expect(companionSay({ type: "resume", held: null }, after, false, null, true).lines.map((l) => l.key)).toContain("cooler.frameScrewLoosen");
+    // Tightening a frame screw again is an install step: the direction flips back.
+    const tighten = nextCoolerStep(after, "cooler")!;
+    expect(mountingDismantling([...saved, coolerStepHistory(after, "cooler", tighten)])).toBe(false);
+    // Frame off and the original ILM back are removal steps too; placing the frame again is not.
+    expect(mountingDismantling([...saved, "hw:motherboard:frame:"])).toBe(true);
+    expect(mountingDismantling([...saved, "hw:motherboard:frame:", "hw:motherboard:ilm:"])).toBe(true);
+    expect(mountingDismantling([...saved, "hw:motherboard:frame:", "hw:motherboard:frame:placed"])).toBe(false);
+    // Undo pops the last saved step: the direction is read again from what is left.
+    expect(mountingDismantling(saved.slice(0, -1))).toBe(false);
   });
 
   it("frame screws loosened across (each the opposite of the last), then taken out, then the frame off, then the ILM back", () => {

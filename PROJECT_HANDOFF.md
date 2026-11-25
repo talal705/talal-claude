@@ -29,6 +29,27 @@ pass; retention-ring/AMD coolers are engine-only (not reachable in the planner).
 (`origin/refactor/concise-code` = `606dc4e` at the start of this pass). No merge into `main` and no production deploy
 without the owner's approval.
 
+**Contact-frame removal repair (2026-11-25, on top of `4c1b333`).** *Root cause: product and harness, both.* Product: after
+the first frame screw was loosened the cooler's own next fitting step ("Tighten frame screw 1") became the primary toolbar action,
+the panel's main button and the robot's line, while removal stayed a side button; so the learner who had chosen removal was
+steered back to tightening (evidence: a diagnostic run printed the "Tighten" button twice beside "Loosen frame screw 3 of 4").
+Engine states cannot tell loosening from fitting (both are "1"), so the direction is read from the saved steps:
+`mountingDismantling(history)` (`cooler-assembly.ts`) is true when the last saved step on the board's frame/ILM removed something
+(fewer screw turns than before, frame lifted, original ILM back). While it is true and `nextMountingRemoval` has a step, the toolbar,
+the cooler panel and the robot (select and welcome-back lines, through `companionSay(..., dismantling)`) lead with that removal
+step; the fitting step stays as a separate, labelled alternative ("Fit a cooler instead"). Any fitting step flips it back; Undo
+and reload recompute it from the saved steps. No new mode, no second state machine, no engine change. Both groups are `role="group"`
+with accessible names (`hands.mountingGroup`, `hands.refitGroup`, en/ar) so browser tests find them semantically. Harness: the
+earlier locator matched by words; the committed script now scopes to those groups and asserts that the primary action equals the
+removal button, the robot line, the fitting alternative, undo and reload part-way, that the frame is offered only when every frame
+screw is out, and one history step per click. A first rewrite asserted "no frame-screw marks in the scene" for removed screws, but
+the scene draws a removed screw as an empty hole; it now asserts all four are "empty" (assertion corrected, not weakened).
+Regression test: `cooler.test.ts` "once the learner chooses removal…" (red first: `mountingDismantling is not a function`, then green).
+**Results on the final production build:** `npm run type-check`, `npm run check:messages`, `npm run build` exit 0; Vitest
+`apps/web packages` 82 files, 1052 passed, 21 skipped; `cooling.mjs` 40/40 in en, ar, en 430 px and ar 430 px; `aio.mjs` 13/13 en and
+ar; `cpu-ram-click.mjs` 9/9; `m2.mjs` 31/31 (run with an unrecognised locale argument, so in English). Planner Add/Remove was
+not re-run in the browser this pass. The deployed preview is still unverified (Vercel status only; dashboard needs a login).
+
 ### History — first checkpoint (`81bfb14`)
 
 - Claude's partial changes reuse part/cable/first-attachment lookups and storage validation/errors,

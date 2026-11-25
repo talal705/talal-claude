@@ -134,18 +134,52 @@ ok("cooler taken off step by step: screws loosened, then out, then lifted", !s.p
 h = await hw();
 ok("removed cooler leaves its screws out of the picture; the contact frame stays on the board", Object.keys(h.screws).every((k) => !k.startsWith("body-screw")) && h.frame === true, JSON.stringify(h));
 
-// Review correction: after the body is off, the contact frame can be taken off by the learner (optional), one click each.
+// Taking the contact frame off (the learner's own choice), one click each. The removal button is found by its semantic
+// group, never by its words or position; the fitting alternative lives in a different group.
 const camB = await cam();
 await press(tile(/Freezer 36/)); await opened();
-// The OPTIONAL mounting action only: the secondary (cancel-styled) button inside the cooler panel's `hands` block in
-// the part options. Not matched by label, because once the frame is off the PRIMARY toolbar button ("Place contact
-// frame") and this secondary one ("Refit original ILM") can both match the same words, which stopped the loop at 9.
-const mount = lab.locator("[class*=partOptions] [class*=hands] button[class*=cancel]");
-ok("optional: the page offers one mounting step while the contact frame is still on", (await mount.count()) === 1, String(await mount.count()));
+const removalGroup = lab.getByRole("group", { name: ar ? "فكّ إطار التلامس" : "Take the contact frame off" });
+const refitGroup = lab.getByRole("group", { name: ar ? "تركيب مبرّد بدلًا من ذلك" : "Fit a cooler instead" });
+const removal = removalGroup.getByRole("button");
+const text = async (l) => (await l.first().innerText()).trim();
+ok("optional: exactly one removal step is offered while the contact frame is on, and nothing is taken yet", (await removalGroup.count()) === 1 && (await removal.count()) === 1 && (await refitGroup.count()) === 0);
+const hBefore2 = await hw();
+const primaryText = async () => text(primary);
 const mTrail = [];
-for (let i = 0; i < 14; i += 1) { await opened(); if ((await mount.count()) !== 1) break; const n = (await st()).history.length; await press(mount); const s3 = await st(); mTrail.push(s3.history.slice(n)); if (s3.history.length === n) break; }
+const roleOf = async () => ({ removal: await text(removal), primary: await primaryText(), alt: (await refitGroup.count()) ? await text(refitGroup.getByRole("button")) : null, lines: (await st()).lines });
+async function removeOne() { await opened(); const n = (await st()).history.length; await press(removal); const s3 = await st(); mTrail.push(s3.history.slice(n)); return s3; }
+await removeOne(); // first screw loosened
+let g = await roleOf();
+ok("after the first loosening the primary action and the robot follow removal, not tightening", g.primary === g.removal && g.lines.some((l) => l === "cooler.frameScrewLoosen") && !g.lines.some((l) => l === "cooler.frameScrewTight"), JSON.stringify(g));
+ok("fitting is still offered, as a clearly separate alternative", g.alt !== null && g.alt !== g.removal && g.alt !== g.primary, JSON.stringify(g));
+await removeOne(); // second loosened
+const sBeforeUndo = JSON.stringify((await hw()).screws);
+await press(lab.getByRole("button", { name: ar ? /تراجع/ : /Undo/ })); await opened();
+g = await roleOf();
+const hU = await hw();
+ok("undo restores the screw as it was in the scene, and guidance is still removal", JSON.stringify(hU.screws) !== sBeforeUndo && g.primary === g.removal, JSON.stringify({ g, hU }));
+mTrail.pop(); await removeOne(); // redo the second loosening
+const snapR = (await st()).history.join("|"); const hR = JSON.stringify((await hw()).screws);
+await page.reload(); await page.waitForSelector("canvas", { timeout: 120000 }); await page.waitForTimeout(7000); await settle();
+for (let k = 0; k < 30 && !(await hw()); k += 1) await page.waitForTimeout(500);
+await press(tile(/Freezer 36/)); await opened();
+g = await roleOf(); s = await st();
+ok("reload part-way through removal: same saved steps, same picture, guidance still removal", s.history.join("|") === snapR && JSON.stringify((await hw()).screws) === hR && g.primary === g.removal && s.lines.some((l) => l === "cooler.frameScrewLoosen"), JSON.stringify({ g, same: s.history.join("|") === snapR }));
+const lifted = async () => (await st()).history.includes("hw:motherboard:frame:");
+let guard = 0;
+while (!(await lifted()) && guard++ < 12) {
+  const hh = await hw();
+  const before = await text(removal);
+  ok(`the frame is not offered for lifting while a frame screw is still in: "${before.slice(0, 40)}"`, !/contact frame off|ارفع إطار التلامس/i.test(before) || Object.entries(hh.screws).filter(([k]) => k.startsWith("frame-screw")).every(([, v]) => v === "empty"), JSON.stringify(hh.screws));
+  await removeOne();
+}
+h = await hw(); s = await st();
+ok("the frame comes off only after every screw is out; the CPU stays in the socket", s.history.includes("hw:motherboard:frame:") && h.frame === false && s.placed.includes("cpu"), JSON.stringify(h));
+g = await roleOf();
+ok("with the frame off the primary action and robot offer the original socket frame back", g.primary === g.removal && g.lines.some((l) => l === "cooler.cpuFree"), JSON.stringify(g));
+await removeOne(); // original frame (ILM) back
 s = await st(); h = await hw();
-ok("frame screws loosened, taken out, frame off, original frame back: one history step per click", mTrail.length === 10 && mTrail.every((x) => x.length === 1) && mTrail.at(-2)[0] === "hw:motherboard:frame:" && mTrail.at(-1)[0] === "hw:motherboard:ilm:", JSON.stringify(mTrail));
+ok("one history step per click through the whole removal (4 loosened, 4 out, frame off, ILM back)", mTrail.length === 10 && mTrail.every((x) => x.length === 1) && mTrail.at(-2)[0] === "hw:motherboard:frame:" && mTrail.at(-1)[0] === "hw:motherboard:ilm:", JSON.stringify(mTrail));
 ok("the scene draws the socket as original again (no frame, no frame screws, plate back)", h.frame === false && h.ilmRemoved === false && Object.keys(h.screws).every((k) => !k.startsWith("frame-screw")), JSON.stringify(h));
 ok("the CPU stayed in the socket (never lifted for the learner)", s.placed.includes("cpu"));
 ok("mounting steps moved no camera", JSON.stringify(await cam()) === JSON.stringify(camB));

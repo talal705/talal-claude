@@ -11,7 +11,7 @@ import {
   type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimpleHeld, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,
 } from "./simple-model";
 import { attachmentOf, nextHandStep } from "./click-assembly";
-import { nextCoolerStep, simpleCoolerProgress, type CoolerStep, type MountingStep } from "./cooler-assembly";
+import { nextCoolerStep, nextMountingRemoval, simpleCoolerProgress, type CoolerStep, type MountingStep } from "./cooler-assembly";
 
 export type Selection = { kind: "part"; key: SimplePartKey } | { kind: "cable"; key: SimpleCableKey } | null;
 export type CompanionMood = "idle" | "wave" | "point" | "happy" | "concerned" | "thinking" | "celebrate";
@@ -327,6 +327,13 @@ export function mountingRemovalLine(step: MountingStep): CompanionLine | null {
     default: return null;
   }
 }
+/**
+ * The line for a cooler the learner has started: the removal step while they are taking the frame off
+ * (`dismantling`, from `mountingDismantling`), else the next fitting step.
+ */
+function coolerGuideLine(state: PCBuildState, key: SimplePartKey, dismantling: boolean): CompanionLine | null {
+  return (dismantling ? mountingRemovalLine(nextMountingRemoval(state)) : null) ?? coolerStepLine(state, key);
+}
 /** What the robot says when a cooler is mechanically fitted: wiring is its own stage, so the lead is not connected yet. */
 export function coolerDoneLine(state: PCBuildState, key: SimplePartKey): CompanionLine | null {
   const progress = simpleCoolerProgress(state, key);
@@ -405,12 +412,12 @@ export function heldLines(state: PCBuildState, held: SimpleHeld): CompanionLine[
  * (the slot it is over and what that slot needs next), another keyed part in hand, or a module resting
  * in a slot not yet pressed home. Null when nothing is part-way: the build's next step applies.
  */
-function resumeLines(state: PCBuildState, held: SimpleHeld | null): CompanionLine[] | null {
+function resumeLines(state: PCBuildState, held: SimpleHeld | null, dismantling: boolean): CompanionLine[] | null {
   const inHand = held ? heldLines(state, held) : null;
   if (inHand) return inHand;
   // A cooler started and not finished: the next documented step, not the build's next part.
   const coolerKey = !held ? coolerInProgress(state) : null;
-  const coolerLine = coolerKey ? coolerStepLine(state, coolerKey) : null;
+  const coolerLine = coolerKey ? coolerGuideLine(state, coolerKey, dismantling) : null;
   if (coolerLine && !["cooler.cpuFirst", "cooler.boardFirst"].includes(coolerLine.key)) return [coolerLine];
   // An M.2 drive left in its slot part-way (at an angle, not yet held, or its heatsink still off).
   const m2 = !held && ALL_SIMPLE_PARTS.find((p) => isM2Key(p.key) && state.parts.find((x) => x.instanceId === p.id)?.attachments.length && !simplePartInstalled(state, p.key));
@@ -422,7 +429,7 @@ function resumeLines(state: PCBuildState, held: SimpleHeld | null): CompanionLin
 }
 
 /** The bubble after an event. `state` is the build after the event; `selection` is what is in hand now. */
-export function companionSay(event: CompanionEvent, state: PCBuildState, powered: boolean, selection: Selection): CompanionSay {
+export function companionSay(event: CompanionEvent, state: PCBuildState, powered: boolean, selection: Selection, dismantling = false): CompanionSay {
   const next = nextAction(state, powered);
   const nextSay = (lines: CompanionLine[], mood: CompanionMood): CompanionSay => ({ lines: [...lines, nextLine(state, powered)], mood, point: pointFor(next) });
   switch (event.type) {
@@ -430,7 +437,7 @@ export function companionSay(event: CompanionEvent, state: PCBuildState, powered
       return { lines: [{ key: "hello" }, nextLine(state, powered)], mood: "wave", point: pointFor(next) };
     case "resume": {
       // What was saved mid-step comes first: the part in hand, or a module resting in its slot.
-      const unfinished = resumeLines(state, event.held ?? null);
+      const unfinished = resumeLines(state, event.held ?? null, dismantling);
       if (unfinished) return { lines: [{ key: "welcomeBack" }, ...unfinished], mood: "wave", point: "scene" };
       return { lines: [{ key: "welcomeBack" }, nextLine(state, powered)], mood: "wave", point: pointFor(next) };
     }
@@ -442,7 +449,7 @@ export function companionSay(event: CompanionEvent, state: PCBuildState, powered
           : nextSay([{ key: "already", values: { part: partName(key) } }], "idle");
         const blocked = simpleBlock(state, key);
         if (blocked) return { lines: [blockLine(state, key, blocked)], mood: "concerned" };
-        const coolerLine = hasModelledMounting(key) ? coolerStepLine(state, key) : null;
+        const coolerLine = hasModelledMounting(key) ? coolerGuideLine(state, key, dismantling) : null;
         if (coolerLine) return { lines: [coolerLine], mood: "point", point: "scene" };
         const place = placeOf(state, key);
         // A SATA drive or a case fan goes where the learner chooses: the plan's own place is not suggested as the only one.
