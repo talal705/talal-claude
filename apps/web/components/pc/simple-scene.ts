@@ -3,7 +3,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { catalogIndex } from "./catalog";
 import type { Selection } from "./companion";
-import { ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, cableSpec, isPositionKey, simplePositions, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCablesFor, simplePartInstalled, simpleRadiatorTarget, simpleTarget } from "./simple-model";
+import { ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, isPositionKey, simplePositions, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableEnds, simpleCablesFor, simpleEndPlugged, simplePartInstalled, simplePortChoices, simpleRadiatorTarget, simpleTarget } from "./simple-model";
 
 /** The second stick lies beside the first; every other part keeps the place it always had. */
 export const SECOND_RAM_ID = "ram-11";
@@ -68,22 +68,27 @@ export function simpleSceneTargets(state: PCBuildState, selection: Selection, ch
     ];
   }
   if (simpleCableConnected(state, selection.key) || simpleCableBlock(state, selection.key)) return [];
-  const own = cableSpec(selection.key);
+  // The end being plugged now (a modular lead's power-supply side first): its planned socket and every free equivalent one glow.
+  const own = simpleCableEnds(selection.key).find((end) => !simpleEndPlugged(state, end));
+  if (!own) return [];
   const hostReady = (instanceId: string) => ALL_SIMPLE_PARTS.some((part) => part.id === instanceId && simplePartInstalled(state, part.key));
   const free = (instanceId: string, portId: string) => !state.cables.some((cable) => Object.values(cable.ends).some((end) => end?.kind === "part" && end.instanceId === instanceId && end.portId === portId));
+  const fitting = simplePortChoices(state, own).filter((choice) => choice.fits && !choice.occupied).map((choice) => choice.portId);
   // Other leads' free ports, and the look-alike headers next to this one (CPU_OPT beside CPU_FAN, EPS_2 beside EPS_1, …).
   const decoys = new Map<string, string>();
-  for (const cable of simpleCablesFor(state)) if (cable.key !== own.key && !simpleCableConnected(state, cable.key) && hostReady(cable.instanceId)) decoys.set(`${cable.instanceId}/${cable.portId}`, cable.portId);
+  for (const cable of simpleCablesFor(state)) if (cable.key !== selection.key && !simpleCableConnected(state, cable.key) && hostReady(cable.instanceId)) decoys.set(`${cable.instanceId}/${cable.portId}`, cable.portId);
   const family = PORT_FAMILIES.find((prefixes) => prefixes.some((prefix) => own.portId.startsWith(prefix)));
   const host = state.parts.find((part) => part.instanceId === own.instanceId);
   if (family && host) {
     for (const port of catalogIndex.byId.get(host.catalogId)?.ports ?? []) {
-      if (port.id !== own.portId && family.some((prefix) => port.id.startsWith(prefix)) && free(host.instanceId, port.id)) decoys.set(`${host.instanceId}/${port.id}`, port.id);
+      if (family.some((prefix) => port.id.startsWith(prefix)) && free(host.instanceId, port.id)) decoys.set(`${host.instanceId}/${port.id}`, port.id);
     }
   }
   return [
-    { id: `target:${own.portId}`, kind: "port", hostInstanceId: own.instanceId, placeId: own.portId, role: "target" },
-    ...[...decoys].filter(([key]) => key !== `${own.instanceId}/${own.portId}`).map(([key, portId]): SimpleSceneTarget => ({ id: `decoy:${portId}`, kind: "port", hostInstanceId: key.slice(0, key.indexOf("/")), placeId: portId, role: "decoy" })),
+    ...fitting.map((portId): SimpleSceneTarget => ({ id: `target:${portId}`, kind: "port", hostInstanceId: own.instanceId, placeId: portId, role: "target" })),
+    ...[...decoys]
+      .filter(([key, portId]) => !(key.startsWith(`${own.instanceId}/`) && fitting.includes(portId)))
+      .map(([key, portId]): SimpleSceneTarget => ({ id: `decoy:${portId}`, kind: "port", hostInstanceId: key.slice(0, key.indexOf("/")), placeId: portId, role: "decoy" })),
   ];
 }
 

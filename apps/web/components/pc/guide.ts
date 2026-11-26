@@ -10,7 +10,7 @@ import type { PCBuildState } from "@ytl/contracts";
 import { nextHandStep } from "./click-assembly";
 import { nextAction, type Selection } from "./companion";
 import {
-  ALL_SIMPLE_CABLES, cableSpec, isPositionKey, isRamKey, partSpec, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
+  ALL_SIMPLE_CABLES, isPositionKey, isRamKey, partSpec, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableEnds, simpleCableMissingParts, simpleEndPlugged, simpleEndSocket,
   roleOf, simplePartInstalled, simplePrerequisites, simpleRetention, slotCovers, simpleRadiatorTarget, simpleSlotFilled, simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf,
   type SimpleCableKey, type SimplePartKey,
 } from "./simple-model";
@@ -39,7 +39,12 @@ export interface GuideFocus {
 }
 
 const partId = (key: SimplePartKey) => partSpec(key).id;
-const portTarget = (key: SimpleCableKey): GuideTarget => ({ kind: "port", hostInstanceId: cableSpec(key).instanceId, placeId: cableSpec(key).portId });
+/** The socket of the end being plugged now (or, for a lead that is in, the one to unplug first). */
+const portTarget = (state: PCBuildState, key: SimpleCableKey): GuideTarget => {
+  const ends = simpleCableEnds(key);
+  const end = ends.find((e) => !simpleEndPlugged(state, e)) ?? ends.at(-1)!;
+  return { kind: "port", hostInstanceId: end.instanceId, placeId: simpleEndSocket(state, end) };
+};
 
 /** The places a part goes: its own, and a liquid cooler's radiator place in the case. */
 function placesOf(state: PCBuildState, key: SimplePartKey, chosen: string | null): GuideTarget[] {
@@ -93,7 +98,7 @@ function forPart(state: PCBuildState, key: SimplePartKey, chosen: string | null 
     const blocked = simpleSwapBlock(state, key);
     if (blocked === "unplugCoolerFirst") {
       const lead = ALL_SIMPLE_CABLES.find((cable) => cable.requires.some((k) => slotOf(k) === "cooler") && simpleCableConnected(state, cable.key))?.key;
-      if (lead) return { targets: [portTarget(lead)], reason: "prerequisite", subject: { cable: lead } };
+      if (lead) return { targets: [portTarget(state, lead)], reason: "prerequisite", subject: { cable: lead } };
     }
     if (blocked === "removeCoolerFirst") {
       const cooler = simpleSlotPart(state, "cooler")!;
@@ -119,7 +124,7 @@ function forCable(state: PCBuildState, key: SimpleCableKey): GuideFocus {
       return { targets: [{ kind: "part", instanceId: partId(part) }], reason: "prerequisite", subject: { part } };
     }
   }
-  return { targets: [portTarget(key)], reason: "place", subject: { cable: key } };
+  return { targets: [portTarget(state, key)], reason: "place", subject: { cable: key } };
 }
 
 /**
@@ -143,7 +148,7 @@ export function guideFocus(state: PCBuildState, selection: Selection, powered: b
       return { ...forCable(state, next.key), reason: "next" };
     case "swapCooler": {
       const lead = simpleCableConnected(state, "cpuFan") ? "cpuFan" : null;
-      if (lead) return { targets: [portTarget(lead)], reason: "next", subject: { cable: lead } };
+      if (lead) return { targets: [portTarget(state, lead)], reason: "next", subject: { cable: lead } };
       return { targets: [{ kind: "part", instanceId: partId("cooler") }], reason: "next", subject: { part: "cooler" } };
     }
     case "power":

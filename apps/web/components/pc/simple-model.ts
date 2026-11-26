@@ -1121,16 +1121,16 @@ export function simplePortChoices(state: PCBuildState, end: CableExtraEnd): Simp
   if (!entry || !right) return [];
   const family = (c: string) => (/argb|rgb|fan|pump/.test(c) ? "header" : /atx|eps|pcie|psu_modular|12v|sata_power/.test(c) ? "power" : /sata_data/.test(c) ? "data" : c);
   const fits = (p: PortSpec) => p.id === right.id || sameKind(p, right);
-  return entry.ports
-    .filter((p) => fits(p) || family(p.connector) === family(right.connector))
-    .sort((a, b) => Number(fits(b)) - Number(fits(a)))
-    .slice(0, 12)
+  const related = entry.ports.filter((p) => fits(p) || family(p.connector) === family(right.connector));
+  // Every socket that takes the plug is listed; only the look-alikes are capped.
+  return [...related.filter(fits), ...related.filter((p) => !fits(p)).slice(0, 8)]
     .map((p) => ({ portId: p.id, label: p.label, connector: p.connector, fits: fits(p), occupied: taken(state, end.instanceId, p.id) }));
 }
-/** The socket to point at for this end: where it sits, else its planned one, else the first free equivalent. */
+/** A socket's name for the learner (null when the part has no such socket). */
+export const simpleSocketName = (state: PCBuildState, instanceId: string, portId: string) => portOf(state, instanceId, portId)?.label ?? null;
+/** The socket to point at for this end: where it sits (when it is in a fitting one), else its planned one, else the first free equivalent. */
 export function simpleEndSocket(state: PCBuildState, end: CableExtraEnd): string {
-  const here = actualEndPort(state, end);
-  if (here) return here;
+  if (endAt(state, end)) return actualEndPort(state, end)!;
   if (!taken(state, end.instanceId, end.portId)) return end.portId;
   return simplePortChoices(state, end).find((c) => c.fits && !c.occupied)?.portId ?? end.portId;
 }

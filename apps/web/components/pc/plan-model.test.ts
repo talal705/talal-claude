@@ -235,6 +235,62 @@ describe("cable endpoint persistence", () => {
     expect(simpleCableConnected(undone, key)).toBe(true);
   });
 
+  it("takes one end out of a lead saved whole (old cable step), keeping the other end and the lead's history", () => {
+    const snapshot = unwired();
+    const { key, ends, index, end } = dataEnd(snapshot);
+    const whole = withCable(snapshot, key);
+    expect(whole.connected).toContain(key);
+    const removed = withUnplug(whole, key, index);
+    // The lead's whole-lead step stays; only the one end is out, and a reload agrees.
+    expect(removed.history).toEqual([...whole.history, `unplug:${key}:${index}`]);
+    const after = simpleBuildFromSnapshot(parseSimpleSnapshot(JSON.parse(JSON.stringify(removed)))!);
+    expect(actualEndPort(after, end)).toBeNull();
+    expect(ends.filter((e) => e !== end).every((e) => actualEndPort(after, e) !== null)).toBe(true);
+    expect(removed.connected).not.toContain(key);
+    expect(simpleCableConnected(simpleBuildFromSnapshot(undoSimpleStep(removed)!), key)).toBe(true);
+  });
+
+  it("removes an end of a partly connected lead, then the other, without touching unrelated leads", () => {
+    const snapshot = unwired();
+    const { key, ends, index } = dataEnd(snapshot);
+    const otherIndex = index === 0 ? 1 : 0;
+    const atx = snapshot.history.length;
+    const partly = withPlug(withCable(snapshot, "atx"), key, otherIndex, ends[otherIndex]!.portId);
+    const first = withUnplug(partly, key, otherIndex);
+    const state = simpleBuildFromSnapshot(first);
+    expect(actualEndPort(state, ends[otherIndex]!)).toBeNull();
+    expect(simpleCableConnected(state, "atx")).toBe(true);
+    expect(first.history.length).toBe(atx + 3);
+    expect(unplugSimpleEnd(state, key, otherIndex)).toMatchObject({ ok: false, reason: "notPlugged" });
+  });
+
+  it("records a fault build's end removal in its own trail and rejects an unplug of an unplugged end on replay", () => {
+    const snapshot = unwired();
+    const { key, index } = dataEnd(snapshot);
+    const trail = withUnplug({ ...emptySimpleSnapshot(), history: [] }, key, index).history;
+    expect(trail).toEqual([`unplug:${key}:${index}`]);
+    expect(() => simpleBuildFromSnapshot({ ...snapshot, history: [...snapshot.history, `unplug:${key}:${index}`], placed: snapshot.placed, connected: snapshot.connected })).toThrow();
+  });
+
+  it("lights every free equivalent socket for the end being plugged and points the robot at the actual socket", async () => {
+    const { simpleSceneTargets } = await import("./simple-scene");
+    const { simpleEndSocket } = await import("./simple-model");
+    const snapshot = unwired();
+    const { state, key, ends, index, end, port } = dataEnd(snapshot);
+    // The drive side of the data lead goes in first (the board end is active only after it).
+    const first = ends.findIndex((e) => e.instanceId !== end.instanceId);
+    const targets = simpleSceneTargets(state, { kind: "cable", key }).filter((t) => t.role === "target");
+    expect(targets.every((t) => t.hostInstanceId === ends[first]!.instanceId)).toBe(true);
+    const wired = simpleBuildFromSnapshot(withPlug(snapshot, key, first, ends[first]!.portId));
+    const boardTargets = simpleSceneTargets(wired, { kind: "cable", key }).filter((t) => t.role === "target").map((t) => t.placeId);
+    expect(boardTargets).toContain(end.portId);
+    expect(boardTargets).toContain(port);
+    // Once in an alternate socket, the socket to point at is that one, not the planned one.
+    const placed = simpleBuildFromSnapshot(withPlug(withPlug(snapshot, key, first, ends[first]!.portId), key, index, port));
+    expect(simpleSceneTargets(placed, { kind: "cable", key })).toEqual([]);
+    expect(simpleEndSocket(placed, end)).toBe(port);
+  });
+
   it("keeps old endpoint saves readable and preserves actual ports when an unrelated fan is added", () => {
     const snapshot = unwired();
     const { key, index, end, port } = dataEnd(snapshot);
