@@ -311,7 +311,8 @@ describe("cable endpoint persistence", () => {
     if (wrong) expect(guideFocus(state, { kind: "cable", key }, false, true, null, { end: boardIndex, portId: wrong.portId })?.targets).toEqual([expect.objectContaining({ placeId: end.portId })]);
   });
 
-  it("a shared modular PSU source is one physical end: the saved connected list follows it for every lead that uses it", () => {
+  /** Two SATA drives on one modular lead: every part fitted, both leads' ends plugged (the second's source is the same physical end). */
+  function sharedSata() {
     const plan = { ...gaming, storage: ["samsung-870-evo-1tb", "seagate-barracuda-2tb-st2000dm008"], fans: [] };
     activateSimpleModel(planModel(build(plan)));
     let state = createSimpleBuild();
@@ -332,9 +333,14 @@ describe("cable endpoint persistence", () => {
         state = r.state; snapshot = withPlug(snapshot, cable.key, index, end.portId);
       }
     }
+    const sourceOf = (key: string) => simpleCableEnds(key).findIndex((e) => e.instanceId.startsWith("psu"));
+    return { power, snapshot, sourceOf };
+  }
+
+  it("a shared modular PSU source is one physical end: the saved connected list follows it for every lead that uses it", () => {
+    const { power, snapshot, sourceOf } = sharedSata();
     const keys = power.map((c) => c.key);
     expect(keys.every((k) => snapshot.connected.includes(k))).toBe(true);
-    const sourceOf = (key: string) => simpleCableEnds(key).findIndex((e) => e.instanceId === "psu-8" || e.instanceId.startsWith("psu"));
     const first = power[0]!, second = power[1]!;
     const out = withUnplug(snapshot, first.key, sourceOf(first.key));
     expect(keys.some((k) => out.connected.includes(k))).toBe(false);
@@ -351,6 +357,40 @@ describe("cable endpoint persistence", () => {
     // An older whole-lead save followed by the source's removal is also consistent.
     const whole = withUnplug(withCable(withCable(snapshot, first.key), second.key), first.key, sourceOf(first.key));
     expect(keys.some((k) => whole.connected.includes(k))).toBe(false);
+  });
+
+  it("migrates a save made by the earlier per-lead derivation (second shared source never recorded), rejecting other mismatched lists", () => {
+    const { power, snapshot, sourceOf } = sharedSata();
+    const [first, second] = [power[0]!, power[1]!];
+    const secondSource = sourceOf(second.key);
+    const sourceStep = `plug:${second.key}:${secondSource}@${simpleCableEnds(second.key)[secondSource]!.portId}`;
+    expect(snapshot.history).toContain(sourceStep);
+    // What the earlier UI saved: the second lead's source step is absent (already physically in) and only the first lead is listed.
+    const legacy = { ...snapshot, history: snapshot.history.filter((st) => st !== sourceStep), connected: [first.key] };
+    const migrated = parseSimpleSnapshot(JSON.parse(JSON.stringify(legacy)))!;
+    expect(migrated).not.toBeNull();
+    expect(migrated.history).toEqual(legacy.history);
+    expect(power.every((c) => migrated.connected.includes(c.key))).toBe(true);
+    expect(power.every((c) => simpleCableConnected(simpleBuildFromSnapshot(migrated), c.key))).toBe(true);
+    // Reload of the migrated save is stable; one-end undo takes the last step back and keeps the shared source in.
+    expect(parseSimpleSnapshot(JSON.parse(JSON.stringify(migrated)))).toEqual(migrated);
+    const undone = undoSimpleStep(migrated)!;
+    expect(simpleCableConnected(simpleBuildFromSnapshot(undone), second.key)).toBe(false);
+    expect(actualEndPort(simpleBuildFromSnapshot(undone), simpleCableEnds(first.key)[sourceOf(first.key)]!)).not.toBeNull();
+    // Taking the shared source out and putting it back through EITHER lead reconnects both.
+    for (const via of [first, second]) {
+      const out = withUnplug(migrated, first.key, sourceOf(first.key));
+      expect(power.some((c) => out.connected.includes(c.key))).toBe(false);
+      const end = simpleCableEnds(via.key)[sourceOf(via.key)]!;
+      const back = withPlug(out, via.key, sourceOf(via.key), end.portId);
+      expect(power.every((c) => back.connected.includes(c.key))).toBe(true);
+      expect(parseSimpleSnapshot(JSON.parse(JSON.stringify(back)))).toEqual(back);
+    }
+    // Anything else that does not match the history is still refused.
+    for (const connected of [[second.key], [first.key, second.key, "atx"], ["bogus"], []]) {
+      expect(parseSimpleSnapshot(JSON.parse(JSON.stringify({ ...legacy, connected })))).toBeNull();
+    }
+    expect(parseSimpleSnapshot(JSON.parse(JSON.stringify({ ...snapshot, connected: [first.key] })))).toBeNull();
   });
 
   it("keeps old endpoint saves readable and preserves actual ports when an unrelated fan is added", () => {

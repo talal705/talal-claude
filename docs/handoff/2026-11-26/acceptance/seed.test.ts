@@ -27,4 +27,18 @@ it('seed',()=>{
  out.unwired=build(false,'none'); out.essentialNoFan=build(true,'essential'); out.allWhole=build(false,'all');
  out.cables=M.simpleCablesFor(M.createSimpleBuild()).map(c=>c.key);
  writeFileSync(process.env.VTE_SEED ?? join(tmpdir(),'vte-seed.json'),JSON.stringify(out));
+
+ // A save from the earlier per-lead derivation: two SATA drives share one modular lead; the second lead's PSU-source step
+ // was never recorded (already physically in) and only the first lead was listed as connected.
+ const plan2={...plan,parts:{...plan.parts,storage:['samsung-870-evo-1tb','seagate-barracuda-2tb-st2000dm008'],fans:[]}};
+ M.activateSimpleModel(planModel(plan2 as never));
+ let st=M.createSimpleBuild(); let sn=M.emptySimpleSnapshot();
+ for(const key of M.simplePartOrder(st)){ if(M.simplePartInstalled(st,key)) continue; const r=M.installSimplePart(st,key); if(!r.ok) throw new Error(key); st=r.state; sn=M.withPart(sn,key); }
+ const power=M.simpleCablesFor(st).filter(c=>c.key.startsWith('sataPower'));
+ const src=(k:string)=>M.simpleCableEnds(k).findIndex(e=>e.instanceId.startsWith('psu'));
+ const skip=`plug:${power[1].key}:${src(power[1].key)}@${M.simpleCableEnds(power[1].key)[src(power[1].key)].portId}`;
+ for(const c of power) for(const [i,e] of M.simpleCableEnds(c.key).entries()){ const r=M.plugSimpleEnd(st,c.key,i,e.portId,false); if(!r.ok) throw new Error(r.reason); st=r.state; sn=M.withPlug(sn,c.key,i,e.portId); }
+ const legacy={...sn,version:4,plan:plan2,history:sn.history.filter((h:string)=>h!==skip),connected:[power[0].key]};
+ out.legacySharedSata={snapshot:legacy,plan:plan2,keys:power.map(c=>c.key)};
+ writeFileSync(process.env.VTE_SEED ?? join(tmpdir(),'vte-seed.json'),JSON.stringify(out));
 });

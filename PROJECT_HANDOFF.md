@@ -4,7 +4,23 @@ Current site brand: **بيئة التدريب الافتراضية (VTE)** in Ar
 **Virtual Training Environment (VTE)** in English. Older references below use the former name.
 The repository and hosting identifiers remain `talal-claude`; saved-data keys are unchanged.
 
-## Current status — Codex Stage 11 review fixes + final verification, 2026-11-26 (latest)
+## Current status — shared-SATA save migration + final handoff, 2026-11-26 (latest; supersedes the two 2026-11-26 sections below)
+
+Workspace `/Users/most/Documents/Codex/VTE-completion-2026-11-25`, branch `fix/wiring-handoff-2026-11-26`, local commits only (no push, `main` merge or deploy). Latest commits: `d510856` (review follow-up), then the commit for this migration. Earlier: `c8ec69a`, `a8cf604`, `847f7d0`.
+
+**Exact delta of this commit (parser only):** `parseSimpleSnapshot` in `/Users/most/Documents/Codex/VTE-completion-2026-11-25/apps/web/components/pc/simple-model.ts` accepts a stored `connected` list if it equals the corrected physical-end derivation **or exactly the list the earlier per-lead derivation (`legacyConnectedList`) produces from the same history**, and rewrites it to the physical one. History and actual ports are untouched; any other mismatched/tampered list is still refused.
+Why: before `d510856` two leads sharing one modular PSU source were counted per lead, so a valid save (second lead's already-in source step never recorded, only the first lead listed) was rejected after the physical-end fix.
+Regression: `plan-model.test.ts` "migrates a save made by the earlier per-lead derivation…" (migration, history unchanged, reload stable, one-end undo, reconnect of the shared source through either lead, rejection of `[second]`, extra/bogus/empty lists and of the full history with the old list). Independent probe `/Users/most/Documents/Codex/VTE-completion-2026-11-25/docs/handoff/2026-11-26/review/shared-sata-power.test.ts` passes.
+
+**Gates for this delta (all exit 0):** `npm run type-check`, `npm run check:messages`, `vitest --config docs/handoff/2026-11-26/review/vitest.config.mjs` (3 tests), `…/2026-11-25/review/vitest.config.mjs`, `npx vitest run apps/web packages` = 84 files, **1114 passed, 21 skipped** (DB/provider integrations unconfigured, not passes), `git diff --check`, `SWC_NATIVE_BINDING_CACHE=/private/tmp/talal-review-swc npm run build`; own server restarted on 3002 (PID/cwd verified first).
+**Targeted browser on that new build** (`/Users/most/Documents/Codex/VTE-completion-2026-11-25/docs/handoff/2026-11-26/acceptance/legacy-shared-sata.mjs`, seeded from `seed.test.ts`): EN 1440 **8/8**, AR 430 **8/8**: the legacy two-SATA save loads (not reset), both leads connected, reload keeps history, one Undo takes back exactly one step (second lead loose, first stays), reload agrees; no page errors.
+
+**Full-matrix browser results preserved from the build immediately before this parser-only delta (`d510856`, logs `/tmp/f-*.log`, Codex counted 346 checks, all exit 0):** `wiring-startup.mjs` EN1440/EN430/AR1440/AR430 = 50/50 each; `gpu-install.mjs` EN1440 10/10; `planner-storage.mjs` EN1440 and AR430 8/8 each; `2026-11-23/acceptance/cooling.mjs` 40/40, `aio.mjs` 16/16; `2026-11-25/acceptance/screwed.mjs` 24/24; `2026-11-21/acceptance/m2.mjs` 31/31, `cpu-ram-click.mjs` 9/9 (cooling/aio/screwed/m2/cpu-ram EN 1440 only). They were **not** repeated for this delta because it changes only the load-time list validation, not any UI, scene or step behavior.
+This **replaces** the stale "29/29" and the false "no cooling/GPU/fan scripts" statements in the older sections below: cooling/aio/screwed/m2/cpu-ram scripts exist (paths above); `2026-11-20/acceptance/*` CPU/RAM scripts exist and were not rerun; GPU had none until `gpu-install.mjs` (install path only).
+
+**Still not verified:** GPU removal and GPU at 430/AR; shared-SATA behaviours other than the legacy-save load/undo in a browser; 3D pointer pixels for a chosen alternate socket (checked through guide targets); wording of the occupied-socket reason. Screenshots: `/private/tmp/vte-shots-final/`. Stage 10/11 are **not** declared accepted; Codex remains reviewer.
+
+## Earlier status — Codex Stage 11 review fixes + final verification, 2026-11-26 (superseded: its 'gaps' list is corrected above)
 
 Commits on `fix/wiring-handoff-2026-11-26`: `847f7d0` (review fixes), `a8cf604` (crash fix, label, acceptance scripts). Local only.
 
@@ -19,14 +35,14 @@ Commits on `fix/wiring-handoff-2026-11-26`: `847f7d0` (review fixes), `a8cf604` 
 - Misleading "older save" test replaced by a complete pre-`sys` running save (restore, first power-off, reload); malformed/impossible `sys:` forms are tested.
 
 **Verified on the final build (`a8cf604`, `npm run build` OK, own server on 3002):** type-check, EN/AR parity, both review configs, `npx vitest run apps/web packages` = 84 files, **1112 passed, 21 skipped** (DB/provider).
-Browser (Playwright, isolated seeded storage, saved plan `ytl_pc_plan*`): `docs/handoff/2026-11-26/acceptance/wiring-startup.mjs` (seeds from `seed.test.ts`) **29/29 EN 1440 and 29/29 AR 430, no page errors**: reversed plug refused, equivalent/alternate SATA socket recorded and reloaded,
+Browser (Playwright, isolated seeded storage, saved plan `ytl_pc_plan*`): `docs/handoff/2026-11-26/acceptance/wiring-startup.mjs` (seeds from `seed.test.ts`) 29/29 EN 1440 and 29/29 AR 430 at that time (since rewritten: now 50/50 on four viewport/locale combinations, see above): reversed plug refused, equivalent/alternate SATA socket recorded and reloaded,
 one end out/undo/reload, wrong-kind socket refused, older whole-lead save one-end removal, readiness failure/steps/success/reload/off/undo, boot without optional fan, fault mode opens.
 Older scripts on the same build: `2026-11-21/acceptance/m2.mjs` 31/31, `cpu-ram-click.mjs` 9/9 (EN 1440; Chrome app). Screenshots (inspected EN 1440 and AR 430) in `/private/tmp/vte-shots/` (`wiring-ends-*`, `readiness-*`, `optional-boot-*`).
 
-**Not run / gaps (honest):** AR at 1440 and EN at 430 for the new script; occupied-socket and fault-mode wrong-header unplug in the browser (unit-tested only); planner add/remove of duplicate storage, cooling/GPU/fan acceptance scripts (none exist in the repo for them besides the 2026-11-20 CPU/RAM ones, not rerun);
+**Not run / gaps (honest):** AR at 1440 and EN at 430 for the new script; occupied-socket and fault-mode wrong-header unplug in the browser (unit-tested only); planner add/remove of duplicate storage, cooling/GPU/fan acceptance (WRONG at the time: cooling.mjs, aio.mjs, screwed.mjs exist and were run later; see the latest section);
 the robot's pointer position for a chosen alternate socket is tested at the guide-target level, not visually; seeded saves skip the long part-by-part clicking (those flows are covered by the m2/cpu-ram scripts only). Stage 10/11 are **not** declared accepted; double-click gating and camera stability were not re-measured here.
 
-## Current status — Claude Stage 10 completion + Stage 11 readiness, 2026-11-26 (earlier today)
+## Earlier status — Claude Stage 10 completion + Stage 11 readiness, 2026-11-26 (superseded)
 
 Branch **`fix/wiring-handoff-2026-11-26`** (builds on `ad15c71`, `ad5eed3`; nothing reset). Local commits only; no push, `main` merge or deploy.
 

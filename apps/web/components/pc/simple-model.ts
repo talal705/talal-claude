@@ -1351,6 +1351,32 @@ export function deriveSimpleLists(history: readonly SimpleStep[]): { placed: Sim
   }
   return { placed, connected };
 }
+/**
+ * The connected list the page wrote before shared modular PSU sources counted as one physical end: each lead counted its
+ * own plug steps. Saves made then are still valid; `parseSimpleSnapshot` accepts exactly this list and rewrites it.
+ */
+function legacyConnectedList(history: readonly SimpleStep[]): SimpleCableKey[] {
+  const connected: SimpleCableKey[] = [];
+  const plugged = new Map<SimpleCableKey, Set<number>>();
+  for (const step of history) {
+    const kind = step.slice(0, step.indexOf(":"));
+    const rest = step.slice(step.indexOf(":") + 1);
+    if (kind === "cable" && !connected.includes(rest)) {
+      connected.push(rest);
+      if (cableSpec(rest)) plugged.set(rest, new Set(simpleCableEnds(rest).keys()));
+    } else if (kind === "plug" || kind === "unplug") {
+      const e = parseEndStep(rest);
+      if (!e || !cableSpec(e.key)) continue;
+      const ends = plugged.get(e.key) ?? new Set<number>();
+      if (kind === "plug") ends.add(e.index); else ends.delete(e.index);
+      plugged.set(e.key, ends);
+      const whole = ends.size >= simpleCableEnds(e.key).length;
+      if (whole && !connected.includes(e.key)) connected.push(e.key);
+      if (!whole && connected.includes(e.key)) connected.splice(connected.indexOf(e.key), 1);
+    }
+  }
+  return connected;
+}
 /** Whether the history leaves the PC running: its last power step says so; with none (older saves) the saved flag stands. */
 const poweredBy = (history: readonly string[], saved: boolean) => {
   const last = history.findLast((step) => step.startsWith("sys:power:"));
@@ -1537,7 +1563,8 @@ export function parseSimpleSnapshot(value: unknown): SimpleSnapshot | null {
     if (history.some((st) => st.startsWith("sys:power:")) && poweredBy(history, false) !== data.powered) return null;
     const derived = deriveSimpleLists(history);
     const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x));
-    if (!same(derived.placed, placed) || !same(derived.connected, connected as string[])) return null;
+    // A list from the earlier per-lead derivation is migrated to the physical-end one (the history itself is unchanged).
+    if (!same(derived.placed, placed) || !(same(derived.connected, connected as string[]) || same(legacyConnectedList(history), connected as string[]))) return null;
     placed = derived.placed;
   } else {
     history = [...placed.map((k): SimpleStep => `part:${k}`), ...(connected as SimpleCableKey[]).map((k): SimpleStep => `cable:${k}`)];

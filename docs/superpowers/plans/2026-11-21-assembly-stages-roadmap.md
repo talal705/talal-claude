@@ -13,8 +13,8 @@ models' documents. A stage is "done" only when its verification gate (brief, sec
 | 7 — SATA SSD / HDD | 2026-11-25 completion scope / review | selectable bays, staged fasteners and scene/guide consistency implemented and unit-tested; final browser acceptance pending |
 | 8 — Graphics card | 2026-11-25 completion scope / review | individual slot covers (`slot-covers:N`) and per-screw bracket steps implemented and unit-tested; browser acceptance pending |
 | 9 — Case fans | 2026-11-25 completion scope / review | position choices, orientation advice, the case's own fans as selectable parts (`sfan`), no automatic fan moves for a radiator, rear-fan/I/O clearance implemented and unit-tested; browser and visual acceptance pending |
-| 10 — Wiring | 2026-11-26 Codex small-fix handoff | actual-port UI save and plug/unplug replay verified; per-end disconnect UI, endpoint guidance and final acceptance pending |
-| 11 — Final check and startup | 2026-11-25 completion scope / review | existing engine startup retained; final readiness actions and full acceptance pending |
+| 10 — Wiring | 2026-11-26 Codex small-fix handoff | per-end disconnect UI, actual/alternate sockets, clickable ends, physical shared-PSU-source save derivation (+ legacy list migration) implemented; unit suite and targeted real-browser runs pass (see `PROJECT_HANDOFF.md` top); **not accepted** until Codex review |
+| 11 — Final check and startup | 2026-11-25 completion scope / review | readiness steps (panel, mains, PSU switch, power button, power off) as saved `sys:` steps, engine-only startup judgement (no optional-part prerequisite), failure/recovery implemented; browser runs pass (see `PROJECT_HANDOFF.md` top); **not accepted** until Codex review |
 
 2026-11-25: the owner authorized continuing through Stage 11 without another stage-approval pause.
 The isolated branch is `feat/assembly-completion`. This is a **partial checkpoint**, not a release.
