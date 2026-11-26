@@ -240,8 +240,12 @@ export const pcieSlotDetail = (note: string) => ({
   retention: { id: "pcie-x16-1-latch", kind: "pcie_latch" as const, note },
   keying: { rotationDeg: 0, toleranceMm: 3, mark: "bracket" as const },
 });
-/** A case's expansion-slot covers (they come out for a card's bracket). */
-export const SLOT_COVERS = { id: "slot-covers", kind: "slot_covers" as const, note: "Expansion-slot covers; how they are fixed (screws, tool-free) is not modelled per case." };
+/**
+ * A case's expansion-slot covers (they come out for a card's bracket), one at a time as `slot-covers:1`, `:2`.
+ * Two openings is the lab's schematic: ASUS's pages for the catalog cards give slot thickness (2 to 3.6) but not the
+ * bracket's openings, and the cases' manuals do not say how each cover is fixed (screws, tool-free) per model.
+ */
+export const SLOT_COVERS = { id: "slot-covers", kind: "slot_covers" as const, openings: 2, note: "Expansion-slot covers, taken out one at a time. Opening count and fixing are schematic (not documented per case or card)." };
 
 /** The CPU socket's retention and keying: an LGA load plate with its lever, and the corner triangle. */
 export const lgaSocketDetail = (note: string) => ({

@@ -282,9 +282,17 @@ export interface RetentionSpec {
    * (the CPU-power side), `bottom` the end toward the expansion slots. The other end is fixed.
    */
   latchEnd?: "top" | "bottom";
+  /**
+   * `slot_covers`: how many covers a graphics card's bracket needs out, counted from the first x16 slot
+   * (schematic: the cards' real bracket widths are not documented in the lab's sources). Default 2.
+   */
+  openings?: number;
   /** Where the procedure is documented, and what is not. */
   note?: string;
 }
+
+/** The mechanism ids of a case's expansion-slot covers a card's bracket needs out, from the first x16 slot (`slot-covers:1`, `:2`...). */
+export const slotCoverIds = (ret: Pick<RetentionSpec, "id" | "openings">) => Array.from({ length: ret.openings ?? 2 }, (_, i) => `${ret.id}:${i + 1}`);
 
 /** The documented orientation of a keyed part in this place, and how far off-centre it may be lowered. */
 export interface KeyingSpec {

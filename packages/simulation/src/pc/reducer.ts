@@ -21,7 +21,7 @@ import type {
   RgbPreference,
   TutorTargetRef,
 } from "@ytl/contracts";
-import { pcTarget } from "@ytl/contracts";
+import { pcTarget, slotCoverIds } from "@ytl/contracts";
 import { checkConnect } from "./cabling";
 import { applyHardware, backplateRule, coolerMounting, coolerMountingGate, liftedCooler } from "./hardware";
 import { cableSpecOf } from "./catalog";
@@ -235,8 +235,10 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       }
       // A screw-held M.2 slot's stand: `<slot>-screw:stand` (fitted at the length hole = "closed").
       const standOf = action.mechanismId.endsWith(":stand") ? action.mechanismId.slice(0, -":stand".length) : null;
-      const mount = entry.mountPoints.find((m) => m.retention?.id === (leverOf ?? nearOf ?? standOf ?? action.mechanismId)
-        && (!leverOf || m.retention.kind === "lga_load_plate") && (!nearOf || (m.retention.kind === "dimm_latch" && m.retention.latches === "both"))
+      // A case's expansion-slot covers are `<id>:1`, `<id>:2`... (one each); the bare id sets every cover a card's bracket needs.
+      const coverOf = /^(.+):\d+$/.exec(action.mechanismId)?.[1] ?? null;
+      const mount = entry.mountPoints.find((m) => m.retention?.id === (leverOf ?? nearOf ?? standOf ?? coverOf ?? action.mechanismId)
+        && (!coverOf || m.retention.kind === "slot_covers") && (!leverOf || m.retention.kind === "lga_load_plate") && (!nearOf || (m.retention.kind === "dimm_latch" && m.retention.latches === "both"))
         && (!standOf || m.retention.kind === "m2_screw"));
       if (!mount?.retention) return unknown(`${action.instanceId}/${action.mechanismId}`, pcTarget.part(action.instanceId));
       const ret = mount.retention;
@@ -244,7 +246,9 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       const occupant = state.parts.find((p) => p.attachments.some((a) => a.target.hostInstanceId === at.hostInstanceId && a.target.mountPointId === at.mountPointId));
       const occAttachment = occupant?.attachments.find((a) => a.target.hostInstanceId === at.hostInstanceId && a.target.mountPointId === at.mountPointId);
       const current = host.mechanisms?.[action.mechanismId] ?? "closed";
-      if (current === action.state) return ok({});
+      // The bare id of the slot covers is every cover a bracket needs, so it is not "already" until all are.
+      const sameState = ret.kind === "slot_covers" && !coverOf ? slotCoverIds(ret).every((c) => (host.mechanisms?.[c] ?? "closed") === action.state) : current === action.state;
+      if (sameState) return ok({});
       const blocked = (en: string, ar: string) => fail("retention_blocked", pcTarget.mount(at), { why: L(en, ar) });
       const lever = mount.fastener?.count ?? 0;
       const setOccupant = (change: { seating?: "placed" | "seated"; fastenersSecured?: number }) =>
@@ -302,9 +306,13 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
         return ok({ parts: state.parts.map(setHost({ [ret.id]: "closed" })).map(setOccupant({ fastenersSecured: lever })) });
       }
       if (ret.kind === "slot_covers") {
+        const covers = slotCoverIds(ret);
+        // One cover at a time; the bare id (old saves, tests) is every cover the bracket needs.
+        const wanted = coverOf ? covers.filter((c) => c === action.mechanismId) : covers;
+        if (wanted.length === 0) return unknown(`${action.instanceId}/${action.mechanismId}`, pcTarget.part(action.instanceId));
         const cardIn = state.parts.some((p) => p.attachments.some((a) => entryOf(v, partById(v, a.target.hostInstanceId) ?? p)?.mountPoints.find((m) => m.id === a.target.mountPointId)?.kind === "pcie_slot" && partById(v, a.target.hostInstanceId)?.attachments[0]?.target.hostInstanceId === host.instanceId));
         if (action.state === "closed" && cardIn) return blocked("A card's bracket is in that opening. Take the card out first.", "حامل الكرت في الفتحة. طلّع الكرت أول.");
-        return ok({ parts: state.parts.map(setHost({ [ret.id]: action.state })) });
+        return ok({ parts: state.parts.map(setHost(Object.fromEntries(wanted.map((c) => [c, action.state])))) });
       }
       // A memory or PCIe latch: closing holds a part that is fully in; opening releases it from its contacts.
       if (action.state === "closed" && occupant && occAttachment?.seating !== "seated") return blocked("Press the module fully in; the latch closes by itself when it is home.", "اضغط الشريحة لين الآخر؛ المشبك يتسكّر لحاله لما تدخل.");
@@ -384,7 +392,8 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
         const caseAt = hostPart.attachments[0]?.target;
         const casePart = caseAt && partById(v, caseAt.hostInstanceId);
         const covers = casePart && entryOf(v, casePart)?.mountPoints.find((m) => m.retention?.kind === "slot_covers")?.retention;
-        if (covers && (casePart.mechanisms?.[covers.id] ?? "closed") !== "open") return fail("retention_closed", pcTarget.mount(action.target), { mechanism: retentionName("slot_covers") });
+        const shut = covers && slotCoverIds(covers).findIndex((c) => (casePart.mechanisms?.[c] ?? "closed") !== "open");
+        if (covers && shut !== undefined && shut >= 0) return fail("retention_closed", pcTarget.mount(action.target), { mechanism: L(`The case's expansion slot cover ${shut + 1}`, `غطاء فتحة التوسعة ${shut + 1} في الكيس`) });
       }
       if (detailed && place?.keying) {
         const a = action.alignment;

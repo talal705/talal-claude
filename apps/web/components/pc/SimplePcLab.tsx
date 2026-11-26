@@ -20,7 +20,7 @@ import {
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
   simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap,
   hasModelledMounting, withSimpleStep, activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
-  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, unscrewSimplePart, withUnscrew, isPositionKey, simplePositions, simpleLiftBlock, simpleOrientationAdvice, simpleRequiredScrews, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot, type SimpleStep,
+  withMechanism, withLower, withSeat, withLift, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, unscrewSimplePart, withUnscrew, isPositionKey, simplePositions, simpleLiftBlock, simpleOrientationAdvice, simpleRequiredScrews, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, caseCoversClosed, slotCovers, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot, type SimpleStep,
 } from "./simple-model";
 import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-scene";
 import { guideFocus } from "./guide";
@@ -599,7 +599,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const r = unscrewSimplePart(state, key);
     if (!r.ok) return;
     const left = firstAttachment(r.state, key)?.fastenersSecured ?? 0;
-    keepHand(r.state, (sn) => withUnscrew(sn, key), left === 0 ? "unscrewedAll" : "unscrewedOne", "point", { left: String(left) });
+    keepHand(r.state, (sn) => withUnscrew(sn, key), left === 0 ? (roleOf(key) === "gpu" ? "gpuUnscrewed" : "unscrewedAll") : "unscrewedOne", "point", { left: String(left) });
   }
   /** Lifts a fitted board, power supply, drive or fan out to the bench once its screws (and leads) are out. */
   function handLiftOut(key: SimplePartKey) {
@@ -700,33 +700,18 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const r = screwSimplePart(state, key);
     if (!r.ok) return;
     const done = simplePartInstalled(r.state, key);
-    keepHand(r.state, (sn) => withScrew(sn, key, corner), done ? "screwsDone" : "screwIn", done ? "happy" : "point");
+    keepHand(r.state, (sn) => withScrew(sn, key, corner), done ? (roleOf(key) === "gpu" ? "gpuScrewed" : "screwsDone") : "screwIn", done ? "happy" : "point");
     if (done) { setSelection(null); if (simpleAllPartsIn(r.state)) setTab("cables"); }
   }
 
-  /** The case's expansion-slot covers beside the card's slot: out before a card, back once no card is there. */
-  function handCovers(desired: "open" | "closed") {
+  /** One of the case's expansion-slot covers beside the card's slot: out before a card, back once no card is there. */
+  function handCovers(id: string, desired: "open" | "closed") {
     if (handsOff()) return;
     if (!takeStep()) return;
-    const r = setSimpleMechanism(state, SLOT_COVERS_ID, desired);
+    const r = setSimpleMechanism(state, id, desired);
     if (!r.ok) { speak({ lines: [{ key: "hands.coversBlocked" }], mood: "concerned", point: "scene" }); return; }
-    keepHand(r.state, (sn) => withMechanism(sn, SLOT_COVERS_ID, desired), desired === "open" ? "coversOut" : "coversIn");
-  }
-  function handFasten(key: SimplePartKey) {
-    if (handsOff()) return;
-    if (!takeStep()) return;
-    const r = fastenSimplePart(state, key);
-    if (!r.ok) { speak({ lines: [{ key: "hands.gpuSeatFirst" }], mood: "concerned", point: "scene" }); return; }
-    keepHand(r.state, (sn) => withFasten(sn, key), "gpuScrewed", "happy");
-    setSelection(null);
-    if (simpleAllPartsIn(r.state)) setTab("cables");
-  }
-  function handUnfasten(key: SimplePartKey) {
-    if (handsOff()) return;
-    if (!takeStep()) return;
-    const r = unfastenSimplePart(state, key);
-    if (!r.ok) return;
-    keepHand(r.state, (sn) => withUnfasten(sn, key), "gpuUnscrewed");
+    const left = slotCovers(r.state).filter((c) => !c.open).length;
+    keepHand(r.state, (sn) => withMechanism(sn, id, desired), desired === "closed" ? "coversIn" : left ? "coverOut" : "coversOut", "point", { left: String(left) });
   }
   const turn = (deg: number) => setHold((h) => (h ? { ...h, rotationDeg: (((h.rotationDeg + deg) % 360) + 360) % 360 } : h));
   /**
@@ -885,10 +870,10 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
       case "clip": handClip(step.slotId, step.near); return;
       case "lever": handLever(key, step.desired); return;
       case "mechanism": handMechanism(key, step.desired); return;
-      case "covers": handCovers("open"); return;
+      case "covers": handCovers(step.id, "open"); return;
       case "lower": handLower(key); return;
       case "seat": handSeat(key); return;
-      case "fasten": handFasten(key); return;
+      case "fasten": handScrew(key, firstAttachment(state, key)?.fastenersSecured ?? 0); return;
       case "heatsink": handHeatsink(key, step.hsId, step.step); return;
       case "stand": handStand(key); return;
       case "tilt": tiltHeld(true); return;
@@ -1482,22 +1467,25 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const key = selectedPart!;
     const ret = keyed!;
     const at = firstAttachment(state, key);
-    const covered = caseCoversClosed(state);
+    const covers = slotCovers(state);
     // The covers matter once the board is in the case; before that the card has no case opening to meet.
     const boardInCase = simplePartInstalled(state, "motherboard");
-    const screwed = simpleFastened(state, key);
+    const secured = at?.fastenersSecured ?? 0;
+    const required = simpleRequiredScrews(state, key);
     const off = hold ? Math.hypot(hold.offsetMm[0], hold.offsetMm[1]) : 0;
     const disabled = !ready || handsOff();
     const st = (open: boolean) => t(open ? "hands.open" : "hands.closed");
     return (
       <div className={styles.hands}>
         <div className={styles.handsHead}>
-          <p className={styles.handsState}>{t("hands.pcieLatch", { state: st(ret.open) })} · {t("hands.covers", { state: t(!boardInCase ? "hands.coversLater" : covered ? "hands.coversIn" : "hands.coversOut") })}{at ? ` · ${t(screwed ? "hands.screwsIn" : "hands.screwsOut")}` : ""}</p>
+          <p className={styles.handsState}>{t("hands.pcieLatch", { state: st(ret.open) })} · {boardInCase ? t("hands.coversCount", { n: covers.filter((c) => c.open).length, total: covers.length }) : t("hands.covers", { state: t("hands.coversLater") })}{at ? ` · ${t("hands.screwsState", { n: secured, total: required })}` : ""}</p>
           <button type="button" className={styles.closeup} onClick={() => focusOn(ret.hostInstanceId, ret.mountPointId)}>{t("hands.closeup")}</button>
         </div>
         {!at && <>
-          {covered && <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handCovers("open")}>{t("hands.removeCovers")}</button>}
-          {!ret.open && <button className={covered ? styles.cancel : styles.installButton} type="button" disabled={disabled} onClick={() => handMechanism(key, "open")}>{t("hands.openPcie")}</button>}
+          {boardInCase && covers.map((c, i) => (
+            <button key={c.id} className={c.open ? styles.cancel : styles.installButton} type="button" disabled={disabled} onClick={() => handCovers(c.id, c.open ? "closed" : "open")}>{t(c.open ? "hands.refitCover" : "hands.removeCover", { n: i + 1 })}</button>
+          ))}
+          {!ret.open && <button className={covers.some((c) => !c.open) ? styles.cancel : styles.installButton} type="button" disabled={disabled} onClick={() => handMechanism(key, "open")}>{t("hands.openPcie")}</button>}
           {hold && <div className={styles.holdControls} role="group" aria-label={t("hands.title")} tabIndex={0} onKeyDown={(e) => holdKeys(e, key)}>
             <p className={styles.alignState} aria-live="polite">{t(hold.rotationDeg === 0 ? "hands.bracketToCase" : "hands.bracketAway")} · {off < 0.05 ? t("hands.aligned") : t("hands.off", { mm: Math.round(off * 10) / 10 })}</p>
             <div className={styles.holdRow}>
@@ -1510,15 +1498,14 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
             <p className={styles.cablesNote}>{t("hands.keys")}</p>
             <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handLower(key)}>{t("hands.pushCard")}</button>
           </div>}
-          {boardInCase && !covered && <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handCovers("closed")}>{t("hands.refitCovers")}</button>}
           {!boardInCase && <p className={styles.hint}>{t("hands.gpuBoardFirst")}</p>}
         </>}
-        {at && !screwed && <>
-          {at.seating === "seated" && <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handFasten(key)}>{t("hands.screwBracket")}</button>}
-          {!ret.open && <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handMechanism(key, "open")}>{t("hands.releasePcie")}</button>}
-          {ret.open && <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handLift(key)}>{t("hands.liftOut")}</button>}
+        {at && <>
+          {at.seating === "seated" && secured < required && <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handScrew(key, secured)}>{t("hands.nextScrew", { n: secured + 1, total: required })}</button>}
+          {secured > 0 && <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handUnscrew(key)}>{t("hands.unscrewNext", { n: secured, total: required })}</button>}
+          {secured === 0 && !ret.open && <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handMechanism(key, "open")}>{t("hands.releasePcie")}</button>}
+          {secured === 0 && ret.open && <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handLift(key)}>{t("hands.liftOut")}</button>}
         </>}
-        {at && screwed && <button className={styles.cancel} type="button" disabled={disabled} onClick={() => handUnfasten(key)}>{t("hands.unscrewBracket")}</button>}
         <p className={styles.hint}>{t("hands.markGpu")}</p>
         <p className={styles.cablesNote}>{t("hands.gpuSource")}</p>
         <p className={styles.cablesNote}>{t("hands.note")}</p>
@@ -1544,10 +1531,10 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
         if (k === "m2") return ret?.kind === "m2_screw" ? t(open ? "hands.m2ScrewOut" : "hands.m2ScrewIn") : t(open ? "hands.openQLatch" : "hands.closeQLatch");
         return t(lga ? (open ? "hands.openPlate" : "hands.closePlate") : (open ? "hands.liftZif" : "hands.lowerZif"));
       }
-      case "covers": return t("hands.removeCovers");
+      case "covers": return t("hands.removeCover", { n: step.id.slice(step.id.lastIndexOf(":") + 1) });
       case "lower": return t(k === "ram" ? "hands.ramLower" : k === "gpu" ? "hands.pushCard" : k === "m2" ? "hands.slideIn" : "hands.lowerIn");
       case "seat": return t("hands.pressIn");
-      case "fasten": return t("hands.screwBracket");
+      case "fasten": return t("hands.nextScrew", { n: (firstAttachment(state, key)?.fastenersSecured ?? 0) + 1, total: simpleRequiredScrews(state, key) });
       case "heatsink": return t(({ screws: "hands.m2Screws", lift: "hands.m2Lift", film: "hands.m2Film", fit: "hands.m2Fit", tighten: "hands.m2Tighten" } as const)[step.step]);
       case "stand": return t("hands.m2Stand");
       case "tilt": return t("hands.m2Tilt");

@@ -5,7 +5,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import type { SimpleSceneTarget } from "./simple-scene";
 import {
-  ALL_SIMPLE_PARTS, caseCoversClosed, isM2Key, isRamKey, M2_WHOLE_TILT_DEG, partSpec, simpleBlock, simpleFastened, simpleKeying, simpleM2Heatsink, simpleM2Slots, simpleRamReference, simpleRamSlotOffsets, simpleRamSlots,
+  ALL_SIMPLE_PARTS, isM2Key, isRamKey, M2_WHOLE_TILT_DEG, partSpec, simpleBlock, simpleFastened, simpleKeying, simpleM2Heatsink, simpleM2Slots, simpleRamReference, simpleRamSlotOffsets, simpleRamSlots, slotCovers,
   simpleRamTargetFor, simpleRetention, simplePartInstalled, type SimpleBlock, type SimpleHeld, type SimplePartKey,
 } from "./simple-model";
 
@@ -137,7 +137,8 @@ export type HandStep =
   | { kind: "clip"; slotId: string; near: boolean }
   | { kind: "lever"; desired: "open" | "closed" }
   | { kind: "mechanism"; desired: "open" | "closed" }
-  | { kind: "covers" }
+  /** One of the case's expansion-slot covers (its mechanism id), taken out for the card's bracket. */
+  | { kind: "covers"; id: string }
   | { kind: "lower" }
   | { kind: "seat" }
   | { kind: "fasten" }
@@ -172,7 +173,8 @@ export function nextHandStep(state: PCBuildState, key: SimplePartKey, held: Simp
     return { kind: "lower" };
   }
   const gpu = ret.kind === "pcie_latch";
-  if (!at && gpu && caseCoversClosed(state)) return { kind: "covers" };
+  const nextCover = !at && gpu ? slotCovers(state).find((c) => !c.open) : undefined;
+  if (nextCover) return { kind: "covers", id: nextCover.id };
   if (ret.leverId && !ret.leverOpen && !ret.open) return { kind: "lever", desired: "open" };
   if (!at && !ret.open) return { kind: "mechanism", desired: "open" };
   if (!at) {

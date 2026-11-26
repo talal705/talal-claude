@@ -4,7 +4,7 @@
 // kept so every saved build replays) or a build the learner planned (`plan-model.ts`). The exported
 // lists below are live bindings that `activateSimpleModel` replaces, so every reader sees the build
 // that is on the page.
-import type { PCAction, PCBuildState, PrepKind, StartupResult } from "@ytl/contracts";
+import { slotCoverIds, type PCAction, type PCBuildState, type PrepKind, type StartupResult } from "@ytl/contracts";
 import { pc } from "@ytl/simulation";
 import { pcCatalog, suppliedPartActions } from "./catalog";
 import { installCoolerWhole, migrateCoolerSteps } from "./cooler-assembly";
@@ -310,7 +310,7 @@ export function simpleKeying(state: PCBuildState, key: SimplePartKey) {
 }
 /** The part a mechanism is on: a retention (`<id>`, `<id>:lever|near|stand`) or an M.2 heatsink (`<id>`, `<id>:screws|film`). */
 const hostOfRetention = (state: PCBuildState, mechanismId: string) => {
-  const base = mechanismId.replace(/:(lever|near|stand|screws|film)$/, "");
+  const base = mechanismId.replace(/:(lever|near|stand|screws|film|\d+)$/, "");
   return state.parts.find((p) => pcCatalog.entries.find((e) => e.id === p.catalogId)?.mountPoints.some((m) => m.retention?.id === base || (m.kind === "m2_slot" && m.heatsink?.id === base)));
 };
 
@@ -486,15 +486,24 @@ export function reseatSimplePart(state: PCBuildState, key: SimplePartKey): { ok:
 }
 
 export const SLOT_COVERS_ID = "slot-covers";
-/** True when the board is in a case whose expansion-slot covers are still in. */
-export function caseCoversClosed(state: PCBuildState): boolean {
+/**
+ * The case's expansion-slot covers a card's bracket needs out, from the first x16 slot, each with its mechanism id and
+ * whether it is out. Empty until the board is in a case. The count is the lab's schematic (see `SLOT_COVERS`).
+ */
+export function slotCovers(state: PCBuildState): { id: string; open: boolean }[] {
   const board = state.parts.find((p) => p.instanceId === active.parts.find((x) => x.key === "motherboard")?.id);
   const casePart = board?.attachments[0] && state.parts.find((p) => p.instanceId === board.attachments[0]!.target.hostInstanceId);
-  const covers = casePart && pcCatalog.entries.find((e) => e.id === casePart.catalogId)?.mountPoints.find((m) => m.retention?.kind === "slot_covers");
-  return Boolean(covers && casePart.mechanisms?.[covers.retention!.id] !== "open");
+  const covers = casePart && pcCatalog.entries.find((e) => e.id === casePart.catalogId)?.mountPoints.find((m) => m.retention?.kind === "slot_covers")?.retention;
+  return covers ? slotCoverIds(covers).map((id) => ({ id, open: casePart.mechanisms?.[id] === "open" })) : [];
 }
+/** True when the board is in a case with an expansion-slot cover a card's bracket needs still in. */
+export const caseCoversClosed = (state: PCBuildState): boolean => slotCovers(state).some((c) => !c.open);
 
-/** Screws a seated part's bracket to the case (a graphics card); its screws are the place's fasteners. */
+/**
+ * Whole-card fit for old saves and tests only: the bare `slot-covers` step opens or shuts every cover a bracket needs
+ * and `fasten:`/`unfasten:` set every bracket screw. The page's controls take one cover and one screw per step instead.
+ */
+/** Screws all of a seated part's bracket screws to the case (a graphics card). */
 export function fastenSimplePart(state: PCBuildState, key: SimplePartKey): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleBlock } {
   const spec = partSpec(key);
   const r = pc.applyAction(state, { type: "set_fasteners", instanceId: spec.id, secured: spec.screws }, pcCatalog);
@@ -1291,7 +1300,7 @@ const isStep = (step: unknown): step is SimpleStep => {
   if (kind === "plug") { const m = /^(.+):(\d)$/.exec(rest); return Boolean(m && isCableKey(m[1])); }
   if (kind === "prep") { const m = /^([a-z0-9]+):(paste|film|standoffs|io_shield|psu_fan|airflow|backplate):([a-z]*)$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
   if (kind === "screw") { const m = /^([a-z0-9]+):(\d{1,2})$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
-  return kind === "mech" && /^[a-z0-9-]+(:lever|:near|:stand|:screws|:film)?:(open|closed)$/.test(rest);
+  return kind === "mech" && /^[a-z0-9-]+(:lever|:near|:stand|:screws|:film|:\d)?:(open|closed)$/.test(rest);
 };
 
 /**

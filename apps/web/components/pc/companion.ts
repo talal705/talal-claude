@@ -212,7 +212,7 @@ export function undoLine(step: string): CompanionLine {
       const id = rest.slice(0, rest.lastIndexOf(":"));
       if (id.endsWith(":lever") || id === "cpu-socket-lever") return { key: "undo.lever" };
       if (id === "cpu-socket-plate") return { key: "undo.plate" };
-      if (id === "slot-covers") return { key: "undo.covers" };
+      if (id.startsWith("slot-covers")) return { key: "undo.covers" };
       return { key: "undo.latch" };
     }
     default: return { key: "undo.step" };

@@ -1,7 +1,7 @@
 // The scene's view of the retention mechanisms the engine tracks: the CPU load plate and lever, the
 // socket cover, memory, PCIe and M.2 latches, and the case's expansion-slot covers. The drawing follows `InstalledPart.mechanisms`, so what the
 // learner sees is always the state the engine checks (no separate animation state).
-import type { InstalledPart, MountPointSpec } from "@ytl/contracts";
+import { slotCoverIds, type InstalledPart, type MountPointSpec } from "@ytl/contracts";
 import { catalogIndex } from "../catalog";
 import type { PartGeometry, Quat, Solid, Vec3 } from "./geometry";
 import { add, compose, IDENTITY, rotate, type PlacedPart } from "./placement";
@@ -39,13 +39,21 @@ function drawMechanisms(geometry: PartGeometry, part: InstalledPart, socketDrawn
     const ret = mount.retention!;
     const open = part.mechanisms?.[ret.id] === "open";
     if (ret.kind === "slot_covers") {
-      // With the covers out, the top two (beside the first x16 slot) are gone from the rear wall.
+      // Each cover is its own mechanism, counted from the top (the first x16 slot): the covers still in are drawn as
+      // runs of plates (one run when none is out), so an out cover leaves its own gap in the rear wall.
       const covers = solids.find((s) => s.id === "slot-covers");
-      if (covers?.size && open) {
-        const per = covers.size[1] / (covers.count ?? 7);
-        covers.count = Math.max(1, (covers.count ?? 7) - 2);
-        covers.size = [covers.size[0], per * covers.count, covers.size[2]];
-        covers.at = [covers.at[0], covers.at[1] - per, covers.at[2]];
+      if (!covers?.size) continue;
+      const total = covers.count ?? 7;
+      const per = covers.size[1] / total;
+      const out = new Set(slotCoverIds(ret).flatMap((id, i) => (part.mechanisms?.[id] === "open" ? [i] : [])));
+      const top = covers.at[1] + covers.size[1] / 2;
+      solids.splice(solids.indexOf(covers), 1);
+      for (let from = 0; from < total; ) {
+        if (out.has(from)) { from += 1; continue; }
+        let to = from;
+        while (to < total && !out.has(to)) to += 1;
+        extra.push({ ...covers, id: from === 0 && to === total ? covers.id : `${covers.id}-${from + 1}`, count: to - from, size: [covers.size[0], per * (to - from), covers.size[2]], at: [covers.at[0], top - (per * (from + to)) / 2, covers.at[2]] });
+        from = to;
       }
       continue;
     }

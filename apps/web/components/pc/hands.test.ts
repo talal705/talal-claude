@@ -3,8 +3,9 @@ import {
   activateSimpleModel, createSimpleBuild, emptySimpleSnapshot, LEGACY_MODEL, liftSimplePart, lowerSimplePart, parseSimpleSnapshot, reseatSimplePart, setSimpleMechanism, simpleBuildFromSnapshot,
   simplePartInstalled, simpleRetention, undoSimpleStep, withLift, withLower, withMechanism,
   caseCoversClosed, connectSimpleCable, disconnectSimpleCable, fastenSimplePart, installSimplePart, simpleFastened, SLOT_COVERS_ID, unfastenSimplePart, withFasten, withUnfasten,
-  placeSimplePart, prepSimplePart, screwSimplePart, simpleOrientationAdvice, simpleScrewOrder, withPlace, withPrep, withScrew,
+  placeSimplePart, prepSimplePart, withSimpleStep, type SimpleStep, screwSimplePart, slotCovers, unscrewSimplePart, simpleOrientationAdvice, simpleScrewOrder, withPlace, withPrep, withScrew,
 } from "./simple-model";
+import { nextHandStep } from "./click-assembly";
 import { applyCoolerStep, nextCoolerStep } from "./cooler-assembly";
 
 afterEach(() => activateSimpleModel(LEGACY_MODEL));
@@ -140,6 +141,89 @@ describe("hands-on graphics card", () => {
     expect(simplePartInstalled(simpleBuildFromSnapshot(undone), "gpu")).toBe(false);
     const out = withLift(withMechanism(withUnfasten(snap, "gpu"), "pcie-x16-1-latch", "open"), "gpu");
     expect(out.placed).not.toContain("gpu");
+  });
+});
+
+describe("graphics card: covers and bracket screws one at a time", () => {
+  const must = <T,>(r: { ok: true; state: T } | { ok: false }) => { if (!r.ok) throw new Error(JSON.stringify(r)); return r.state; };
+  const history = (...steps: string[]) => {
+    let snap = emptySimpleSnapshot();
+    for (const k of ["cpu", "ram", "ram2", "storage", "cooler", "motherboard"]) snap = { ...snap, history: [...snap.history, `part:${k}` as const] };
+    return steps.reduce((sn, step) => withSimpleStep(sn, step as SimpleStep), snap);
+  };
+  const board = () => simpleBuildFromSnapshot(history());
+
+  it("lists the case's covers separately, each out or in on its own", () => {
+    let s = board();
+    expect(slotCovers(s).map((c) => c.open)).toEqual([false, false]);
+    s = must(setSimpleMechanism(s, "slot-covers:2", "open"));
+    expect(slotCovers(s).map((c) => c.open)).toEqual([false, true]);
+    expect(caseCoversClosed(s)).toBe(true);
+    expect(setSimpleMechanism(s, "slot-covers:3", "open").ok).toBe(false);
+  });
+
+  it("offers the next cover, then the latch, one step each, and one screw at a time once seated", () => {
+    let s = board();
+    expect(nextHandStep(s, "gpu", null)).toEqual({ kind: "covers", id: "slot-covers:1" });
+    s = must(setSimpleMechanism(s, "slot-covers:1", "open"));
+    expect(nextHandStep(s, "gpu", null)).toEqual({ kind: "covers", id: "slot-covers:2" });
+    s = must(setSimpleMechanism(s, "slot-covers:2", "open"));
+    expect(nextHandStep(s, "gpu", null)).toEqual({ kind: "mechanism", desired: "open" });
+    s = must(setSimpleMechanism(s, "pcie-x16-1-latch", "open"));
+    s = must(lowerSimplePart(s, "gpu", aligned));
+    expect(nextHandStep(s, "gpu", null)).toEqual({ kind: "fasten" });
+    s = must(screwSimplePart(s, "gpu"));
+    expect(nextHandStep(s, "gpu", null)).toEqual({ kind: "fasten" });
+    s = must(screwSimplePart(s, "gpu"));
+    expect(nextHandStep(s, "gpu", null)).toBeNull();
+  });
+
+  it("refuses the card until every cover its bracket needs is out, and names none as done by itself", () => {
+    let s = board();
+    s = must(setSimpleMechanism(s, "pcie-x16-1-latch", "open"));
+    s = must(setSimpleMechanism(s, "slot-covers:1", "open"));
+    expect(lowerSimplePart(s, "gpu", aligned)).toMatchObject({ ok: false, reason: "openFirst" });
+    s = must(setSimpleMechanism(s, "slot-covers:2", "open"));
+    s = must(lowerSimplePart(s, "gpu", aligned));
+    // Neither cover can go back over the bracket.
+    expect(setSimpleMechanism(s, "slot-covers:1", "closed").ok).toBe(false);
+    expect(setSimpleMechanism(s, "slot-covers:2", "closed").ok).toBe(false);
+  });
+
+  it("tightens the bracket screws one by one and takes them out one by one", () => {
+    let s = board();
+    for (const m of ["pcie-x16-1-latch", "slot-covers:1", "slot-covers:2"]) s = must(setSimpleMechanism(s, m, "open"));
+    s = must(lowerSimplePart(s, "gpu", aligned));
+    s = must(screwSimplePart(s, "gpu"));
+    expect(simpleFastened(s, "gpu")).toBe(false);
+    expect(simplePartInstalled(s, "gpu")).toBe(false);
+    s = must(screwSimplePart(s, "gpu"));
+    expect(simpleFastened(s, "gpu") && simplePartInstalled(s, "gpu")).toBe(true);
+    expect(screwSimplePart(s, "gpu")).toMatchObject({ ok: false, reason: "alreadyIn" });
+    s = must(unscrewSimplePart(s, "gpu"));
+    expect(simpleFastened(s, "gpu")).toBe(false);
+    // One screw still holds the card: it cannot be lifted yet.
+    expect(liftSimplePart(s, "gpu")).toMatchObject({ ok: false, reason: "unscrewFirst" });
+    s = must(unscrewSimplePart(s, "gpu"));
+    expect(unscrewSimplePart(s, "gpu").ok).toBe(false);
+  });
+
+  it("replays one-cover, one-screw saves after a reload, and old whole-card saves still load", () => {
+    const steps = ["mech:slot-covers:1:open", "mech:slot-covers:2:open", "mech:pcie-x16-1-latch:open", "lower:gpu", "screw:gpu:0", "screw:gpu:1"];
+    const snap = history(...steps);
+    const restored = parseSimpleSnapshot(JSON.parse(JSON.stringify(snap)))!;
+    expect(restored.history).toEqual(snap.history);
+    const built = simpleBuildFromSnapshot(restored);
+    expect(simplePartInstalled(built, "gpu")).toBe(true);
+    expect(slotCovers(built).every((c) => c.open)).toBe(true);
+    // Undo takes back one screw, not both.
+    const undone = simpleBuildFromSnapshot(undoSimpleStep(restored)!);
+    expect(simplePartInstalled(undone, "gpu")).toBe(false);
+    expect(simpleFastened(undone, "gpu")).toBe(false);
+    expect(undone.parts.find((p) => p.instanceId === "gpu-7")?.attachments[0]?.fastenersSecured).toBe(1);
+    const legacy = simpleBuildFromSnapshot(history("mech:slot-covers:open", "mech:pcie-x16-1-latch:open", "lower:gpu", "fasten:gpu"));
+    expect(simplePartInstalled(legacy, "gpu")).toBe(true);
+    expect(slotCovers(legacy).every((c) => c.open)).toBe(true);
   });
 });
 
