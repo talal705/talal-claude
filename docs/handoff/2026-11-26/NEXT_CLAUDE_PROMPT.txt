@@ -1,37 +1,27 @@
-Continue Virtual Training Environment (VTE) from the saved CURRENT project. You implement; Codex reviews. The owner has authorized completion through Stage 11 and concise readable code. No new stage-approval pause is required.
+Continue VTE after Codex's authorized small-fix packet. You implement the remaining larger work; Codex reviews. The owner authorized completion through Stage11, preserving concise readable code. Do not ask for another stage approval.
 
-Workspace: /Users/most/Documents/Codex/VTE-completion-2026-11-25
-Current partial-work branch: wip/wiring-2026-11-26
-Stable feature checkpoint: feat/assembly-completion at 72330d6
+WORKSPACE: /Users/most/Documents/Codex/VTE-completion-2026-11-25
+CURRENT HANDOFF BRANCH: fix/wiring-handoff-2026-11-26
+PRODUCT-FIX COMMIT: ad15c71 (documentation commits may follow).
 
-Verify Git status, branch and history first. Preserve newer and uncommitted work. Do not reset to the old afd162e report, switch the original Talal-Claude-local workspace, or overwrite files from an older checkout. The cooling repair is already included as3dce2b5. Local work through Stage9 is committed in0fa7056,9276afa and72330d6. The partial Stage10 work is saved on the WIP branch; finish it rather than starting over.
+Verify status/history and preserve newer or uncommitted work. This branch includes the interrupted Stage10 model, Stage8/9 and the cooling repair. Do not reset to afd162e,72330d6 or the old WIP checkout, and do not edit the separate original Talal-Claude-local worktree.
 
-Read CLAUDE.md, PROJECT_HANDOFF.md, docs/DECISIONS.md, the assembly roadmap, docs/handoff/2026-11-25/review/IMPLEMENTATION_SCOPE.txt and docs/handoff/2026-11-26/CODEX_REVIEW.md. Older review notes may describe already-fixed code: verify current behavior. Use installed Superpowers skills as appropriate. One writer, no extra agents. Preserve all parts/features, EN/AR, click/tap/keyboard, centered stable camera, dark wood, model quality, optional RGB, save/undo/old formats, planner loading isolation and unrelated site areas. Videos remain deferred. No main merge, production deploy, force-push, paid services, account changes or data clearing.
+Read CLAUDE.md, the CURRENT top of PROJECT_HANDOFF.md and CODEX_SMALL_FIXES_HANDOFF.md alongside this prompt. Historical CODEX_REVIEW notes describe older source. Codex has ALREADY fixed the missing parser import, actual-port save validation, UI withPlug(portId), undo translations and occupied-port labels. Do not repeat those repairs or revert the passing regressions. Types, messages, production build and84files/1096tests passed, with21 missing DB/provider skips; browser/visual acceptance remains unperformed.
 
-1. Restore the interrupted Stage10 code to a verified state
-- Type-check currently fails: companion.ts calls parseEndStep without importing it. Fix the integration properly, then run type-check. Do not hide/exclude the file or remove the parsing behavior.
-- The independent equivalent-SATA-port probe now passes at the model level, but the UI still calls withPlug(snapshot,key,index) without saving the actual selected port. Finish model/UI/save integration so a valid alternative destination is kept after reload, undo and plan rebasing.
-- Use a shared parser for new plug/unplug forms everywhere (history lists, companion undo, rebase, validation). Preserve old plug:<key>:<index> and whole-cable save replay. Add normal-suite regressions, not only scratch tests.
+REMAINING WORK
+1. Complete per-end wiring controls, including selecting/disconnecting one endpoint of a partly connected cable, using unplugSimpleEnd and withUnplug. One action affects one endpoint and preserves the other; retain actual-port recording, undo/reload and old plug/cable saves. Respect engine connector/function/keying/occupancy and PSU-cable rules. Valid equivalent ports remain accepted; preferred ports are guidance. Wrong, occupied and reversed choices get one short EN/AR reason. Keep shared SATA leads, modular/captive sources, multiple drives, essential versus optional leads and plan rebasing correct.
+2. Make cable scene/robot/guide targets consistently follow the selected and actual endpoint/socket. Audit panel, scene, toolbar and keyboard paths for bulk shortcuts and stale targets. Correct port choices must not disappear behind a bounded list of decoys. Preserve model detail, gentle optional RGB and camera position.
+3. Complete Stage11 readiness/power controls with the existing engine's panel/mains/PSU/button actions as individual clear steps in the new detailed flow. Do not auto-complete internal assembly to make startup succeed. Show real working/not-working results and a useful actual fault. Distinguish startup from finishing optional items; no external monitor/HDMI requirement. Provide accessible power-off/failure recovery with matching UI, engine and saved state, including reload/undo and guided/independent/fault modes.
+4. Preserve all existing parts, EN/AR, click/tap/keyboard, centered stable camera, dark wood, model quality, save keys/old formats, planner loading isolation and unrelated website features. Videos remain deferred. Keep GPU cover/bracket counts honestly labelled as schematic until exact facts are verified; do not invent hardware incompatibilities.
 
-2. Complete Stage10 wiring through actual individual endpoints
-- Each cable end can be connected and disconnected separately, including partially connected cables; keep the other endpoint unchanged.
-- Offer genuinely equivalent available ports, without mistaking the plan's preferred destination for a physical requirement. Engine connector/function/keying/occupancy and PSU-cable compatibility rules must still decide. Reject reversed plugs, wrong-function look-alikes and occupied destinations with one short useful EN/AR explanation.
-- Save/replay the actual endpoint; keep progress, robot/guide targets, the scene and startup evaluation consistent. Test multiple SATA drives, shared SATA power leads, modular/captive PSUs, selected-model GPU/CPU/AIO cables, and optional fan/RGB leads. Never turn an optional cosmetic lead into a fake boot requirement.
-- Ensure a bounded choice list cannot omit the required/valid destination just because it occurs late in catalog order. Check scene clicks, panels, toolbar and keyboard for bulk shortcuts or dead ends.
+FINAL GATES
+- Add meaningful regressions for remaining UI/model interactions. Preserve the seven endpoint cases in plan-model.test.ts and the independent board/port probes. Run targeted checks, type-check, translation parity and the broad apps/web packages suite; report missing service integrations as skipped.
+- Build production AFTER the final source change. Run a bounded browser matrix on that exact build: planner add/remove (individual storage/duplicates), CPU/RAM/M.2/cooling/GPU/fans/wiring/startup, EN/AR desktop/430px, invalid actions, save/undo/reload, stable camera and double-click gating. Use isolated test storage, your own port3002/processes and state-based waits. Do not globally kill Chrome or clear the owner's storage.
+- Save and inspect representative screenshots; unit tests/canvas hashes alone do not verify visuals. Distinguish product, harness and environment failures. Skips/timeouts/interrupted runs are not passes. Review the whole final diff and fix confirmed issues.
+- Update the current roadmap/handoff with exact actual results, formats/migrations, source/approximation limits and remaining gates. Commit only task-related files locally for Codex review. No force-push, main merge, production deploy, account/protection changes or paid services. Use installed Superpowers where appropriate, one writer and no extra agents.
 
-3. Complete Stage11 final readiness and startup
-- Use the existing engine's modelled side-panel, power-cord, PSU-switch and power-button actions as clear individual readiness steps in the new detailed flow. Keep the interface compact and the main next action obvious. Bulk startup helpers may remain only for old-save migration/tests.
-- Do not auto-install missing internal parts or cables to make startup succeed. Show working/not working from the real engine with the actual fault and one useful next action. Distinguish boot success from finishing every optional item; fan motion/RGB alone do not prove success. No external monitor/HDMI requirement.
-- Provide a working power-off/recovery route after success or failure. UI locks, engine power state and saved/reloaded state must agree; preserve guided/independent/fault behavior and the stationary camera.
+Return concise Arabic results with branch/commits, what changed, tests/build/browser counts and limits, and screenshot paths. Do not claim the whole project or deployed preview is verified until those gates are actually complete.
 
-4. Review and final verification
-- Retain the passed carried-board boundary fix, first-step fault-removal intent, actual bay/fan selection, supplied-fan identity, per-cover/per-screw GPU actions, legacy raw-cover fallback, no automatic current-user fan relocation, and rear-fan/I/O geometry fix.
-- Keep the documented schematic limits honest: current GPU cover/bracket count is a teaching approximation, not verified manufacturer data. Do not infer cover count from slotThickness or invent unsupported incompatibilities.
-- Run targeted regressions, the saved carried-board reproduction, type-check and translation parity; then the broad apps/web packages suite. Report missing DB/provider integrations as skipped, not passed. A green unit suite alone does not prove UI integration or type correctness.
-- Build production AFTER the final source change. Run bounded browser acceptance against that exact build: planner add/remove (individual storage/duplicates), CPU/RAM/M.2/cooling, GPU, supplied/extra fans, actual-port wiring and final power flow, EN/AR desktop and430px, wrong actions, save/undo/reload, stable camera and double-click gating. Use isolated test storage and only your own port3002/browser processes; never clear the owner's data or globally kill Chrome.
-- Reuse/update existing scripts without weakening assertions. Capture representative screenshots and inspect the actual3D state; canvas hashes/DOM checks alone are not visual review. Distinguish harness defects, product defects and environment limitations. A timed-out/interrupted/still-running check is not a pass.
-- Review the whole final diff and fix confirmed errors. Update the CURRENT handoff/roadmap with actual completed stages, formats/migrations, sources/approximations, exact results and remaining limits. Do not leave the old quota-blocked checkpoint as the current status.
-
-Make local task-related commits on the WIP branch after checks; Codex will review and fast-forward the feature branch when ready, then publish a preview. Do not merge main, publish production or disable Vercel protection. Return a concise Arabic report with branch/commits, causes/fixes, test counts including skips, final build/browser evidence and screenshot paths. Do not declare the project complete while required work or gates remain.
-
-Durable independent port probe: npx vitest run --config docs/handoff/2026-11-26/review/vitest.config.mjs (source alongside it). The port probe and carried-board probe both pass on the interrupted model, but type-check and UI integration remain incomplete.
+Independent probes:
+ npx vitest run --config docs/handoff/2026-11-25/review/vitest.config.mjs
+ npx vitest run --config docs/handoff/2026-11-26/review/vitest.config.mjs

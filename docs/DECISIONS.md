@@ -47,3 +47,7 @@ These replace earlier, less specific requirements in `docs/BRIEF.md` where they 
 ## 2026-11-25 — Complete the agreed detailed assembly roadmap
 
 21. **Continue through Stage 11 with Claude implementing and Codex reviewing.** The owner requested direct coordination with Claude, completion of the agreed project work and correction of errors. Continue the remaining motherboard/case, PSU, SATA storage, GPU, fan, wiring and final-startup stages; older stage-specific stop instructions do not require fresh approval between these stages. Preserve the current planner, click/tap interactions, still centered camera, EN/AR, save/undo, model detail, RGB choice and unrelated site features. Keep concise readable code. Explanatory videos remain deferred. Preserve the existing boundary against merging `main` or deploying production before the final owner review.
+
+## 2026-11-26 — Codex small fixes and handoff authorized
+
+22. **Codex may implement bounded small fixes/tests to reduce Claude's work.** The owner asked Codex to handle simple changes and summarize everything for Claude to continue afterward, then explicitly said to start. This authorizes the saved-endpoint/compilation/translation/test packet and its handoff; Claude continues the larger wiring/readiness work. Preserve the existing code/data and no-main/no-production boundary.

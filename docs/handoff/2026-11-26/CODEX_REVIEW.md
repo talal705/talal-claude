@@ -1,5 +1,9 @@
 # Codex review / continuation — 2026-11-26
 
+Historical checkpoint. The owner subsequently authorized Codex small fixes; `ad15c71` resolves the missing import, endpoint
+save validation and actual-port UI save callback listed below. See `CODEX_SMALL_FIXES_HANDOFF.md` and the current top of
+`PROJECT_HANDOFF.md` before continuing; do not repeat the already-completed repairs.
+
 Claude implements; Codex reviews. The full agreed roadmap remains authorized. No production/main changes.
 
 ## Reviewed work saved through Stage 9

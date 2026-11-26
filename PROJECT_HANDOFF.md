@@ -4,19 +4,20 @@ Current site brand: **بيئة التدريب الافتراضية (VTE)** in Ar
 **Virtual Training Environment (VTE)** in English. Older references below use the former name.
 The repository and hosting identifiers remain `talal-claude`; saved-data keys are unchanged.
 
-## Current status — 2026-11-26 continuation
+## Current status — Codex small fixes, 2026-11-26
 
-Reviewed feature checkpoint: `feat/assembly-completion` at `72330d6` (repair packet `0fa7056`, Stage8 `9276afa`, Stage9 `72330d6`).
-The latest interrupted wiring work is preserved separately on **`wip/wiring-2026-11-26`** in this same isolated worktree.
-Claude reached its five-hour limit while implementing Stage10 (reported reset20:40 Asia/Riyadh, 2026-11-26).
+Continue **`fix/wiring-handoff-2026-11-26`** in `/Users/most/Documents/Codex/VTE-completion-2026-11-25`.
+The owner authorized Codex to handle bounded small fixes/tests and prepare a handoff; Claude continues the larger work.
+Product-fix commit **`ad15c71`** includes all earlier Stage8/9/cooling work and the interrupted wiring model.
 
-The saved Stage9 checkpoint passes relevant independent tests/types/messages; final browser/production-build gates remain.
-The partial Stage10 source **fails type checking** because companion.ts lacks the `parseEndStep` import, and its actual-port
-selection is not yet wired into the UI save callback. Model probes and 85 relevant tests pass, but that is not full acceptance.
-Stage11 readiness/startup work remains. No `main` merge or production deployment was made.
+Codex restored compilation, fixed loading the new plug/unplug save forms, wired the actual selected socket into the UI save
+callback, corrected EN/AR undo/instructions and marked occupied socket choices. Seven new regression cases passed;
+types, message parity and production build passed. Broad suite: **84 files, 1096 passed, 21 skipped** (DB/provider unavailable).
+No final browser/visual/device check, main merge or production deployment was performed.
 
-Read `docs/handoff/2026-11-26/CODEX_REVIEW.md` and **`NEXT_CLAUDE_PROMPT.txt`** for the exact remaining commands and gates.
-Continue that WIP branch without reverting reviewed work; integrate it back only after fixing the listed issues and final checks.
+Claude still needs the per-end disconnect UI, endpoint/scene/guide consistency, Stage11 readiness/power/off recovery and final
+browser acceptance. Read **`docs/handoff/2026-11-26/CODEX_SMALL_FIXES_HANDOFF.md`** for all changes and actual results, then
+**`NEXT_CLAUDE_PROMPT.txt`** alongside it. Older quota/type-failure notes below are historical and have been superseded.
 
 ## Current work — assembly completion checkpoint (2026-11-25)
 
