@@ -621,7 +621,9 @@ export function simplePositions(state: PCBuildState, key: SimplePartKey): Simple
 }
 
 export function simplePartInstalled(state: PCBuildState, key: SimplePartKey): boolean {
-  const spec = partSpec(key);
+  const spec = ALL_SIMPLE_PARTS.find((p) => p.key === key);
+  // A part this build does not have (a liquid cooler in an air-cooled plan) is simply not installed.
+  if (!spec) return false;
   // A module counts in any memory slot of its board (the learner chooses the slot); the recommendation is advice.
   const m2 = isM2Key(key);
   const mounts: readonly string[] = isRamKey(key) ? simpleRamSlots(state).map((x) => x.id) : m2 ? simpleM2Slots(state, key).map((x) => x.id) : isPositionKey(key) ? simplePositions(state, key).map((x) => x.id) : [spec.mount];

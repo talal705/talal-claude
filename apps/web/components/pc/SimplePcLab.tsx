@@ -1832,7 +1832,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
                   const active = selectedCable === item.key;
                   return <button type="button" key={item.key} className={styles.cable} data-selected={active} data-connected={done} aria-pressed={active} onClick={() => chooseCable(item.key)}>
                     <span className={styles.wireIcon} aria-hidden="true">↳</span>
-                    <span>{cableName(item.key)}{!item.essential && <small>{t("fanOptional")}</small>}</span>
+                    <span>{cableName(item.key)}{!item.essential && <small>{t(item.key.startsWith("caseFan") ? "fanOptional" : "leadOptional")}</small>}</span>
                     {done ? <CheckIcon /> : <span className={styles.unplugged}>{t("loose")}</span>}
                   </button>;
                 })}

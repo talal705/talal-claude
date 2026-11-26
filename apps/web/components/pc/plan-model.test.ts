@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { pc } from "@ytl/simulation";
 import { pcCatalog } from "./catalog";
+import { companionSay } from "./companion";
 import { planModel, parsePlannedBuild, rebaseProgress, snapshotFromHistory, type PlannedBuild } from "./plan-model";
 import {
   activateSimpleModel, connectSimpleCable, createSimpleBuild, emptySimpleSnapshot, installSimplePart, LEGACY_MODEL, parseSimpleSnapshot, SIMPLE_PARTS, simplePartOrder,
@@ -470,6 +471,13 @@ describe("readiness and startup", () => {
     expect(result.ok).toBe(true);
     // Booting is not finishing: the optional fan and its lead are still to do.
     expect(simpleAssemblyComplete(result.state)).toBe(false);
+  });
+
+  it("asking whether a liquid cooler is fitted is safe on a plan that has none (a complete air-cooled build powering on)", () => {
+    activateSimpleModel(planModel(build(gaming)));
+    const { state } = assembleAll();
+    expect(simplePartInstalled(state, "aio")).toBe(false);
+    expect(() => companionSay({ type: "powerOn" }, state, true, null)).not.toThrow();
   });
 
   it("a missing boot part is reported by the engine and by the boot-part check, not by the optional fan", () => {

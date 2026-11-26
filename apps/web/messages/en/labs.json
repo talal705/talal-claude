@@ -869,6 +869,7 @@
     "disconnect": "Unplug cable",
     "loose": "Loose",
     "fanOptional": "Case fan · optional for startup",
+    "leadOptional": "Optional for startup",
     "suppliedTag": "supplied with the case",
     "powerOff": "Turn off the PC",
     "turnOffFirst": "Turn the PC off before changing a cable.",
