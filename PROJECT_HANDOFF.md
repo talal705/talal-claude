@@ -4,7 +4,44 @@ Current site brand: **بيئة التدريب الافتراضية (VTE)** in Ar
 **Virtual Training Environment (VTE)** in English. Older references below use the former name.
 The repository and hosting identifiers remain `talal-claude`; saved-data keys are unchanged.
 
-## Current status — Codex small fixes, 2026-11-26
+## Current status — Claude Stage 10 completion + Stage 11 readiness, 2026-11-26 (latest)
+
+Branch **`fix/wiring-handoff-2026-11-26`** (builds on `ad15c71`, `ad5eed3`; nothing reset). Local commits only; no push, `main` merge or deploy.
+
+**Stage 10 (per-end wiring) — done in source.**
+- The real UI unplug callback is `unplugEnd(key, index)` in `SimplePcLab.tsx`: `unplugSimpleEnd` + `withUnplug` through the shared
+  `commit` helper (so the fault build keeps its own trail). It no longer calls `disconnectSimpleCable`/`withoutCable`, which dropped
+  the whole lead's history. `disconnectSimpleCable`/`withoutCable`/`connectSimpleCable` remain only for old-save replay, the fault
+  builder and tests; no learner control calls them.
+- `CablePanel` lists each end with its actual socket and a "Take out" button for every end that is really in (`actualEndPort`,
+  so a wrong header counts). Captive PSU sources are not ends, so they are never offered. The held socket is reset when an end is
+  removed and ignored when it is not one of the active end's choices.
+- Every socket that takes the plug (same connector, function, keying and role) is listed first and never capped; only look-alikes are
+  capped (8). A lit socket in the 3D view is chosen like its button. Scene targets and the robot's port target follow the active end
+  (a modular lead's PSU side first) and the actual socket once plugged (`simpleEndSocket`, `simpleSocketName`).
+- Saved forms unchanged from the earlier packet: `plug:<lead>:<end>@<socket>`, old `plug:<lead>:<end>`, `unplug:<lead>:<end>`, old `cable:<lead>`.
+
+**Stage 11 (readiness/startup) — done in source.**
+- New history step `sys:<control>:<value>`: `panel:closed|open`, `wall:in|out`, `psu:on|off`, `power:on|off`, each replaying one existing
+  engine action (`set_side_panel`, `set_wall_power`, `set_psu_switch`, `press_power`/`power_off`). Save keys and versions unchanged.
+- `nextReadiness` marks the next control (panel → mains → PSU → button) but does not force an order; the engine reports the real
+  fault (e.g. `psu_switch_off`). `pressSimplePower` runs the real startup on the build as it is: success keeps the PC running (saved as
+  `sys:power:on`); failure changes nothing (no state, no step) and the result panel names what to do first when only the readiness
+  controls are missing. A running PC only offers "Turn the PC off" (`sys:power:off`); other controls are refused with the existing message.
+- `powered` is derived from the last `sys:power:*` step; a save whose flag and history disagree is refused. Older saves that say
+  "running" with no step still start through `startSimplePC` and switch off by clearing the flag. Plan edits keep panel/mains/PSU steps and drop the power press.
+- `startSimplePC` (one-action start) is kept only for the fault finder and older saves. Optional case-fan/lighting leads are not boot requirements.
+
+**Verified:** `npm run type-check`, `npm run check:messages`, `npx vitest run apps/web packages` = **84 files, 1105 passed, 21 skipped**
+(DB/provider integrations unconfigured), both review probes pass. New regressions in `plan-model.test.ts`: legacy whole-lead save then one-end
+removal, partly connected lead, fault trail, lit equivalent sockets/actual-socket target, readiness order, save/reload/undo/power-off,
+real-fault failure without side effects, optional leads, plan rebase.
+**Not done:** production build after the final change, the browser matrix (planner, CPU/RAM/M.2/cooling/GPU/fans/wiring/startup, EN/AR,
+430 px, undo/reload, camera, double-click gating), screenshots and any deployed-preview check. React components have no unit-test harness here,
+so the UI callbacks are covered by the model calls they make, not by rendering. Scene geometry, the lit-socket click and the readiness panel
+layout are unseen in a browser. GPU cover/bracket counts stay schematic. No acceptance script covers the simple lab, so none was changed.
+
+## Earlier status — Codex small fixes, 2026-11-26
 
 Continue **`fix/wiring-handoff-2026-11-26`** in `/Users/most/Documents/Codex/VTE-completion-2026-11-25`.
 The owner authorized Codex to handle bounded small fixes/tests and prepare a handoff; Claude continues the larger work.

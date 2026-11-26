@@ -814,6 +814,41 @@
     "power": "Start the PC",
     "success": "It works!",
     "failure": "Not working yet",
+    "ready": {
+      "title": "Before you press power",
+      "state": {
+        "panel": {
+          "open": "Side panel: open",
+          "closed": "Side panel: closed"
+        },
+        "wall": {
+          "in": "Plugged into the wall",
+          "out": "Not plugged into the wall"
+        },
+        "psu": {
+          "on": "PSU switch: on",
+          "off": "PSU switch: off"
+        }
+      },
+      "do": {
+        "panel": {
+          "closed": "Close the side panel",
+          "open": "Open the side panel"
+        },
+        "wall": {
+          "in": "Plug into the wall",
+          "out": "Unplug from the wall"
+        },
+        "psu": {
+          "on": "Switch the PSU on",
+          "off": "Switch the PSU off"
+        }
+      },
+      "press": "Press the power button",
+      "off": "Turn the PC off",
+      "running": "The PC is on. Turn it off before changing anything inside.",
+      "fixFirst": "Not yet: {step}, then try again."
+    },
     "missing": "Fit the remaining parts, then connect their cables.",
     "reset": "Start over",
     "camera": "Camera controls",
@@ -1105,7 +1140,10 @@
         "psu": "Last part: the power supply. Tap it to select it.",
         "firstCable": "All parts are in! Now the cables. Start with the {cable} lead.",
         "cable": "Next cable: the {cable} lead. Select it, then tap its glowing port.",
-        "power": "Everything is fitted and connected. Press Start the PC to test it!",
+        "power": "Everything is fitted and connected. Press the power button to test it!",
+        "readyPanel": "Everything is connected. Close the side panel.",
+        "readyWall": "Next: plug the PC into the wall.",
+        "readyPsu": "Next: switch the power supply on.",
         "turnOff": "Turn the PC off, then plug in the case fans to finish.",
         "done": "Your PC is built and running. Great work!",
         "cpu2": "Fit the Core i9 in the CPU socket.",

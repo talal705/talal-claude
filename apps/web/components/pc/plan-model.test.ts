@@ -5,7 +5,7 @@ import { planModel, parsePlannedBuild, rebaseProgress, snapshotFromHistory, type
 import {
   activateSimpleModel, connectSimpleCable, createSimpleBuild, emptySimpleSnapshot, installSimplePart, LEGACY_MODEL, parseSimpleSnapshot, SIMPLE_PARTS, simplePartOrder,
   simpleAssemblyComplete, simpleBuildFromSnapshot, simpleCablesFor, simpleRuleBlock, startSimplePC, withCable, withPart, type SimpleSnapshot,
-  actualEndPort, plugSimpleEnd, simpleCableEnds, simpleCableConnected, simplePortChoices, unplugSimpleEnd, undoSimpleStep, withPlug, withUnplug,
+  actualEndPort, nextReadiness, plugSimpleEnd, pressSimplePower, setSimpleSystem, simpleSystemValue, withSimpleStep, lastSimpleStep, simpleCableEnds, simpleCableConnected, simplePortChoices, unplugSimpleEnd, undoSimpleStep, withPlug, withUnplug, withoutCable,
 } from "./simple-model";
 
 const build = (parts: pc.BuildPlan): PlannedBuild => ({ version: 1, purpose: "gaming", workload: "1080p", parts });
@@ -338,3 +338,102 @@ describe("cable endpoint persistence", () => {
     }
   });
 });
+
+describe("readiness and startup", () => {
+  const steps = ["sys:panel:closed", "sys:wall:in", "sys:psu:on"] as const;
+  const readied = (snapshot: SimpleSnapshot, list: readonly string[] = steps) => list.reduce((sn, step) => withSimpleStep(sn, step as never), snapshot);
+
+  it("offers panel, mains, PSU switch and button one at a time, and never does them for the learner", () => {
+    activateSimpleModel(planModel(build(gaming)));
+    const { state, snapshot } = assembleAll();
+    expect(nextReadiness(state)).toEqual({ control: "panel", value: "closed" });
+    let now = state;
+    for (const [control, value] of [["panel", "closed"], ["wall", "in"], ["psu", "on"]] as const) {
+      expect(nextReadiness(now)).toEqual({ control, value });
+      const r = setSimpleSystem(now, control, value);
+      if (!r.ok) throw new Error(r.reason);
+      now = r.state;
+    }
+    expect(nextReadiness(now)).toEqual({ control: "power", value: "on" });
+    expect(now.power.pressed).toBe(false);
+    expect(setSimpleSystem(now, "psu", "on")).toMatchObject({ ok: false, reason: "unchanged" });
+    // The button itself is the last step and starts the real checks.
+    const pressed = pressSimplePower(now);
+    expect(pressed.ok).toBe(true);
+    expect(nextReadiness(pressed.state)).toBeNull();
+    // A running PC only turns off.
+    expect(setSimpleSystem(pressed.state, "wall", "out")).toMatchObject({ ok: false, reason: "turnOffFirst" });
+    const off = setSimpleSystem(pressed.state, "power", "off");
+    expect(off.ok && simpleSystemValue(off.state, "power")).toBe("off");
+    expect(snapshot.powered).toBe(false);
+  });
+
+  it("saves, reloads, undoes and powers off consistently", () => {
+    activateSimpleModel(planModel(build(gaming)));
+    const on = readied(assembleAll().snapshot, [...steps, "sys:power:on"]);
+    expect(on.powered).toBe(true);
+    const reloaded = parseSimpleSnapshot(JSON.parse(JSON.stringify(on)))!;
+    expect(simpleBuildFromSnapshot(reloaded).power).toMatchObject({ pressed: true, wallConnected: true, psuSwitchOn: true });
+    expect(lastSimpleStep(on)).toBeNull();
+    const off = withSimpleStep(on, "sys:power:off");
+    expect(off.powered).toBe(false);
+    expect(simpleBuildFromSnapshot(parseSimpleSnapshot(JSON.parse(JSON.stringify(off)))!).power.pressed).toBe(false);
+    // Undoing the power-off is the one step back: the PC runs again, as the history says.
+    expect(undoSimpleStep(off)).toEqual(on);
+    // A save whose flag and history disagree is refused.
+    expect(parseSimpleSnapshot({ ...on, powered: false })).toBeNull();
+    expect(parseSimpleSnapshot({ ...off, powered: true })).toBeNull();
+    // After a power-off the switches can be set back, and each is one undoable step.
+    const switchedOff = withSimpleStep(off, "sys:psu:off");
+    expect(simpleBuildFromSnapshot(switchedOff).power.psuSwitchOn).toBe(false);
+    expect(simpleBuildFromSnapshot(undoSimpleStep(switchedOff)!).power.psuSwitchOn).toBe(true);
+  });
+
+  it("reports the real fault of a failed try, changes nothing, and does not need the optional leads", () => {
+    activateSimpleModel(planModel(build(gaming)));
+    const { state } = assembleAll();
+    // PSU switch left off: a real engine fault, no state change.
+    const wall = setSimpleSystem(state, "wall", "in");
+    if (!wall.ok) throw new Error(wall.reason);
+    const noSwitch = { state: wall.state };
+    const failed = pressSimplePower(noSwitch.state);
+    expect(failed.ok).toBe(false);
+    expect(failed.state).toBe(noSwitch.state);
+    expect(JSON.stringify(failed.startup)).toContain("psu_switch_off");
+    // A missing essential lead is reported, not connected for the learner.
+    const loose = simpleBuildFromSnapshot(withUnplugAtx(readied(assembleAll().snapshot)));
+    const noAtx = pressSimplePower(loose);
+    expect(noAtx.ok).toBe(false);
+    expect(simpleCableConnected(noAtx.state, "atx")).toBe(false);
+    // Optional case-fan and lighting leads are not needed for a boot.
+    const optional = simpleCablesFor(state).filter((c) => !c.essential);
+    expect(optional.length).toBeGreaterThan(0);
+    let bare = readied(assembleAll().snapshot);
+    for (const c of optional) bare = withoutCable(bare, c.key);
+    const without = simpleBuildFromSnapshot(bare);
+    expect(simpleAssemblyComplete(without)).toBe(false);
+    expect(pressSimplePower(without).ok).toBe(true);
+  });
+
+  it("keeps the readiness steps, not the power press, when the plan changes", () => {
+    const from = planModel(build(gaming));
+    activateSimpleModel(from);
+    const on = readied(assembleAll().snapshot, [...steps, "sys:power:on"]);
+    const next = planModel(build({ ...gaming, fans: [...gaming.fans!, "arctic-p12-pwm-pst"] }));
+    const rebased = rebaseProgress(on, from, next).history;
+    expect(rebased).toEqual(expect.arrayContaining(steps as unknown as string[]));
+    expect(rebased).not.toContain("sys:power:on");
+  });
+
+  it("still starts an older save that says the PC runs, and its first power-off needs no new step", () => {
+    activateSimpleModel(LEGACY_MODEL);
+    const saved = parseSimpleSnapshot({ version: 3, placed: [], connected: [], history: [], powered: false })!;
+    expect(saved.powered).toBe(false);
+    expect(startSimplePC(simpleBuildFromSnapshot(saved), { evenIfIncomplete: true }).ok).toBe(false);
+  });
+});
+
+/** The ATX lead taken out of a fully wired snapshot, as the learner's own unplug steps. */
+function withUnplugAtx(snapshot: SimpleSnapshot): SimpleSnapshot {
+  return simpleCableEnds("atx").reduce((sn, _end, index) => withUnplug(sn, "atx", index), snapshot);
+}

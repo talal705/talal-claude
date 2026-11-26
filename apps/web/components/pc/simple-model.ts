@@ -242,7 +242,7 @@ const isCoolerKey = (key: SimplePartKey) => slotOf(key) === "cooler";
  *   a CPU or a module; replaying it opens and closes their mechanisms (the explicit migration of those saves).
  * - `cable:<key>`: a lead connected.
  */
-export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}` | `lower:${string}` | `seat:${string}` | `lift:${string}` | `fasten:${string}` | `unfasten:${string}` | `prep:${string}` | `place:${string}` | `unscrew:${string}` | `screw:${string}` | `plug:${string}` | `unplug:${string}` | `hw:${string}` | `rad:${string}` | `fans:${string}` | `radscrew:${string}`;
+export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}` | `lower:${string}` | `seat:${string}` | `lift:${string}` | `fasten:${string}` | `unfasten:${string}` | `prep:${string}` | `place:${string}` | `unscrew:${string}` | `screw:${string}` | `plug:${string}` | `unplug:${string}` | `sys:${string}` | `hw:${string}` | `rad:${string}` | `fans:${string}` | `radscrew:${string}`;
 /**
  * Saved progress. `placed` and `connected` say what is fitted; `history` is the same steps in the
  * order they were taken, so the latest one can be undone without breaking what depends on it.
@@ -1199,24 +1199,63 @@ export function disconnectSimpleCable(state: PCBuildState, key: SimpleCableKey):
   return { ok: true, state };
 }
 
-/** Only mains/PSU switches remain automatic; internal leads must be connected by the learner. */
+// ---------- Readiness: side panel, mains, PSU switch and power button, one action each ----------
+
+/** The engine's own actions for each readiness control, keyed by the value it is set to (recorded as `sys:<control>:<value>`). */
+const SYSTEM = {
+  panel: { closed: { type: "set_side_panel", open: false }, open: { type: "set_side_panel", open: true } },
+  wall: { in: { type: "set_wall_power", connected: true }, out: { type: "set_wall_power", connected: false } },
+  psu: { on: { type: "set_psu_switch", on: true }, off: { type: "set_psu_switch", on: false } },
+  power: { on: { type: "press_power" }, off: { type: "power_off" } },
+} as const satisfies Record<string, Record<string, PCAction>>;
+export type SystemControl = keyof typeof SYSTEM;
+/** Where the controls stand when a build is ready to start, in the order a builder would set them. */
+const READY: readonly (readonly [SystemControl, string])[] = [["panel", "closed"], ["wall", "in"], ["psu", "on"], ["power", "on"]];
+
+/** The value a control stands at in the engine's state (`closed`/`open`, `in`/`out`, `on`/`off`). */
+export function simpleSystemValue(state: PCBuildState, control: SystemControl): string {
+  return control === "panel" ? (state.sidePanelOpen ? "open" : "closed")
+    : control === "wall" ? (state.power.wallConnected ? "in" : "out")
+    : control === "psu" ? (state.power.psuSwitchOn ? "on" : "off")
+    : state.power.pressed ? "on" : "off";
+}
+/** The control the guide suggests next, or null while the PC is running (then only the power button is left). */
+export function nextReadiness(state: PCBuildState): { control: SystemControl; value: string } | null {
+  if (state.power.pressed) return null;
+  const [control, value] = READY.find(([c, v]) => simpleSystemValue(state, c) !== v)!;
+  return { control, value };
+}
+export function isSystemStep(rest: string): { control: SystemControl; value: string } | null {
+  const [control, value, extra] = rest.split(":");
+  const actions = control && Object.hasOwn(SYSTEM, control) ? SYSTEM[control as SystemControl] : null;
+  return actions && value && Object.hasOwn(actions, value) && extra === undefined ? { control: control as SystemControl, value } : null;
+}
+/** Sets one control. A running PC only turns off: nothing else changes under it. */
+export function setSimpleSystem(state: PCBuildState, control: SystemControl, value: string): { ok: true; state: PCBuildState } | { ok: false; reason: "turnOffFirst" | "unchanged" } {
+  if (state.power.pressed && !(control === "power" && value === "off")) return { ok: false, reason: "turnOffFirst" };
+  if (simpleSystemValue(state, control) === value) return { ok: false, reason: "unchanged" };
+  return { ok: true, state: run(state, [(SYSTEM[control] as Record<string, PCAction>)[value]!]) };
+}
+
+/**
+ * Presses the power button on the build as it stands (the switches are the learner's own steps) and reads what the
+ * engine says. On success the PC is running; on a failed try nothing changes, so wiring stays editable.
+ */
+export function pressSimplePower(state: PCBuildState, opts: { evenIfIncomplete?: boolean } = {}): { ok: boolean; state: PCBuildState; startup: StartupResult; rule: SimpleRule | null } {
+  if (!opts.evenIfIncomplete && !simpleAllPartsIn(state)) return { ok: false, state, startup: pc.evaluateStartup(state, pcCatalog), rule: null };
+  const pressed = state.power.pressed ? state : run(state, [SYSTEM.power.on]);
+  const startup = pc.evaluateStartup(pressed, pcCatalog);
+  const rule = simpleRuleBlock(pressed);
+  const ok = startup.outcome === "operational" && !rule;
+  return { ok, state: ok ? pressed : state, startup, rule };
+}
+
+/** One-action start for the fault finder and older saves: panel, mains and PSU switch, then the button. */
 export function startSimplePC(state: PCBuildState, opts: { evenIfIncomplete?: boolean } = {}): { ok: boolean; state: PCBuildState; startup: StartupResult; rule: SimpleRule | null } {
   // "Find the fault" presses power on whatever is there: a half-seated module must show as a failed POST.
   if (!opts.evenIfIncomplete && !simpleAllPartsIn(state)) return { ok: false, state, startup: pc.evaluateStartup(state, pcCatalog), rule: null };
-  if (!state.power.pressed) {
-    state = run(state, [
-      { type: "set_side_panel", open: false },
-      { type: "set_wall_power", connected: true },
-      { type: "set_psu_switch", on: true },
-      { type: "press_power" },
-    ]);
-  }
-  const startup = pc.evaluateStartup(state, pcCatalog);
-  const rule = simpleRuleBlock(state);
-  const ok = startup.outcome === "operational" && !rule;
-  // A failed try leaves wiring editable. Preserve its diagnostics for the caller's feedback.
-  if (!ok && state.power.pressed) state = run(state, [{ type: "power_off" }]);
-  return { ok, state, startup, rule };
+  if (!state.power.pressed) state = run(state, [SYSTEM.panel.closed, SYSTEM.wall.in, SYSTEM.psu.on]);
+  return pressSimplePower(state, opts);
 }
 
 /** Every part fitted and every lead connected, case fans included: the whole build, not only what boots. */
@@ -1248,6 +1287,7 @@ export function applySimpleStep(state: PCBuildState, step: SimpleStep): PCBuildS
       if (!e || !end) return null;
       return kind === "unplug" ? unplugSimpleEnd(state, e.key, e.index) : plugSimpleEnd(state, e.key, e.index, e.portId ?? end.portId, false);
     })()
+    : kind === "sys" ? (() => { const e = isSystemStep(rest); return e ? setSimpleSystem(state, e.control, e.value) : null; })()
     : kind === "prep" ? (() => { const [k, prep, value] = rest.split(":"); return prepSimplePart(state, k!, prep as PrepKind, value ?? ""); })()
     : kind === "place" ? placeSimplePart(state, rest.split("@")[0]!, rest.split("@")[1])
     : kind === "unscrew" ? unscrewSimplePart(state, rest)
@@ -1295,9 +1335,14 @@ export function deriveSimpleLists(history: readonly SimpleStep[]): { placed: Sim
   }
   return { placed, connected };
 }
+/** Whether the history leaves the PC running: its last power step says so; with none (older saves) the saved flag stands. */
+const poweredBy = (history: readonly string[], saved: boolean) => {
+  const last = history.findLast((step) => step.startsWith("sys:power:"));
+  return last ? last === "sys:power:on" : saved;
+};
 const withStep = (snapshot: SimpleSnapshot, step: SimpleStep): SimpleSnapshot => {
   const history = [...snapshot.history, step];
-  return { ...snapshot, history, ...deriveSimpleLists(history) };
+  return { ...snapshot, history, powered: poweredBy(history, snapshot.powered), ...deriveSimpleLists(history) };
 };
 export const withSimpleStep = withStep;
 export const withMechanism = (snapshot: SimpleSnapshot, retentionId: string, state: "open" | "closed") => withStep(snapshot, `mech:${retentionId}:${state}`);
@@ -1368,7 +1413,7 @@ export function undoSimpleStep(snapshot: SimpleSnapshot): SimpleSnapshot | null 
   const last = lastSimpleStep(snapshot);
   if (!last) return null;
   const history = snapshot.history.slice(0, -1);
-  return { ...snapshot, history, ...deriveSimpleLists(history) };
+  return { ...snapshot, history, powered: poweredBy(history, snapshot.powered), ...deriveSimpleLists(history) };
 }
 
 // ---------- Saved progress ----------
@@ -1391,6 +1436,7 @@ const isStep = (step: unknown): step is SimpleStep => {
     const end = parseEndStep(rest);
     return Boolean(end && isCableKey(end.key) && Number.isSafeInteger(end.index) && end.index < simpleCableEnds(end.key).length && (kind === "plug" || end.portId === null));
   }
+  if (kind === "sys") return Boolean(isSystemStep(rest));
   if (kind === "prep") { const m = /^([a-z0-9]+):(paste|film|standoffs|io_shield|psu_fan|airflow|backplate):([a-z]*)$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
   if (kind === "screw") { const m = /^([a-z0-9]+):(\d{1,2})$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
   return kind === "mech" && /^[a-z0-9-]+(:lever|:near|:stand|:screws|:film|:\d)?:(open|closed)$/.test(rest);
@@ -1471,6 +1517,8 @@ export function parseSimpleSnapshot(value: unknown): SimpleSnapshot | null {
     if (!Array.isArray(data.history) || data.history.length > 400 || !data.history.every(isStep)) return null;
     history = migrateCoolerSteps(migrateM2Steps(migrateLeverSteps(data.history as string[]))) as SimpleStep[];
     // The lists must say what the steps say.
+    // A save that says the PC runs must end on the step that started it (and the other way round).
+    if (history.some((st) => st.startsWith("sys:power:")) && poweredBy(history, false) !== data.powered) return null;
     const derived = deriveSimpleLists(history);
     const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x));
     if (!same(derived.placed, placed) || !same(derived.connected, connected as string[])) return null;

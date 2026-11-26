@@ -392,6 +392,8 @@ export function rebaseProgress(snapshot: { placed: string[]; connected: string[]
     if (kind === "cable") return keepCable(key);
     if (kind === "plug" || kind === "unplug") { const end = parseEndStep(key); return !!end && keepCable(end.key); }
     // Levers and latches belong to the board: they stay unless the board itself changed.
+    // Panel, mains and PSU switch stay; a power-on or -off belonged to the old build.
+    if (kind === "sys") return !key.startsWith("power:");
     if (kind === "mech") return !changed.has("motherboard");
     // prep:<part>:<what>:<value>, screw:<part>:<corner> and place:<part>@<position> belong to their part.
     const part = key.split(/[:@]/)[0]!;

@@ -36,6 +36,12 @@
 .powerButton { width:100%; min-height:48px; display:flex; align-items:center; justify-content:center; gap:9px; background:linear-gradient(130deg,#286fe4,#0a4eaa); color:#fff; font-size:15px; font-weight:600; border:1px solid #4587e5; border-radius:10px; cursor:pointer; }
 .powerButton span { font-size:24px; line-height:1; }
 .powerButton:disabled { opacity:.55; cursor:default; }
+.readiness ul { list-style:none; margin:8px 0 12px; padding:0; display:grid; gap:6px; }
+.readiness li { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; }
+.readiness li button { min-height:36px; padding:4px 10px; border:1px solid var(--border); border-radius:8px; background:transparent; color:var(--text); cursor:pointer; }
+.readiness li button[aria-current="step"], .readiness .powerButton[aria-current="step"] { border-color:var(--accent-strong); box-shadow:0 0 0 1px var(--accent-strong); }
+.readiness li button:disabled { opacity:.55; cursor:default; }
+.readiness li button:focus-visible { outline:2px solid var(--accent-strong); outline-offset:3px; }
 .reset { display:block; padding:8px 14px 0; margin-inline:auto; color:var(--text-muted); font-size:12px; cursor:pointer; }
 .reset:hover { color:white; }
 .fallback { display:grid; place-items:center; height:100%; padding:24px; color:var(--text-muted); text-align:center; }

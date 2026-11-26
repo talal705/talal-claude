@@ -18,7 +18,7 @@ import {
   ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, cableSpec, firstAttachment, partSpec, createSimpleBuild, emptySimpleSnapshot, installSimplePart, isM2Key, isRamKey, lastSimpleStep, M2_WHOLE_TILT_DEG, simpleM2Heatsink, simpleM2Slots,
   parseSimpleSnapshot, SIMPLE_PART_LIST, SIMPLE_PARTS, SIMPLE_SAVE_KEY, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot,
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
-  simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, unplugSimpleEnd, withUnplug, actualEndPort, simpleSocketName, withoutPart, withPart, withSwap,
+  simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, unplugSimpleEnd, withUnplug, nextReadiness, pressSimplePower, setSimpleSystem, simpleSystemValue, type SystemControl, actualEndPort, simpleSocketName, withoutPart, withPart, withSwap,
   hasModelledMounting, withSimpleStep, activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
   withMechanism, withLower, withSeat, withLift, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, unscrewSimplePart, withUnscrew, isPositionKey, simplePositions, simpleLiftBlock, simpleOrientationAdvice, simpleRequiredScrews, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, caseCoversClosed, slotCovers, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot, type SimpleStep,
 } from "./simple-model";
@@ -940,31 +940,31 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (next === "fault") newFault();
   }
 
-  function power() {
+  /** One readiness step (panel, mains, PSU switch, power off) as its own saved step; the power button is `pressPower`. */
+  function systemStep(control: SystemControl, value: string) {
+    if (mode === "fault") return;
     setConfirmRestart(false);
-    if (mode === "fault") {
-      if (!fault) return;
-      const result = startSimplePC(fault.state, { evenIfIncomplete: true });
-      setAttempt({ state: fault.state, startup: result.startup });
-      setVerdict(result.ok ? "success" : "failure");
-      setFailedRule(result.ok ? null : result.rule);
-      if (result.ok) setFault({ ...fault, solved: true });
-      return;
-    }
-    if (saved.powered) {
-      setSaved((previous) => ({ ...previous, powered: false }));
-      setVerdict(null);
-      const off = simpleBuildFromSnapshot({ ...saved, powered: false });
-      react({ type: "powerOff" }, off, false, selection);
-      return;
-    }
-    const result = startSimplePC(state);
+    if (!takeStep()) return;
+    const r = setSimpleSystem(state, control, value);
+    if (!r.ok) { if (r.reason === "turnOffFirst") speak({ lines: [{ key: "blocked.turnOff" }], mood: "concerned", point: "power" }); return; }
+    // A save from before the readiness steps says "running" with no step for it: switching off just clears that flag.
+    const older = control === "power" && !saved.history.includes("sys:power:on");
+    const next = older ? { ...saved, powered: false } : withSimpleStep(saved, `sys:${control}:${value}`);
+    setSaved(next);
+    setVerdict(null);
+    if (control === "power") react({ type: "powerOff" }, simpleBuildFromSnapshot(next), false, selection);
+  }
+
+  /** Presses the button on the build exactly as it stands: the engine says whether it works, and what is wrong if not. */
+  function pressPower() {
+    if (!takeStep()) return;
+    const result = pressSimplePower(state);
     setAttempt({ state: result.ok ? result.state : state, startup: result.startup });
     setVerdict(result.ok ? "success" : "failure");
     setFailedRule(result.ok ? null : result.rule);
     setSelection(null);
     if (result.ok) {
-      setSaved((previous) => ({ ...previous, powered: true }));
+      setSaved((previous) => withSimpleStep(previous, "sys:power:on"));
       react({ type: "powerOn" }, result.state, true, null);
       return;
     }
@@ -972,6 +972,17 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (result.rule) setTab("parts");
     else if (progress === SIMPLE_PARTS.length) setTab("cables");
     react({ type: "powerFail", missingCable: missing, rule: result.rule }, state, false, null);
+  }
+
+  /** Fault finder: one press tries the build as it is. Otherwise the readiness steps below do it. */
+  function power() {
+    setConfirmRestart(false);
+    if (!fault) return;
+    const result = startSimplePC(fault.state, { evenIfIncomplete: true });
+    setAttempt({ state: fault.state, startup: result.startup });
+    setVerdict(result.ok ? "success" : "failure");
+    setFailedRule(result.ok ? null : result.rule);
+    if (result.ok) setFault({ ...fault, solved: true });
   }
 
   function quick(intent: "next" | "help" | "explain") {
@@ -1018,7 +1029,9 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   // The lab rule wins when it is still broken; otherwise the first missing part or lead.
   const rule = failedRule && simpleRuleBlock(state) ? failedRule : null;
   const ruleText = planned ? t("planner.findingText.exercise_needs_liquid") : t("needsLiquid");
-  const missingMessage = rule ? ruleText : progress < SIMPLE_PARTS.length ? t("missing") : firstMissingCable ? t("missingCable", { cable: cableName(firstMissingCable.key) }) : t("checkCables");
+  // Every part and lead is in but the panel, mains or PSU switch is not set: that is what to do first.
+  const unreadied = nextReadiness(state)?.control !== "power" ? nextReadiness(state) : null;
+  const missingMessage = rule ? ruleText : progress < SIMPLE_PARTS.length ? t("missing") : firstMissingCable ? t("missingCable", { cable: cableName(firstMissingCable.key) }) : unreadied ? t("ready.fixFirst", { step: t(`ready.do.${unreadied.control}.${unreadied.value}`) }) : t("checkCables");
   const placeName = (key: SimplePartKey) => {
     // A memory module: the slot it is in, else the slot it is held over, else none. Never a default slot.
     if (isRamKey(key)) {
@@ -1104,6 +1117,30 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (kind === "cpu") return CpuHands();
     if (kind === "ram") return RamHands();
     return M2Hands();
+  }
+
+  /** Panel, mains, PSU switch and power button as separate steps; the next one is marked, the order is not forced. */
+  function Readiness() {
+    const next = nextReadiness(state);
+    const rows = [["panel", ["closed", "open"]], ["wall", ["in", "out"]], ["psu", ["on", "off"]]] as const;
+    return (
+      <div className={styles.readiness}>
+        <p className={styles.hint}>{t(lockedOn ? "ready.running" : "ready.title")}</p>
+        <ul>
+          {rows.map(([control, [good, other]]) => {
+            const value = simpleSystemValue(state, control);
+            const flip = value === good ? other : good;
+            return <li key={control}>
+              <span>{t(`ready.state.${control}.${value}`)}</span>
+              <button type="button" aria-current={next?.control === control ? "step" : undefined} disabled={!ready || lockedOn || handsOff()} onClick={() => systemStep(control, flip)}>{t(`ready.do.${control}.${flip}`)}</button>
+            </li>;
+          })}
+        </ul>
+        <button className={styles.powerButton} type="button" aria-current={next?.control === "power" ? "step" : undefined} disabled={!ready} onClick={() => (lockedOn ? systemStep("power", "off") : pressPower())}>
+          <span aria-hidden="true">⏻</span>{t(lockedOn ? "ready.off" : "ready.press")}
+        </button>
+      </div>
+    );
   }
 
   /** One lead: each end into a port the learner picks, turned the right way. */
@@ -1813,7 +1850,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
               )}
               {mode === "fault"
                 ? <button className={styles.powerButton} type="button" onClick={fault?.solved ? newFault : power} disabled={!ready || !fault}><span aria-hidden="true">⏻</span>{fault?.solved ? t("fault.newFault") : t("power")}</button>
-                : <button className={styles.powerButton} type="button" onClick={power} disabled={!ready}><span aria-hidden="true">⏻</span>{t(saved.powered ? "powerOff" : "power")}</button>}
+                : Readiness()}
               <div className={styles.steps} hidden={mode === "fault"}>
                 {!confirmRestart ? <button type="button" onClick={() => setConfirmRestart(true)} disabled={!ready}>{t("reset")}</button> : null}
               </div>

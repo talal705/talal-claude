@@ -5,7 +5,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { pcCatalog } from "./catalog";
 import {
-  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, hasModelledMounting, isPositionKey, isRamKey, parseEndStep, partSpec, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
+  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, hasModelledMounting, nextReadiness, isPositionKey, isRamKey, parseEndStep, partSpec, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
   simpleCablesFor, simpleCableOrder, simplePartInstalled, simplePartOrder, simplePrerequisites, simpleRuleBlock, REMOVABLE, simpleRamRecommended, simpleSlotFilled, simpleSlotPart, simpleTarget, slotOf,
   caseCoversClosed, isM2Key, simpleM2Slots, simpleRamSlots, simpleRamTargetFor, simpleRetention,
   type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimpleHeld, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,
@@ -99,6 +99,11 @@ export function nextLine(state: PCBuildState, powered: boolean): CompanionLine {
   if (next.kind === "cable") {
     const first = simpleCablesFor(state).every((c) => !simpleCableConnected(state, c.key));
     return { key: first ? "next.firstCable" : "next.cable", values: { cable: { cable: next.key } } };
+  }
+  if (next.kind === "power") {
+    // The panel, the mains and the PSU switch are steps of their own before the button.
+    const ready = nextReadiness(state);
+    if (ready && ready.control !== "power") return { key: `next.ready${ready.control[0]!.toUpperCase()}${ready.control.slice(1)}` };
   }
   return { key: `next.${next.kind}` };
 }
