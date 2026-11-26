@@ -4,7 +4,29 @@ Current site brand: **بيئة التدريب الافتراضية (VTE)** in Ar
 **Virtual Training Environment (VTE)** in English. Older references below use the former name.
 The repository and hosting identifiers remain `talal-claude`; saved-data keys are unchanged.
 
-## Current status — Claude Stage 10 completion + Stage 11 readiness, 2026-11-26 (latest)
+## Current status — Codex Stage 11 review fixes + final verification, 2026-11-26 (latest)
+
+Commits on `fix/wiring-handoff-2026-11-26`: `847f7d0` (review fixes), `a8cf604` (crash fix, label, acceptance scripts). Local only.
+
+**Fixed (Codex blocker + review points).**
+- Startup no longer requires every part incl. optional fans: `pressSimplePower`/`startSimplePC` judge the real engine only (plus the documented liquid-cooling lab rule);
+  `evenIfIncomplete` is gone. `simpleBootPartsIn` (all parts but case fans) drives the "parts missing" message and next-tab guidance. The `optional-startup` probe passes and
+  an ordinary-suite regression covers it (boots without the optional fan; not reported as a finished build).
+- Robot and lit sockets follow the end and socket the learner chose (`guideFocus(..., picked)`, `simpleSceneTargets(..., endIndex)`); loose ends are clickable (`simpleActiveEnd`);
+  an unplugged end becomes the active one with no stale socket/turn. "Unplugged" robot line now says one end is out (EN/AR). `undo()` reports the real power state.
+- Real defect found by the browser run: powering a complete planned build without a liquid cooler crashed the page (`simplePartInstalled("aio")` read `spec.mount` of undefined). Fixed + regression.
+- Non-fan optional leads said "Case fan · optional"; they now say "Optional for startup" (EN/AR).
+- Misleading "older save" test replaced by a complete pre-`sys` running save (restore, first power-off, reload); malformed/impossible `sys:` forms are tested.
+
+**Verified on the final build (`a8cf604`, `npm run build` OK, own server on 3002):** type-check, EN/AR parity, both review configs, `npx vitest run apps/web packages` = 84 files, **1112 passed, 21 skipped** (DB/provider).
+Browser (Playwright, isolated seeded storage, saved plan `ytl_pc_plan*`): `docs/handoff/2026-11-26/acceptance/wiring-startup.mjs` (seeds from `seed.test.ts`) **29/29 EN 1440 and 29/29 AR 430, no page errors**: reversed plug refused, equivalent/alternate SATA socket recorded and reloaded,
+one end out/undo/reload, wrong-kind socket refused, older whole-lead save one-end removal, readiness failure/steps/success/reload/off/undo, boot without optional fan, fault mode opens.
+Older scripts on the same build: `2026-11-21/acceptance/m2.mjs` 31/31, `cpu-ram-click.mjs` 9/9 (EN 1440; Chrome app). Screenshots (inspected EN 1440 and AR 430) in `/private/tmp/vte-shots/` (`wiring-ends-*`, `readiness-*`, `optional-boot-*`).
+
+**Not run / gaps (honest):** AR at 1440 and EN at 430 for the new script; occupied-socket and fault-mode wrong-header unplug in the browser (unit-tested only); planner add/remove of duplicate storage, cooling/GPU/fan acceptance scripts (none exist in the repo for them besides the 2026-11-20 CPU/RAM ones, not rerun);
+the robot's pointer position for a chosen alternate socket is tested at the guide-target level, not visually; seeded saves skip the long part-by-part clicking (those flows are covered by the m2/cpu-ram scripts only). Stage 10/11 are **not** declared accepted; double-click gating and camera stability were not re-measured here.
+
+## Current status — Claude Stage 10 completion + Stage 11 readiness, 2026-11-26 (earlier today)
 
 Branch **`fix/wiring-handoff-2026-11-26`** (builds on `ad15c71`, `ad5eed3`; nothing reset). Local commits only; no push, `main` merge or deploy.
 
