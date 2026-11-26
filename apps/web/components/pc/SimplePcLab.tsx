@@ -18,7 +18,7 @@ import {
   ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, cableSpec, connectSimpleCable, firstAttachment, partSpec, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, isM2Key, isRamKey, lastSimpleStep, M2_WHOLE_TILT_DEG, simpleM2Heatsink, simpleM2Slots,
   parseSimpleSnapshot, SIMPLE_PART_LIST, SIMPLE_PARTS, SIMPLE_SAVE_KEY, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot,
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
-  simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap,
+  simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withoutCable, withoutPart, withPart, withSwap,
   hasModelledMounting, withSimpleStep, activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
   withMechanism, withLower, withSeat, withLift, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, unscrewSimplePart, withUnscrew, isPositionKey, simplePositions, simpleLiftBlock, simpleOrientationAdvice, simpleRequiredScrews, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, caseCoversClosed, slotCovers, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot, type SimpleStep,
 } from "./simple-model";
@@ -789,14 +789,6 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (saved.powered) { react({ type: "select", selection: { kind: "cable", key } }); return; }
     // Each end goes in by hand (see CablePanel): pick the port, turn the plug, push it home.
     if (!simpleCableConnected(state, key)) { if (!(selection?.kind === "cable" && selection.key === key)) chooseCable(key); return; }
-    if (!takeStep()) return;
-    const step = connectSimpleCable(state, key);
-    if (!step.ok) { react({ type: "select", selection: { kind: "cable", key } }); return; }
-    if (simpleCableConnected(state, key)) return;
-    setSaved((previous) => withCable(previous, key));
-    setSelection(null);
-    setVerdict(null);
-    react({ type: "connected", key }, step.state, false, null);
   }
 
   function unplug(key: SimpleCableKey) {
