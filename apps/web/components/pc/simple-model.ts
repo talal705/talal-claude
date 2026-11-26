@@ -1319,25 +1319,34 @@ export function simpleBuildFromSnapshot(snapshot: SimpleSnapshot): PCBuildState 
 export function deriveSimpleLists(history: readonly SimpleStep[]): { placed: SimplePartKey[]; connected: SimpleCableKey[] } {
   const placed: SimplePartKey[] = [];
   const connected: SimpleCableKey[] = [];
-  const plugged = new Map<SimpleCableKey, Set<number>>();
+  // An end is a physical one (cable + end): two leads that share a modular cable's PSU side share its state.
+  const plugged = new Set<string>();
+  const physical = (key: SimpleCableKey, index: number) => { const e = simpleCableEnds(key)[index]; return e && `${e.cableId}/${e.endId}`; };
+  const syncConnected = () => {
+    for (const { key: lead } of ALL_SIMPLE_CABLES) {
+      const whole = simpleCableEnds(lead).every((_, i) => plugged.has(physical(lead, i)!));
+      if (whole && !connected.includes(lead)) connected.push(lead);
+      if (!whole && connected.includes(lead)) connected.splice(connected.indexOf(lead), 1);
+    }
+  };
   for (const step of history) {
     const kind = step.slice(0, step.indexOf(":"));
     const key = kind === "lower" ? step.slice(step.indexOf(":") + 1).split(":")[0]! : kind === "place" ? step.slice(step.indexOf(":") + 1).split("@")[0]! : step.slice(step.indexOf(":") + 1);
     if ((kind === "part" || kind === "lower" || kind === "place") && !placed.includes(key)) placed.push(key);
     // A lift of the radiator alone (`lift:aio:rad`) leaves the cooler's block where it is.
     if (kind === "lift" && !step.endsWith(":rad") && placed.includes(key)) placed.splice(placed.indexOf(key), 1);
-    if (kind === "cable" && !connected.includes(key)) { connected.push(key); if (cableSpec(key)) plugged.set(key, new Set(simpleCableEnds(key).keys())); }
+    if (kind === "cable" && !connected.includes(key)) {
+      connected.push(key);
+      if (cableSpec(key)) simpleCableEnds(key).forEach((_, i) => plugged.add(physical(key, i)!));
+      syncConnected();
+    }
     if (kind === "plug" || kind === "unplug") {
       // An end is in from its plug step until its unplug step; a lead is connected while every end is in.
       const e = parseEndStep(step.slice(step.indexOf(":") + 1));
-      const total = e && cableSpec(e.key) ? simpleCableEnds(e.key).length : 0;
-      if (!e || !total) continue;
-      const ends = plugged.get(e.key) ?? new Set<number>();
-      if (kind === "plug") ends.add(e.index); else ends.delete(e.index);
-      plugged.set(e.key, ends);
-      const whole = ends.size >= total;
-      if (whole && !connected.includes(e.key)) connected.push(e.key);
-      if (!whole && connected.includes(e.key)) connected.splice(connected.indexOf(e.key), 1);
+      const id = e && cableSpec(e.key) ? physical(e.key, e.index) : null;
+      if (!id) continue;
+      if (kind === "plug") plugged.add(id); else plugged.delete(id);
+      syncConnected();
     }
   }
   return { placed, connected };

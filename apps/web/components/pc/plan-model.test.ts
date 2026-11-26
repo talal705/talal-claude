@@ -311,6 +311,48 @@ describe("cable endpoint persistence", () => {
     if (wrong) expect(guideFocus(state, { kind: "cable", key }, false, true, null, { end: boardIndex, portId: wrong.portId })?.targets).toEqual([expect.objectContaining({ placeId: end.portId })]);
   });
 
+  it("a shared modular PSU source is one physical end: the saved connected list follows it for every lead that uses it", () => {
+    const plan = { ...gaming, storage: ["samsung-870-evo-1tb", "seagate-barracuda-2tb-st2000dm008"], fans: [] };
+    activateSimpleModel(planModel(build(plan)));
+    let state = createSimpleBuild();
+    let snapshot: SimpleSnapshot = emptySimpleSnapshot();
+    for (const key of simplePartOrder(state)) {
+      if (simplePartInstalled(state, key)) continue;
+      const r = installSimplePart(state, key);
+      if (!r.ok) throw new Error(`${key}: ${r.reason}`);
+      state = r.state; snapshot = withPart(snapshot, key);
+    }
+    const power = simpleCablesFor(state).filter((c) => c.key.startsWith("sataPower"));
+    expect(power).toHaveLength(2);
+    expect(power[0]!.id).toBe(power[1]!.id);
+    for (const cable of power) {
+      for (const [index, end] of simpleCableEnds(cable.key).entries()) {
+        const r = plugSimpleEnd(state, cable.key, index, end.portId, false);
+        if (!r.ok) throw new Error(r.reason);
+        state = r.state; snapshot = withPlug(snapshot, cable.key, index, end.portId);
+      }
+    }
+    const keys = power.map((c) => c.key);
+    expect(keys.every((k) => snapshot.connected.includes(k))).toBe(true);
+    const sourceOf = (key: string) => simpleCableEnds(key).findIndex((e) => e.instanceId === "psu-8" || e.instanceId.startsWith("psu"));
+    const first = power[0]!, second = power[1]!;
+    const out = withUnplug(snapshot, first.key, sourceOf(first.key));
+    expect(keys.some((k) => out.connected.includes(k))).toBe(false);
+    expect(keys.some((k) => simpleCableConnected(simpleBuildFromSnapshot(out), k))).toBe(false);
+    // Each drive's own plug is independent: taking one out leaves the other lead's source and device end in.
+    const deviceOut = withUnplug(snapshot, first.key, simpleCableEnds(first.key).length - 1);
+    expect(deviceOut.connected).toContain(second.key);
+    expect(deviceOut.connected).not.toContain(first.key);
+    // Putting the shared source back through the OTHER lead reconnects both; reload and undo agree.
+    const back = withPlug(out, second.key, sourceOf(second.key), simpleCableEnds(second.key)[sourceOf(second.key)]!.portId);
+    expect(keys.every((k) => back.connected.includes(k))).toBe(true);
+    expect(parseSimpleSnapshot(JSON.parse(JSON.stringify(back)))).toEqual(back);
+    expect(undoSimpleStep(back)!.connected.some((k) => keys.includes(k))).toBe(false);
+    // An older whole-lead save followed by the source's removal is also consistent.
+    const whole = withUnplug(withCable(withCable(snapshot, first.key), second.key), first.key, sourceOf(first.key));
+    expect(keys.some((k) => whole.connected.includes(k))).toBe(false);
+  });
+
   it("keeps old endpoint saves readable and preserves actual ports when an unrelated fan is added", () => {
     const snapshot = unwired();
     const { key, index, end, port } = dataEnd(snapshot);

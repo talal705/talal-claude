@@ -65,13 +65,13 @@ ok("without the board in the case the robot says the board comes first (nothing 
 await press(tile(ar ? /^اللوحة الأم/ : /^Motherboard/));
 if ((await lab.locator("details").count()) === 0) await press(tile(ar ? /^اللوحة الأم/ : /^Motherboard/));
 const d0 = lab.locator("details").first(); if (!(await d0.evaluate((e) => e.open))) await d0.locator("summary").click();
-await lab.getByRole("button", { name: ar ? /^تأكد/ : /^Check the standoffs/ }).click(); await page.waitForTimeout(900);
+await lab.getByRole("button", { name: ar ? /^تأكد/ : /^Check the standoffs/ }).first().click(); await page.waitForTimeout(900);
 const lower = lab.getByRole("button", { name: ar ? /نزّل اللوحة/ : /Lower the board/ });
-await lower.click(); await page.waitForTimeout(900);
+await lower.first().click(); await page.waitForTimeout(900);
 if (!(await st()).history.some((x) => x.startsWith("place:motherboard"))) {
   // This board's shield is not fixed to it: the learner fits the separate one, then lowers the board.
-  await lab.getByRole("button", { name: ar ? /غطا المنافذ/ : /I\/O shield/ }).click(); await page.waitForTimeout(900);
-  await lower.click(); await page.waitForTimeout(900);
+  await lab.getByRole("button", { name: ar ? /غطا المنافذ/ : /I\/O shield/ }).first().click(); await page.waitForTimeout(900);
+  await lower.first().click(); await page.waitForTimeout(900);
 }
 if (process.env.DEBUG_BOARD) console.log("hist tail:", JSON.stringify((await st()).history.slice(-4)), "says:", (await st()).lines);
 for (let i = 0; i < 12 && !(await st()).placed.includes("motherboard"); i += 1) { await lab.getByRole("button", { name: ar ? /اربط البرغي/ : /Tighten screw/ }).first().click(); await page.waitForTimeout(900); }
@@ -82,9 +82,11 @@ await press(liquid); await opened();
 await click1();
 s = await st();
 ok("with the fan in the way the radiator step only names the fan (nothing moved, no radiator yet)", !s.history.some((x) => x.startsWith("rad:") || x.startsWith("fans:")), JSON.stringify(s.history.slice(-4)));
-await press(tile(ar ? /^مروحة الكيس 1/ : /^Case fan 1/));
+// The step itself selected the obstructing fan (pressing its tile again would deselect it).
+ok("the step selected the supplied fan to work on", (await st()).selection?.key === "sfan1", JSON.stringify((await st()).selection));
+await opened();
 for (let i = 0; i < 4; i += 1) { await lab.getByRole("button", { name: ar ? /فك البرغي/ : /Take out screw/ }).first().click(); await page.waitForTimeout(900); }
-await lab.getByRole("button", { name: ar ? /ارفع المروحة/ : /Lift the fan out/ }).click(); await page.waitForTimeout(900);
+await lab.getByRole("button", { name: ar ? /ارفع المروحة/ : /Lift the fan out/ }).first().click(); await page.waitForTimeout(900);
 s = await st();
 ok("the supplied fan came out by four single screw steps and its own lift", s.history.filter((x) => x === "unscrew:sfan1").length === 4 && s.history.at(-1) === "lift:sfan1", JSON.stringify(s.history.slice(-6)));
 await press(liquid); await opened();

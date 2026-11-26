@@ -1167,7 +1167,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
             const loose = !simpleEndPlugged(state, e);
             const choosable = loose && ends.filter((x) => !simpleEndPlugged(state, x)).length > 1;
             return <li key={i}><span aria-hidden="true">{loose ? i + 1 : "✓"}</span> {choosable
-              ? <button type="button" aria-pressed={next === i} disabled={!ready || handsOff()} onClick={() => setPlugHold({ ...hold, end: i, portId: null })}>{t("hands.endInto", { part: hostName(e.instanceId) })}</button>
+              ? <button type="button" aria-pressed={next === i} disabled={!ready || handsOff()} onClick={() => setPlugHold({ ...hold, end: i, portId: null, reversed: true })}>{t("hands.endInto", { part: hostName(e.instanceId) })}</button>
               : t("hands.endInto", { part: hostName(e.instanceId) })}
               {socketName && <> · {socketName[lang]} <button type="button" disabled={!ready || handsOff()} aria-label={t("hands.unplugEnd", { part: hostName(e.instanceId) })} onClick={() => unplugEnd(key, i)}>{t("hands.unplugEndShort")}</button></>}
             </li>;
