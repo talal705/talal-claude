@@ -3,7 +3,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { catalogIndex } from "./catalog";
 import type { Selection } from "./companion";
-import { ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, cableSpec, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCablesFor, simplePartInstalled, simpleRadiatorTarget, simpleTarget } from "./simple-model";
+import { ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, cableSpec, isPositionKey, simplePositions, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCablesFor, simplePartInstalled, simpleRadiatorTarget, simpleTarget } from "./simple-model";
 
 /** The second stick lies beside the first; every other part keeps the place it always had. */
 export const SECOND_RAM_ID = "ram-11";
@@ -39,10 +39,20 @@ function siblingMounts(hostCatalogId: string, mountId: string): string[] {
   return (catalogIndex.byId.get(hostCatalogId)?.mountPoints ?? []).map((m) => m.id).filter((id) => id.startsWith(family) && id !== mountId);
 }
 
-export function simpleSceneTargets(state: PCBuildState, selection: Selection): SimpleSceneTarget[] {
+/**
+ * `chosen`: the bay or fan place the learner picked for the selected part. A SATA drive or case fan shows every place
+ * of its kind as a click (`pick:`), only the chosen one glowing: no place is suggested before the learner chooses.
+ */
+export function simpleSceneTargets(state: PCBuildState, selection: Selection, chosen: string | null = null): SimpleSceneTarget[] {
   if (!selection || state.power.pressed) return [];
   if (selection.kind === "part") {
     if (simplePartInstalled(state, selection.key) || simpleBlock(state, selection.key)) return [];
+    if (isPositionKey(selection.key)) {
+      const placed = state.parts.find((part) => part.instanceId === ALL_SIMPLE_PARTS.find((p) => p.key === selection.key)?.id)?.attachments.length;
+      if (placed) return [];
+      const host = ALL_SIMPLE_PARTS.find((p) => p.key === selection.key)!.host;
+      return simplePositions(state, selection.key).map((place): SimpleSceneTarget => ({ id: `pick:${place.id}`, kind: "mount", hostInstanceId: host, placeId: place.id, role: place.id === chosen ? "target" : "decoy" }));
+    }
     const target = simpleTarget(state, selection.key);
     const host = state.parts.find((part) => part.instanceId === target.hostInstanceId);
     if (!host) return [];

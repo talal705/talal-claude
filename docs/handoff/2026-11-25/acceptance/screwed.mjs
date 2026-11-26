@@ -22,15 +22,14 @@ const screw = () => press(button(h.msg("hands.nextScrew")));
 // ---------- Stage 6: power supply ----------
 await select(/RM850x/i);
 ok("the power supply is selectable with no board in the case (no 'board first' block)", !(await said()).includes("boardFirst"), await said());
-await press(button(h.msg("hands.psuFanUp")));
+ok("the filtered-vent advice (fan down) is shown before choosing", (await lab.getByText(m.hands.advice.psuDown).count()) === 1);
 await press(button(h.msg("hands.place.psu")));
 let s = await state();
-ok("fan up is refused by this case's filtered bottom vent (nothing placed)", !s.history.includes("place:psu") && /prep:psu:psu_fan:up/.test(s.history.at(-1) ?? ""), JSON.stringify(s.history.slice(-3)));
-ok("the refusal is spoken (engine reason, not silence)", (await said()).includes("hands.engine"), await said());
-await press(button(h.msg("hands.psuFanDown")));
+ok("placing without a fan direction is refused by the engine (nothing placed)", !s.history.includes("place:psu") && (await said()).includes("hands.engine"), JSON.stringify(s.history.slice(-3)));
+await press(button(h.msg("hands.psuFanUp")));
 await press(button(h.msg("hands.place.psu")));
 s = await state();
-ok("fan down: the supply is placed (one step), not yet screwed", s.history.at(-1) === "place:psu" && !s.placed.includes("motherboard"), JSON.stringify(s.history.slice(-3)));
+ok("fan up also fits over the vent: the supply is placed (advice, not a prohibition), not yet screwed", s.history.at(-1) === "place:psu" && !s.placed.includes("motherboard"), JSON.stringify(s.history.slice(-3)));
 const before = s.history.length;
 await screw();
 s = await state();
@@ -86,18 +85,18 @@ ok("undo reverses one step: the lift", !s.history.includes("lift:storage3") && s
 // ---------- Stage 9: a case fan at a chosen place, with its airflow ----------
 await select(/P12/i);
 await press(fanPlace(h.ar ? /علوية رقم 1/ : /Top fan position 1/));
-await press(button(h.msg("hands.fanIntake")));
+ok("the usual direction for a top place is advised (exhaust), not imposed", (await lab.getByText(m.hands.advice.exhaust).count()) === 1);
 await press(button(h.msg("hands.place.fan")));
 s = await state();
-ok("an intake fan at a top (exhaust) place is refused by the engine and not placed", !s.history.some((x) => x.startsWith("place:fan1")) && (await said()).includes("hands.engine"), JSON.stringify(s.history.slice(-2)));
+ok("placing without an airflow choice is refused by the engine", !s.history.some((x) => x.startsWith("place:fan1")) && (await said()).includes("hands.engine"), JSON.stringify(s.history.slice(-2)));
 await press(fanPlace(h.ar ? /أمامية رقم 1/ : /Front fan position 1/));
 ok("a place holding the case's own fan is refused", (await said()).includes("positionTaken"), await said());
 await press(fanPlace(h.ar ? /علوية رقم 1/ : /Top fan position 1/));
-await press(button(h.msg("hands.fanExhaust")));
+await press(button(h.msg("hands.fanIntake")));
 await press(button(h.msg("hands.place.fan")));
 for (let i = 0; i < 4; i += 1) await screw();
 s = await state();
-ok("the fan is installed at the place chosen", s.history.includes("place:fan1@fan-top-1") && s.placed.includes("fan1"), JSON.stringify(s.history.slice(-6)));
+ok("the fan is installed at the place chosen, turned the way the learner chose (intake at a top place also fits)", s.history.includes("place:fan1@fan-top-1") && s.placed.includes("fan1"), JSON.stringify(s.history.slice(-6)));
 ok("none of this moved the camera", JSON.stringify(await cam()) === JSON.stringify(cam0), `${JSON.stringify(cam0)} -> ${JSON.stringify(await cam())}`);
 await h.shot("fan-installed");
 

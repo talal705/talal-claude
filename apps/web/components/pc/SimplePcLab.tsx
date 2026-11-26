@@ -13,14 +13,14 @@ import { askCompanionAi, companionAskRequest, fetchTutorStatus, type AiStatus } 
 import { buildContext, companionSay, coolerDoneLine, coolerRemovalLine, coolerStepLine, heldLines, intentOf, m2StepLine, mountingRemovalLine, nextLine, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
 import { aimClick, aimTargets, createStepGate, m2LiftPose, nextHandStep, type HandStep } from "./click-assembly";
 import { focusOn, moveCamera, selectPart } from "./scene/scene-store";
-import { applyCoolerStep, applyMountingStep, coolerStepHistory, mountingDismantling, mountingStepHistory, nextCoolerRemoval, nextCoolerStep, nextMountingRemoval, type CoolerStep, type MountingStep } from "./cooler-assembly";
+import { applyCoolerStep, applyMountingStep, boardFrameScrews, coolerStepHistory, mountingDismantling, mountingStepHistory, nextCoolerRemoval, nextCoolerStep, nextMountingRemoval, type CoolerStep, type MountingStep } from "./cooler-assembly";
 import {
   ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, cableSpec, connectSimpleCable, firstAttachment, partSpec, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, isM2Key, isRamKey, lastSimpleStep, M2_WHOLE_TILT_DEG, simpleM2Heatsink, simpleM2Slots,
   parseSimpleSnapshot, SIMPLE_PART_LIST, SIMPLE_PARTS, SIMPLE_SAVE_KEY, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot,
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
   simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap,
   hasModelledMounting, withSimpleStep, activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
-  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, unscrewSimplePart, withUnscrew, isPositionKey, simplePositions, simpleLiftBlock, simpleOrientationAdvice, simpleRequiredScrews, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot,
+  withMechanism, withLower, withSeat, withLift, withFasten, withUnfasten, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, unscrewSimplePart, withUnscrew, isPositionKey, simplePositions, simpleLiftBlock, simpleOrientationAdvice, simpleRequiredScrews, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, fastenSimplePart, unfastenSimplePart, simpleFastened, caseCoversClosed, SLOT_COVERS_ID, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot, type SimpleStep,
 } from "./simple-model";
 import { cableOfPort, simpleBenchLayout, simpleSceneTargets } from "./simple-scene";
 import { guideFocus } from "./guide";
@@ -142,7 +142,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
 
   /** Guided shows every step; independent gives no step hints unasked; fault is a finished build with one mistake. */
   const [mode, setMode] = useState<"guided" | "independent" | "fault">("guided");
-  const [fault, setFault] = useState<{ kind: FaultKind; state: PCBuildState; solved: boolean } | null>(null);
+  const [fault, setFault] = useState<{ kind: FaultKind; state: PCBuildState; solved: boolean; trail: SimpleStep[]; baseScrews: string } | null>(null);
   /** The last power-on attempt, for the stage-by-stage panel. */
   const [attempt, setAttempt] = useState<{ state: PCBuildState; startup: StartupResult } | null>(null);
   const built = useMemo(() => simpleBuildFromSnapshot(saved), [saved]);
@@ -165,9 +165,13 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   /** The retention a part works with now: for an M.2 drive in hand, the one of the slot it is over. */
   const retOf = (key: SimplePartKey) => simpleRetention(state, key, hold?.key === key ? hold.slotId : undefined);
   const startup = useMemo(() => pc.evaluateStartup(state, pcCatalog), [state]);
-  const targets = useMemo(() => simpleSceneTargets(state, selection), [state, selection]);
+  /** The bay or fan place chosen for the part in hand (the same one in the controls, the scene, the robot and the saved step). */
+  const chosenPosition = selection?.kind === "part" && position?.key === selection.key ? position.id : null;
+  const targets = useMemo(() => simpleSceneTargets(state, selection, chosenPosition), [state, selection, chosenPosition]);
   const powered = mode === "fault" ? Boolean(fault?.solved) : saved.powered;
-  const guide = useMemo(() => (view.guide && mode === "guided" ? guideFocus(state, selection, powered, guided) : null), [view.guide, mode, state, selection, powered, guided]);
+  /** The steps the guidance reads: the fault build's own while it is on the page, else the saved progress. */
+  const stepsTaken = mode === "fault" ? (fault?.trail ?? []) : saved.history;
+  const guide = useMemo(() => (view.guide && mode === "guided" ? guideFocus(state, selection, powered, guided, chosenPosition) : null), [view.guide, mode, state, selection, powered, guided, chosenPosition]);
   const progress = simplePartsProgress(state);
   /** The leads of this build: the liquid cooler's two replace the air cooler's one when it is fitted. */
   const leads = useMemo(() => simpleCablesFor(state), [state]);
@@ -186,8 +190,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     setMessage((previous) => ({ id: previous.id + 1, say: { ...say, lines: lines.length ? lines : say.lines.slice(0, 1) }, ...extra }));
   }, []);
   const react = useCallback((event: CompanionEvent, after = state, powered = saved.powered, inHand: Selection = selection) => {
-    speak(companionSay(event, after, powered, inHand, mountingDismantling(saved.history)));
-  }, [speak, state, saved.powered, saved.history, selection]);
+    speak(companionSay(event, after, powered, inHand, mountingDismantling(stepsTaken, mode === "fault" ? fault?.baseScrews : undefined)));
+  }, [speak, state, saved.powered, stepsTaken, selection]);
 
   useEffect(() => {
     let restored: SimpleSnapshot | null = null;
@@ -349,7 +353,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
 
   /** Keeps an engine change: the fault build's state, or one step in the saved progress. */
   function commit(next: ReturnType<typeof createSimpleBuild>, step: (s: SimpleSnapshot) => SimpleSnapshot) {
-    if (mode === "fault") { if (fault) setFault({ ...fault, state: next }); }
+    // The fault build keeps its own steps, so guidance never reads the saved normal build.
+    if (mode === "fault") { if (fault) setFault({ ...fault, state: next, trail: step({ ...emptySimpleSnapshot(), history: fault.trail }).history }); }
     else setSaved((previous) => step(previous));
   }
   /** Keeps a mechanism or seating change, then says what happened. */
@@ -824,6 +829,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
       else primaryHand(selection.key);
       return;
     }
+    // A bay or fan place clicked in the view is chosen exactly like its button in the part controls.
+    if (role === "pick") { if (selection.kind === "part") choosePosition(selection.key, place); return; }
     if (role === "target") {
       if (selection.kind === "part") install(selection.key);
       else connect(selection.key);
@@ -934,7 +941,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const kinds = availableFaults();
     if (kinds.length === 0) { setFault(null); return; }
     const kind = kinds[Math.floor(Math.random() * kinds.length)]!;
-    setFault({ kind, state: withFault(kind)!, solved: false });
+    const start = withFault(kind)!;
+    setFault({ kind, state: start, solved: false, trail: [], baseScrews: boardFrameScrews(start) });
     setAttempt(null);
     setVerdict(null);
     setSelection(null);
@@ -1175,7 +1183,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const choose = (active: boolean, label: string, run: () => void) =>
       <button type="button" className={styles.installButton} aria-pressed={active} disabled={disabled} onClick={run}>{label}</button>;
     // Taking the frame off has been chosen: its next step leads, and the fitting step it replaced stays as the way back.
-    const dismantle = mountingDismantling(saved.history) ? nextMountingRemoval(state) : null;
+    const dismantle = mountingDismantling(stepsTaken, mode === "fault" ? fault?.baseScrews : undefined) ? nextMountingRemoval(state) : null;
     if (dismantle) {
       return (
         <div className={styles.hands}>
@@ -1564,7 +1572,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (hasModelledMounting(key)) {
       if (rival) return { label: t("toolbar.more"), run: openPartOptions };
       // Taking the frame off has been chosen: the next removal step leads, whatever the cooler's own next fitting step is.
-      const removal = mountingDismantling(saved.history) ? nextMountingRemoval(state) : null;
+      const removal = mountingDismantling(stepsTaken, mode === "fault" ? fault?.baseScrews : undefined) ? nextMountingRemoval(state) : null;
       const removalLine = mountingRemovalLine(removal);
       if (removal && removalLine) return { label: t(`companion.${removalLine.key}`, removalLine.values as never), run: () => takeMountingStep(removal) };
       const coolerStep = nextCoolerStep(state, key);
@@ -1577,6 +1585,14 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     }
     if (partInstalled) return { label: t("installed"), why: t("toolbar.nothing") };
     if (partBlocked) return { label: t("install"), why: t(partBlocked) };
+    // A board, power supply, drive or fan: the toolbar takes the same one step as the part controls (place, then each screw).
+    if (!rival && simpleUsesScrews(key) && roleOf(key) !== "cooler" && !simpleIsLiquid(key)) {
+      const secured = firstAttachment(state, key)?.fastenersSecured ?? 0;
+      const required = simpleRequiredScrews(state, key);
+      if (placedScrewed) return { label: t("hands.nextScrew", { n: secured + 1, total: required }), run: () => handScrew(key, secured) };
+      if (isPositionKey(key) && !chosenPosition) return { label: t("toolbar.more"), run: openPartOptions, why: t(`hands.positionTitle.${roleOf(key)}`) };
+      return { label: t(`hands.place.${roleOf(key)}`), run: () => handPlace(key, "placedScrews") };
+    }
     if (rival || simpleUsesScrews(key) || simpleIsLiquid(key)) return { label: t("toolbar.more"), run: openPartOptions };
     if (mode !== "fault" && ticked < substepsFor(key).length) return { label: t("toolbar.more"), run: openPartOptions };
     return { label: t("install"), run: () => install(key) };

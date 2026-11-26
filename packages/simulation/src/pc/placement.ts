@@ -167,7 +167,7 @@ function kindRules(
           evidence("Fan size", "مقاس المروحة", mm(entry.spec.sizeMm), mount.sizesMm.map(mm).join(" / "), entry.id),
         ]);
       }
-      // A bank takes one fan size at a time, up to its capacity for that size (front: 3 x 120 mm or 2 x 140 mm).
+      // The documented capacities of a bank (front: 3 x 120 mm or 2 x 140 mm) are the layouts modelled; a mixed row is not one of them.
       const bank = mount.bank;
       if (bank) {
         const sizes = hostEntry.mountPoints.flatMap((m) => {

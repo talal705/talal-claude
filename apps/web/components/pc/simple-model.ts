@@ -223,7 +223,7 @@ const isCoolerKey = (key: SimplePartKey) => slotOf(key) === "cooler";
  *   a CPU or a module; replaying it opens and closes their mechanisms (the explicit migration of those saves).
  * - `cable:<key>`: a lead connected.
  */
-export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}` | `lower:${string}` | `seat:${string}` | `lift:${string}` | `fasten:${string}` | `unfasten:${string}` | `prep:${string}` | `place:${string}` | `unscrew:${string}` | `screw:${string}` | `plug:${string}` | `hw:${string}` | `rad:${string}` | `radscrew:${string}`;
+export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}` | `lower:${string}` | `seat:${string}` | `lift:${string}` | `fasten:${string}` | `unfasten:${string}` | `prep:${string}` | `place:${string}` | `unscrew:${string}` | `screw:${string}` | `plug:${string}` | `hw:${string}` | `rad:${string}` | `fans:${string}` | `radscrew:${string}`;
 /**
  * Saved progress. `placed` and `connected` say what is fitted; `history` is the same steps in the
  * order they were taken, so the latest one can be undone without breaking what depends on it.
@@ -513,12 +513,16 @@ export function simpleFastened(state: PCBuildState, key: SimplePartKey): boolean
 }
 
 type InstalledPartLike = PCBuildState["parts"][number];
-/** True when a lead still joins this part to another (both ends in, or a fixed lead of this part plugged into another). */
-const hasLeadIn = (state: PCBuildState, instanceId: string) => state.cables.some((c) => {
+/**
+ * True when a lead joins a part of `inside` to a part outside it: both ends in, or a fixed lead of one plugged into
+ * the other. A lead wholly within the set (a cooler's fan lead on the board that carries the cooler) is not crossing.
+ */
+const leadCrosses = (state: PCBuildState, inside: ReadonlySet<string>) => state.cables.some((c) => {
   const joined = new Set(Object.values(c.ends).flatMap((e) => (e?.kind === "part" ? [e.instanceId] : [])));
   const fixed = pcCatalog.entries.find((e) => e.id === c.catalogId)?.cables.find((x) => x.id === c.cableSpecId)?.attachment === "captive";
   if (fixed && c.ownerInstanceId) joined.add(c.ownerInstanceId);
-  return joined.has(instanceId) && joined.size > 1;
+  const parts = [...joined];
+  return parts.some((id) => inside.has(id)) && parts.some((id) => !inside.has(id));
 });
 
 /**
@@ -536,7 +540,7 @@ export function simpleLiftBlock(state: PCBuildState, key: SimplePartKey): Simple
   const carried = board ? state.parts.filter((p) => p.attachments.some((a) => a.target.hostInstanceId === spec.id)) : [];
   const screwedToCase = (p: InstalledPartLike) => p.attachments.some((a) => a.role === "radiator" || (a.target.hostInstanceId === spec.id && a.fastenersSecured > 0 && pcCatalog.entries.find((e) => e.id === p.catalogId)?.category === "gpu"));
   if (board && state.parts.some(screwedToCase)) return "unscrewFirst";
-  if ([spec.id, ...carried.map((p) => p.instanceId)].some((id) => hasLeadIn(state, id))) return "unplugFirst";
+  if (leadCrosses(state, new Set([spec.id, ...carried.map((p) => p.instanceId)]))) return "unplugFirst";
   return null;
 }
 
@@ -733,26 +737,54 @@ export const simpleRequiredScrews = (state: PCBuildState, key: SimplePartKey): n
   return pcCatalog.entries.find((e) => e.id === host?.catalogId)?.mountPoints.find((m) => m.id === at?.target.mountPointId)?.fastener?.count ?? partSpec(key).screws;
 };
 
-/** Puts the liquid cooler's radiator in the case, moving the case's own fans to the top to make room (Stage 9 handles fans on their own). */
-export function placeRadiator(state: PCBuildState, key: SimplePartKey): Engine {
+/** The fan places a liquid cooler's radiator covers, and the instances sitting in them now. */
+function radiatorCover(state: PCBuildState, key: SimplePartKey): { fans: string[]; supplied: string[] } {
+  const radiator = partSpec(key).radiator;
+  const place = pcCatalog.entries.find((e) => e.id === state.parts.find((p) => p.instanceId === radiator?.host)?.catalogId)?.mountPoints.find((m) => m.id === radiator?.mount);
+  const covered = new Set(place?.kind === "radiator_mount" ? (place.blocks ?? []) : []);
+  const fans = state.parts.filter((p) => p.attachments.some((a) => a.target.hostInstanceId === radiator?.host && covered.has(a.target.mountPointId))).map((p) => p.instanceId);
+  const own = new Set(radiator?.moveFans.map(([fan]) => fan));
+  return { fans, supplied: fans.filter((id) => own.has(id)) };
+}
+/** Fans still in the radiator's way: the case's own (which one explicit step can move) and those the learner fitted. */
+export const simpleRadiatorCover = (state: PCBuildState, key: SimplePartKey) => radiatorCover(state, key);
+
+/** The steps that move one case fan to its place for a radiator: out, the airflow it needs there, in, home, screwed. */
+const moveFanActions = (state: PCBuildState, radiator: NonNullable<PartSpec["radiator"]>, only?: ReadonlySet<string>): PCAction[] =>
+  radiator.moveFans.flatMap(([fan, place]): PCAction[] => (state.parts.find((p) => p.instanceId === fan)?.attachments.length && (!only || only.has(fan)) ? [
+    { type: "unmount_part", instanceId: fan },
+    { type: "set_prep", instanceId: fan, prep: "airflow", value: airflowFor(radiatorLocation(state, radiator.host, place)) },
+    { type: "mount_part", instanceId: fan, target: { hostInstanceId: radiator.host, mountPointId: place } },
+    { type: "set_seating", instanceId: fan, seating: "seated" },
+    { type: "set_fasteners", instanceId: fan, secured: FAN_SCREWS },
+  ] : []));
+
+/**
+ * The learner's own step before a radiator: the case's own fans that cover its places move to the top, as exhaust
+ * (`fans:<key>` in the saved steps). A fan the learner fitted is never moved: it has to be taken out by hand.
+ */
+export function clearRadiatorFans(state: PCBuildState, key: SimplePartKey): Engine {
+  const radiator = partSpec(key).radiator;
+  const cover = radiatorCover(state, key);
+  if (!radiator || cover.supplied.length === 0) return { ok: false, reason: "cannotFit" };
+  try { return { ok: true, state: run(state, moveFanActions(state, radiator, new Set(cover.supplied))) }; } catch { return { ok: false, reason: "cannotFit" }; }
+}
+
+/**
+ * Puts the liquid cooler's radiator in the case. Fans in its way are refused (`fanInTheWay`): the learner clears them
+ * (`clearRadiatorFans`, or taking their own fan out). Only replaying an old save (`migrate`, from before that step
+ * existed) moves the case's own fans as part of this step.
+ */
+export function placeRadiator(state: PCBuildState, key: SimplePartKey, migrate = false): Engine {
   const spec = partSpec(key);
   const radiator = spec.radiator;
   if (!radiator) return { ok: false, reason: "cannotFit" };
   if (state.parts.find((p) => p.instanceId === spec.id)?.attachments.some((a) => a.role === "radiator")) return { ok: false, reason: "alreadyIn" };
-  // A fan the learner fitted where the radiator goes is never moved for them: take it out first.
-  const covered = pcCatalog.entries.find((e) => e.id === state.parts.find((p) => p.instanceId === radiator.host)?.catalogId)?.mountPoints.find((m) => m.id === radiator.mount);
-  const moving = new Set(radiator.moveFans.map(([fan]) => fan));
-  const inTheWay = state.parts.some((p) => !moving.has(p.instanceId) && p.attachments.some((a) => a.target.hostInstanceId === radiator.host && covered?.kind === "radiator_mount" && (covered.blocks ?? []).includes(a.target.mountPointId)));
-  if (inTheWay) return { ok: false, reason: "fanInTheWay" };
+  const cover = radiatorCover(state, key);
+  if (migrate ? cover.fans.length > cover.supplied.length : cover.fans.length > 0) return { ok: false, reason: "fanInTheWay" };
   try {
     return { ok: true, state: run(state, [
-      ...radiator.moveFans.flatMap(([fan, place]): PCAction[] => (state.parts.find((p) => p.instanceId === fan)?.attachments.length ? [
-        { type: "unmount_part", instanceId: fan },
-        { type: "set_prep", instanceId: fan, prep: "airflow", value: airflowFor(radiatorLocation(state, radiator.host, place)) },
-        { type: "mount_part", instanceId: fan, target: { hostInstanceId: radiator.host, mountPointId: place } },
-        { type: "set_seating", instanceId: fan, seating: "seated" },
-        { type: "set_fasteners", instanceId: fan, secured: FAN_SCREWS },
-      ] : [])),
+      ...(migrate ? moveFanActions(state, radiator, new Set(cover.supplied)) : []),
       { type: "mount_part", instanceId: spec.id, role: "radiator", target: { hostInstanceId: radiator.host, mountPointId: radiator.mount } },
       { type: "set_seating", instanceId: spec.id, role: "radiator", seating: "seated" },
     ]) };
@@ -1136,7 +1168,8 @@ export function applySimpleStep(state: PCBuildState, step: SimpleStep): PCBuildS
     : kind === "screw" ? screwSimplePart(state, rest.slice(0, rest.lastIndexOf(":")))
     : kind === "mech" ? setSimpleMechanism(state, rest.slice(0, rest.lastIndexOf(":")), rest.slice(rest.lastIndexOf(":") + 1) as "open" | "closed")
     : kind === "hw" ? (() => { const [who, hwKey, value] = rest.split(":"); return setSimpleHardware(state, who!, hwKey!, value ?? ""); })()
-    : kind === "rad" ? placeRadiator(state, rest)
+    : kind === "rad" ? placeRadiator(state, rest, true)
+    : kind === "fans" ? clearRadiatorFans(state, rest)
     : kind === "radscrew" ? (() => { const i = rest.lastIndexOf(":"); return setRadiatorScrews(state, rest.slice(0, i), Number(rest.slice(i + 1))); })()
     : null;
   if (!result?.ok) throw new Error(`Invalid simple step ${step}`);
@@ -1250,7 +1283,7 @@ const isStep = (step: unknown): step is SimpleStep => {
   const rest = step.slice(colon + 1);
   if (kind === "cable") return isCableKey(rest);
   if (kind === "lower") return isPartKey(rest) || Boolean(loweredPose(step) && isPartKey((rest as string).split(":")[0]));
-  if (kind === "part" || kind === "seat" || kind === "fasten" || kind === "unfasten" || kind === "unscrew" || kind === "rad") return isPartKey(rest);
+  if (kind === "part" || kind === "seat" || kind === "fasten" || kind === "unfasten" || kind === "unscrew" || kind === "rad" || kind === "fans") return isPartKey(rest);
   if (kind === "place") { const [key, position, extra] = rest.split("@"); return isPartKey(key) && extra === undefined && (position === undefined || /^[a-z0-9-]+$/.test(position)); }
   if (kind === "lift") { const base = rest.split(":")[0]; return isPartKey(rest) || (/^[a-z0-9]+:rad$/.test(rest) && isPartKey(base)); }
   if (kind === "hw") { const m = /^([a-z0-9]+):([a-z_]+):([a-z0-9]*)$/.exec(rest); return Boolean(m && isPartKey(m[1])); }

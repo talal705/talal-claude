@@ -7,7 +7,7 @@
 import type { CatalogEntry, PCAction, PCBuildState, PortSpec } from "@ytl/contracts";
 import { pc } from "@ytl/simulation";
 import { pcCatalog, suppliedPartActions } from "./catalog";
-import { applySimpleStep, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, isPositionKey, type SimpleStep, type CableExtraEnd, type CableSpec, type PartSpec, type SimpleModel, type SimplePartKey, type SimpleSnapshot } from "./simple-model";
+import { applySimpleStep, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, type SimpleStep, type CableExtraEnd, type CableSpec, type PartSpec, type SimpleModel, type SimplePartKey, type SimpleSnapshot } from "./simple-model";
 
 /** What the learner is building for. */
 export type BuildPurpose = "study" | "gaming" | "creator";
@@ -334,6 +334,9 @@ export function planModel(build: PlannedBuild): SimpleModel {
   };
 }
 
+/** A SATA drive or a case fan of a plan, read from its own spec (not from whichever model is on the page). */
+const isPositionSpec = (p: PartSpec) => /^fan\d*$/.test(p.key) || (/^storage\d*$/.test(p.key) && !/^m2-\d+$/.test(p.mount));
+
 /**
  * Progress of `snapshot` (made under `from`) carried over to the model `to` after parts were
  * replaced. Only what the change affects is undone: the replaced parts, the parts that sat on a
@@ -352,7 +355,7 @@ export function rebaseProgress(snapshot: { placed: string[]; connected: string[]
   for (const [key, p] of fromPart) {
     const q = toPart.get(key);
     // A bay or fan place is the learner's choice, so the plan's suggested one moving does not undo the part's steps.
-    if (!q || q.catalogId !== p.catalogId || (q.mount !== p.mount && !isPositionKey(key)) || hostKey(toKeys, q.host) !== hostKey(fromKeys, p.host)) changed.add(key);
+    if (!q || q.catalogId !== p.catalogId || (q.mount !== p.mount && !(isPositionSpec(p) && isPositionSpec(q))) || hostKey(toKeys, q.host) !== hostKey(fromKeys, p.host)) changed.add(key);
   }
   const fromCase = from.createActions().find((a) => a.type === "add_part");
   const toCase = to.createActions().find((a) => a.type === "add_part");

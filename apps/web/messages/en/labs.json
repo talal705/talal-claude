@@ -1083,7 +1083,8 @@
         "cpuFree": "The frame is off, so the CPU can be lifted out now. Put the original socket frame back only to close its plate and lever again.",
         "ilmBack": "The original socket frame is back. Close the plate and lock the lever over the CPU, or lift the CPU out.",
         "done": "The cooler is on and connected.",
-        "notWired": "The cooler is mounted. Its cables come later, in the wiring stage."
+        "notWired": "The cooler is mounted. Its cables come later, in the wiring stage.",
+        "clearFans": "Before the radiator goes in, move the case's own fans out of its way: they go to the top as exhaust fans. A fan you fitted yourself is never moved; take it out first."
       },
       "resume": {
         "ramOver": "You're holding the stick over {slot}.",

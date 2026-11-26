@@ -132,7 +132,8 @@ describe("Liquid Freezer III 280 (the practice build's liquid cooler): block, ra
     const boarded = [...["ram", "ram2", "storage"]].reduce((s, k) => must(installSimplePart(s, k)), early);
     const inCase = must(installSimplePart(boarded, "motherboard"));
     const { steps, state } = walk(inCase, "aio");
-    expect(kinds(steps)[0]).toBe("radiator");
+    // The case's own front fan covers the radiator's places: moving it is the learner's own step first.
+    expect(kinds(steps).slice(0, 2)).toEqual(["clearFans", "radiator"]);
     expect(kinds(steps).filter((k) => k === "radiatorScrew").length).toBe(8);
     expect(simplePartInstalled(state, "aio")).toBe(true);
     expect(simpleCoolerProgress(state, "aio")).toMatchObject({ mechanicallyComplete: true, connected: false });

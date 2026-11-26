@@ -5,7 +5,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { pcCatalog } from "./catalog";
 import {
-  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, applySimpleStep, createSimpleBuild, liftSimplePart, partSpec, placeRadiator, placeSimplePart, prepSimplePart, roleOf, seatedCpuKey,
+  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, applySimpleStep, createSimpleBuild, clearRadiatorFans, liftSimplePart, partSpec, placeRadiator, simpleRadiatorCover, placeSimplePart, prepSimplePart, roleOf, seatedCpuKey,
   setRadiatorScrews, setSimpleHardware, setSimpleMechanism, simpleCableConnected, simpleCoolerMounting, simplePartInstalled, simpleRequiredScrews, simpleRetention,
   type SimpleBlock, type SimplePartKey, type SimpleStep,
 } from "./simple-model";
@@ -22,7 +22,7 @@ export type CoolerStep =
   | { kind: "position"; id: string } | { kind: "ring" } | { kind: "pin"; index: number; value: string }
   | { kind: "place" }
   | { kind: "screw"; index: number; to: ScrewMove; value: string }
-  | { kind: "vrmFan" } | { kind: "radiator" } | { kind: "radiatorScrew"; count: number }
+  | { kind: "vrmFan" } | { kind: "clearFans" } | { kind: "radiator" } | { kind: "radiatorScrew"; count: number }
   | { kind: "radiatorUnscrew"; count: number } | { kind: "liftRadiator" } | { kind: "liftBody" }
   | null;
 
@@ -102,7 +102,12 @@ export function nextCoolerStep(state: PCBuildState, key: SimplePartKey): CoolerS
   if (partSpec(key).radiator) {
     if (m.kit.some((k) => k.id === "vrm-fan-module") && hw.vrm_fan !== "attached") return { kind: "vrmFan" };
     const radiator = radiatorOf(state, key);
-    if (!radiator) return boardInCase(state) ? { kind: "radiator" } : { kind: "boardFirst" };
+    if (!radiator) {
+      if (!boardInCase(state)) return { kind: "boardFirst" };
+      // The case's own fans in the radiator's way move by the learner's own step; a fan they fitted must be taken out by hand.
+      const cover = simpleRadiatorCover(state, key);
+      return { kind: cover.supplied.length && cover.supplied.length === cover.fans.length ? "clearFans" : "radiator" };
+    }
     if (radiator.fastenersSecured < partSpec(key).radiator!.screws) return { kind: "radiatorScrew", count: radiator.fastenersSecured + 1 };
   }
   return null;
@@ -153,11 +158,12 @@ export function nextMountingRemoval(state: PCBuildState): MountingStep {
  * Whether the learner is taking the board's mounting hardware off, read from the last saved step on it: a frame
  * screw loosened or out (fewer turns than the screw state before it), the frame lifted off, or the original ILM
  * put back. Fitting steps (a screw engaged or tightened, the frame placed, the ILM removed) mean they are fitting.
+ * `baseScrews`: the frame screws the build started from (a finished fault build starts with them tight).
  * The engine states alone cannot say (a loosened screw and an engaged one are both "1"); the saved steps can.
  */
-export function mountingDismantling(history: readonly SimpleStep[]): boolean {
+export function mountingDismantling(history: readonly SimpleStep[], baseScrews = "0000"): boolean {
   const turns = (v: string) => [...v].reduce((n, c) => n + Number(c), 0);
-  let screws = "0000";
+  let screws = baseScrews;
   let removing = false;
   for (const h of history) {
     const [, part, field, value = ""] = h.split(":");
@@ -167,6 +173,9 @@ export function mountingDismantling(history: readonly SimpleStep[]): boolean {
   }
   return removing;
 }
+
+/** The frame screws of the board as the build has them now ("0000" while the frame is not fitted): the baseline `mountingDismantling` compares against. */
+export const boardFrameScrews = (state: PCBuildState): string => state.parts.find((p) => p.instanceId === partSpec("motherboard").id)?.hardware?.frame_screws ?? "0000";
 
 /** Takes one mounting step: one engine `set_hardware` change on the board, with the engine's own guards. */
 export function applyMountingStep(state: PCBuildState, step: MountingStep): Result {
@@ -211,6 +220,7 @@ export function applyCoolerStep(state: PCBuildState, key: SimplePartKey, step: C
     case "place": return placeSimplePart(state, key);
     case "screw": return setSimpleHardware(state, key, "screws", step.value);
     case "vrmFan": return setSimpleHardware(state, key, "vrm_fan", "attached");
+    case "clearFans": return clearRadiatorFans(state, key);
     case "radiator": return placeRadiator(state, key);
     case "radiatorScrew": case "radiatorUnscrew": return setRadiatorScrews(state, key, step.count);
     case "liftRadiator": return liftSimplePart(state, key, "radiator");
@@ -238,6 +248,7 @@ export function coolerStepHistory(state: PCBuildState, key: SimplePartKey, step:
     case "place": return `place:${key}`;
     case "screw": return `hw:${key}:screws:${step.value}`;
     case "vrmFan": return `hw:${key}:vrm_fan:attached`;
+    case "clearFans": return `fans:${key}`;
     case "radiator": return `rad:${key}`;
     case "radiatorScrew": case "radiatorUnscrew": return `radscrew:${key}:${step.count}`;
     case "liftRadiator": return `lift:${key}:rad`;

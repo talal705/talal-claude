@@ -9,7 +9,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { nextAction, type Selection } from "./companion";
 import {
-  ALL_SIMPLE_CABLES, cableSpec, isRamKey, partSpec, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
+  ALL_SIMPLE_CABLES, cableSpec, isPositionKey, isRamKey, partSpec, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
   simplePartInstalled, simplePrerequisites, simpleRadiatorTarget, simpleSlotFilled, simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf,
   type SimpleCableKey, type SimplePartKey,
 } from "./simple-model";
@@ -41,11 +41,14 @@ const partId = (key: SimplePartKey) => partSpec(key).id;
 const portTarget = (key: SimpleCableKey): GuideTarget => ({ kind: "port", hostInstanceId: cableSpec(key).instanceId, placeId: cableSpec(key).portId });
 
 /** The places a part goes: its own, and a liquid cooler's radiator place in the case. */
-function placesOf(state: PCBuildState, key: SimplePartKey): GuideTarget[] {
+function placesOf(state: PCBuildState, key: SimplePartKey, chosen: string | null): GuideTarget[] {
   // A memory module goes wherever the learner brings it: until it is in a slot, the place to look at is
   // the module itself (the page points at the slot it is held over). No default slot is implied.
   if (isRamKey(key) && !state.parts.find((p) => p.instanceId === partId(key))?.attachments.length) return [{ kind: "part", instanceId: partId(key) }];
-  const target = simpleTarget(state, key);
+  // A bay or fan place is the learner's choice: nothing is implied until one is chosen, then the chosen place is pointed at.
+  const unplaced = !state.parts.find((p) => p.instanceId === partId(key))?.attachments.length;
+  if (isPositionKey(key) && unplaced && !chosen) return [{ kind: "part", instanceId: partId(key) }];
+  const target = simpleTarget(state, key, isPositionKey(key) && unplaced ? chosen ?? undefined : undefined);
   const radiator = simpleRadiatorTarget(key);
   return [
     { kind: "mount", hostInstanceId: target.hostInstanceId, placeId: target.mountPointId },
@@ -63,7 +66,7 @@ function missingBefore(state: PCBuildState, key: SimplePartKey): SimplePartKey |
   return null;
 }
 
-function forPart(state: PCBuildState, key: SimplePartKey): GuideFocus {
+function forPart(state: PCBuildState, key: SimplePartKey, chosen: string | null = null): GuideFocus {
   if (simplePartInstalled(state, key)) return { targets: [{ kind: "part", instanceId: partId(key) }], reason: "place", subject: { part: key } };
   // The other CPU or cooler is in: point at it, the one to swap (or to unplug first).
   const rival = simpleSlotPart(state, slotOf(key));
@@ -84,7 +87,7 @@ function forPart(state: PCBuildState, key: SimplePartKey): GuideFocus {
     const first = missingBefore(state, key);
     if (first) return { targets: [{ kind: "part", instanceId: partId(first) }], reason: "prerequisite", subject: { part: first } };
   }
-  return { targets: placesOf(state, key), reason: "place", subject: { part: key } };
+  return { targets: placesOf(state, key, chosen), reason: "place", subject: { part: key } };
 }
 
 function forCable(state: PCBuildState, key: SimpleCableKey): GuideFocus {
@@ -103,9 +106,10 @@ function forCable(state: PCBuildState, key: SimpleCableKey): GuideFocus {
  * Where the robot goes now. `null` keeps it parked out of sight: nothing in hand and the learner
  * has not asked for help (guidance only starts once they select something or ask).
  */
-export function guideFocus(state: PCBuildState, selection: Selection, powered: boolean, asked: boolean): GuideFocus | null {
+/** `chosen`: the bay or fan place the learner picked for the selected part, if any. */
+export function guideFocus(state: PCBuildState, selection: Selection, powered: boolean, asked: boolean, chosen: string | null = null): GuideFocus | null {
   if (powered && simpleAssemblyComplete(state)) return { targets: [{ kind: "powerButton" }], reason: "celebrate" };
-  if (selection?.kind === "part" && !powered) return forPart(state, selection.key);
+  if (selection?.kind === "part" && !powered) return forPart(state, selection.key, chosen);
   if (selection?.kind === "cable" && !powered) return forCable(state, selection.key);
   if (!asked) return null;
   const next = nextAction(state, powered);

@@ -30,8 +30,10 @@ const driveBays = (count: number, sizes: ("2.5_inch" | "3.5_inch")[], prefix: st
   }));
 
 /**
- * The front fan bank takes three 120 mm fans OR two 140 mm fans, never a mix (Corsair's 4000D Airflow quick-start
- * guide, Fractal's North product page): the third place is a 120 mm one, and the bank's capacity is checked by size.
+ * Documented front capacity: three 120 mm fans OR two 140 mm fans (Corsair's 4000D Airflow quick-start guide,
+ * Fractal's North product page). The lab models exactly those two layouts, so the third place is a 120 mm one and
+ * the bank holds one size at a time. Neither source says a mixed row is physically impossible; it is simply a layout
+ * this schematic does not model (an approximation, not a manufacturer prohibition).
  */
 const frontBank = () => fanMounts("front", 3, [120, 140], "Front", "أمامية", { id: "front", capacityBySizeMm: { "120": 3, "140": 2 } })
   .map((m, i) => (i === 2 && m.kind === "fan_mount" ? { ...m, sizesMm: [120] } : m));
@@ -91,7 +93,7 @@ export const cases: CaseEntry[] = [
     teachingNotes: [
       FASTENER_NOTE,
       "The two fitted fans are separate parts (catalog entry corsair-airguide-120-4000d) that arrive mounted, one at the front and one at the rear (Corsair's 4000D AIRFLOW comparison page; the RGB and FRAME variants differ); they can be taken out like any fan.",
-      "The front bank takes three 120 mm fans or two 140 mm fans, never a mix (Corsair 4000D Airflow quick-start guide). A front radiator blocks the whole bank in this model.",
+      "Documented front capacity: three 120 mm fans or two 140 mm fans (Corsair 4000D Airflow quick-start guide); this model offers those two layouts and does not model a mixed row. A front radiator blocks the whole bank in this model.",
     ],
     dimensions: { lengthMm: 453, widthMm: 230, heightMm: 466 },
     formFactor: "Mid-Tower",
@@ -161,7 +163,7 @@ export const cases: CaseEntry[] = [
     ],
     teachingNotes: [
       FASTENER_NOTE,
-      "The two fitted 140 mm front fans are separate parts (catalog entry fractal-aspect-14-pwm-north) that arrive mounted at the front; they can be taken out like any fan. The front bank takes three 120 mm or two 140 mm fans, never a mix (Fractal North product page and manual).",
+      "The two fitted 140 mm front fans are separate parts (catalog entry fractal-aspect-14-pwm-north) that arrive mounted at the front; they can be taken out like any fan. Documented front capacity: three 120 mm or two 140 mm fans (Fractal North product page and manual); a mixed row is not modelled.",
       "The page states the GPU limit drops to 300 mm with a 360 mm front radiator; that interaction is not modelled.",
     ],
     dimensions: { lengthMm: 447, widthMm: 215, heightMm: 469 },

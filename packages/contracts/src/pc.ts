@@ -330,7 +330,7 @@ export type MountPointSpec =
       kind: "fan_mount";
       location: CaseLocation;
       sizesMm: number[];
-      /** Places that share one bank of the case (e.g. the front): one fan size at a time, up to the count for that size. */
+      /** Places that share one bank of the case (e.g. the front). The lab models the documented capacities only: one fan size at a time, up to the count for that size (mixed rows are an unmodelled layout, not a stated prohibition). */
       bank?: { id: string; capacityBySizeMm: Record<string, number> };
     })
   | (MountPointBase & {
