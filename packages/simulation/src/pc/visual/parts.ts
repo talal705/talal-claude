@@ -109,7 +109,9 @@ export function caseGeometry(entry: CaseEntry, v: string): PartGeometry {
     const zc = trayZ + (W - trayZ) / 2;
     if (location === "front") return (i) => ({ at: [L - 22, feet + 70 + i * 122, zc], quat: TURN_Y, axis: "x", insert: [1, 0, 0] });
     if (location === "top") return (i) => ({ at: [L * 0.35 + i * 124, H - 16, zc], quat: FACE_UP, axis: "y", insert: [0, 1, 0] });
-    if (location === "rear") return () => ({ at: [14, H - 0.2 * H, zc], quat: TURN_Y, axis: "x", insert: [-1, 0, 0] });
+    // The board's rear I/O stack reaches about 48 mm off the tray (standoffs, board, 34 mm of connectors in the
+    // schematic), so the rear fan's frame starts beyond it, beside the I/O opening, not in front of its ports.
+    if (location === "rear") return () => ({ at: [14, H - 0.2 * H, Math.max(zc, trayZ + 48 + 60)], quat: TURN_Y, axis: "x", insert: [-1, 0, 0] });
     if (location === "side") return (i) => ({ at: [L * 0.5 + i * 122, H * 0.6, trayZ + 16], quat: IDENTITY, axis: "z", insert: [0, 0, -1] });
     return undefined;
   };

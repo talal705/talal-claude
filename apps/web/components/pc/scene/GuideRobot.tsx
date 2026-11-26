@@ -52,7 +52,11 @@ export function targetPoint(target: GuideTarget, placed: ReadonlyMap<string, Pla
   if (!host || !own) return null;
   if (target.kind === "solid") {
     const solid = own.solids.find((x) => x.id === target.solidId);
-    return solid ? compose(host.frame, { at: [solid.at[0], solid.at[1] + (solid.size?.[1] ?? 0) / 2 + 3, solid.at[2]], quat: [0, 0, 0, 1] }).at : null;
+    if (!solid) return null;
+    const height = solid.size?.[1] ?? 0;
+    // One plate of a stack: its own band from the top (the stack's top, otherwise).
+    const y = target.slice ? solid.at[1] + height / 2 - (height / (solid.count ?? 1)) * (target.slice.index + 0.5) : solid.at[1] + height / 2 + 3;
+    return compose(host.frame, { at: [solid.at[0], y, solid.at[2]], quat: [0, 0, 0, 1] }).at;
   }
   if (target.kind === "socket") {
     const layout = socketLayout(own, target.placeId, target.socket);

@@ -36,4 +36,9 @@ describe("expansion-slot covers in the scene", () => {
     expect(parts.map((s) => s.count)).toEqual([1, 5]);
     expect(bottom(parts[0]!)).toBeGreaterThan(top(parts[1]!));
   });
+
+  it("draws an old raw build's single slot-covers state as both covers out, and a cover's own state wins over it", () => {
+    expect(plates({ "slot-covers": "open" })).toBe(5);
+    expect(plates({ "slot-covers": "open", "slot-covers:1": "closed" })).toBe(6);
+  });
 });

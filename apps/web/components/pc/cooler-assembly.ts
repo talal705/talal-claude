@@ -5,7 +5,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { pcCatalog } from "./catalog";
 import {
-  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, applySimpleStep, createSimpleBuild, clearRadiatorFans, liftSimplePart, partSpec, placeRadiator, simpleRadiatorCover, placeSimplePart, prepSimplePart, roleOf, seatedCpuKey,
+  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, applySimpleStep, createSimpleBuild, clearRadiatorFans, liftSimplePart, partSpec, placeRadiator, simpleFansInTheWay, placeSimplePart, prepSimplePart, roleOf, seatedCpuKey,
   setRadiatorScrews, setSimpleHardware, setSimpleMechanism, simpleCableConnected, simpleCoolerMounting, simplePartInstalled, simpleRequiredScrews, simpleRetention,
   type SimpleBlock, type SimplePartKey, type SimpleStep,
 } from "./simple-model";
@@ -22,7 +22,7 @@ export type CoolerStep =
   | { kind: "position"; id: string } | { kind: "ring" } | { kind: "pin"; index: number; value: string }
   | { kind: "place" }
   | { kind: "screw"; index: number; to: ScrewMove; value: string }
-  | { kind: "vrmFan" } | { kind: "clearFans" } | { kind: "radiator" } | { kind: "radiatorScrew"; count: number }
+  | { kind: "vrmFan" } | { kind: "clearFans"; fan: SimplePartKey } | { kind: "radiator" } | { kind: "radiatorScrew"; count: number }
   | { kind: "radiatorUnscrew"; count: number } | { kind: "liftRadiator" } | { kind: "liftBody" }
   | null;
 
@@ -104,9 +104,9 @@ export function nextCoolerStep(state: PCBuildState, key: SimplePartKey): CoolerS
     const radiator = radiatorOf(state, key);
     if (!radiator) {
       if (!boardInCase(state)) return { kind: "boardFirst" };
-      // The case's own fans in the radiator's way move by the learner's own step; a fan they fitted must be taken out by hand.
-      const cover = simpleRadiatorCover(state, key);
-      return { kind: cover.supplied.length && cover.supplied.length === cover.fans.length ? "clearFans" : "radiator" };
+      // Any fan in the radiator's way (the case's own or the learner's) is taken out by its own steps, never moved for them.
+      const fan = simpleFansInTheWay(state, key)[0];
+      return fan ? { kind: "clearFans", fan } : { kind: "radiator" };
     }
     if (radiator.fastenersSecured < partSpec(key).radiator!.screws) return { kind: "radiatorScrew", count: radiator.fastenersSecured + 1 };
   }
@@ -220,7 +220,7 @@ export function applyCoolerStep(state: PCBuildState, key: SimplePartKey, step: C
     case "place": return placeSimplePart(state, key);
     case "screw": return setSimpleHardware(state, key, "screws", step.value);
     case "vrmFan": return setSimpleHardware(state, key, "vrm_fan", "attached");
-    case "clearFans": return clearRadiatorFans(state, key);
+    case "clearFans": return { ok: false, reason: "fanInTheWay" };
     case "radiator": return placeRadiator(state, key);
     case "radiatorScrew": case "radiatorUnscrew": return setRadiatorScrews(state, key, step.count);
     case "liftRadiator": return liftSimplePart(state, key, "radiator");
@@ -248,7 +248,6 @@ export function coolerStepHistory(state: PCBuildState, key: SimplePartKey, step:
     case "place": return `place:${key}`;
     case "screw": return `hw:${key}:screws:${step.value}`;
     case "vrmFan": return `hw:${key}:vrm_fan:attached`;
-    case "clearFans": return `fans:${key}`;
     case "radiator": return `rad:${key}`;
     case "radiatorScrew": case "radiatorUnscrew": return `radscrew:${key}:${step.count}`;
     case "liftRadiator": return `lift:${key}:rad`;
@@ -289,7 +288,8 @@ export function installCoolerWhole(state: PCBuildState, key: SimplePartKey): Res
     const step = nextCoolerStep(s, key);
     if (!step) return { ok: true, state: s };
     if (step.kind === "cpuFirst" || step.kind === "boardFirst") return { ok: false, reason: step.kind };
-    const r = applyCoolerStep(s, key, step);
+    // Whole-fit (old saves, tests) is the one place the case's own fans are moved for the radiator, as `fans:` always did.
+    const r = step.kind === "clearFans" ? clearRadiatorFans(s, key) : applyCoolerStep(s, key, step);
     if (!r.ok) return r;
     s = r.state;
   }

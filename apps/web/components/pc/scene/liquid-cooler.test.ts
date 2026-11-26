@@ -87,8 +87,8 @@ describe("the 280 mm liquid cooler in the 3D view", () => {
     expect(state.parts.find((p) => p.instanceId === "fan-10")!.attachments[0]!.target.mountPointId).toBe("fan-rear-1");
   });
 
-  it("touches nothing: radiator, block, the moved fan and the rest of the build stay clear of each other", () => {
-    const own = (b: Box) => b.id.startsWith("cooling-13/") || b.id.startsWith("fan-9/");
+  it("touches nothing: radiator, block, both case fans (the rear one beside the board's I/O stack) and the rest of the build stay clear of each other", () => {
+    const own = (b: Box) => b.id.startsWith("cooling-13/") || b.id.startsWith("fan-9/") || b.id.startsWith("fan-10/");
     const clashes: string[] = [];
     for (const a of boxes.filter(own)) {
       for (const b of boxes.filter((x) => !x.id.startsWith(a.id.split("/")[0]!))) {

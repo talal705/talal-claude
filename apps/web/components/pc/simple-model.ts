@@ -4,9 +4,9 @@
 // kept so every saved build replays) or a build the learner planned (`plan-model.ts`). The exported
 // lists below are live bindings that `activateSimpleModel` replaces, so every reader sees the build
 // that is on the page.
-import { slotCoverIds, type PCAction, type PCBuildState, type PrepKind, type StartupResult } from "@ytl/contracts";
+import { slotCoverIds, slotCoverOpen, type PCAction, type PCBuildState, type PrepKind, type StartupResult } from "@ytl/contracts";
 import { pc } from "@ytl/simulation";
-import { pcCatalog, suppliedPartActions } from "./catalog";
+import { pcCatalog, SUPPLIED_PARTS, suppliedPartActions } from "./catalog";
 import { installCoolerWhole, migrateCoolerSteps } from "./cooler-assembly";
 
 const RAM_ID = "corsair-vengeance-rgb-ddr5-6000-32gb-kit";
@@ -61,9 +61,26 @@ export interface PartSpec {
   key: SimplePartKey; id: string; catalogId: string; host: string; mount: string; screws: number; slot?: SimpleSlot;
   /** A liquid cooler's radiator: where it goes, and the case fans that make room for it (instance → new fan place). */
   radiator?: { host: string; mount: string; screws: number; moveFans: readonly (readonly [string, string])[] };
+  /** One of the case's own fans: fitted from the start, optional, and worked on like any other case fan. */
+  supplied?: true;
 }
 /** Screws of a case fan place. */
 const FAN_SCREWS = 4;
+
+/**
+ * The case's own fans as parts the learner can select (`sfan1`, `sfan2`, in the order the case lists them): they keep
+ * their instance IDs and start fitted, and are not required, so taking one out never stops the PC. They are listed
+ * beside the other parts and take the same steps as a fan the learner chose.
+ */
+export function suppliedFanSpecs(caseCatalogId: string, instanceIds: readonly string[]): PartSpec[] {
+  const caseEntry = pcCatalog.entries.find((e) => e.id === caseCatalogId);
+  return instanceIds.flatMap((id, i): PartSpec[] => {
+    const item = SUPPLIED_PARTS[caseCatalogId]?.[i];
+    if (!item || pcCatalog.entries.find((e) => e.id === item.catalogId)?.category !== "fan") return [];
+    const screws = caseEntry?.mountPoints.find((m) => m.id === item.mountPointId)?.fastener?.count ?? FAN_SCREWS;
+    return [{ key: `sfan${i + 1}`, id, catalogId: item.catalogId, host: "case-1", mount: item.mountPointId, screws, supplied: true }];
+  });
+}
 
 /** The supplied PSU has captive leads. Each step connects its free device end. */
 const LEGACY_CABLES = [
@@ -72,8 +89,8 @@ const LEGACY_CABLES = [
   { key: "gpuPower", id: "psu-8.pcie", endId: "device-1", instanceId: "gpu-7", portId: "power-8pin", requires: ["psu", "gpu"], essential: true },
   { key: "cpuFan", id: "cooling-6.fan", endId: "plug", instanceId: "motherboard-2", portId: "cpu-fan", requires: ["cpu", "cooler"], essential: true },
   { key: "powerSwitch", id: "case-1.power-switch", endId: "plug", instanceId: "motherboard-2", portId: "panel-pwrsw", requires: ["motherboard"], essential: true },
-  { key: "caseFan1", id: "fan-9.fan", endId: "plug", instanceId: "motherboard-2", portId: "cha-fan-1", requires: ["motherboard"], essential: false },
-  { key: "caseFan2", id: "fan-10.fan", endId: "plug", instanceId: "motherboard-2", portId: "cha-fan-2", requires: ["motherboard"], essential: false },
+  { key: "caseFan1", id: "fan-9.fan", endId: "plug", instanceId: "motherboard-2", portId: "cha-fan-1", requires: ["motherboard", "sfan1"], essential: false },
+  { key: "caseFan2", id: "fan-10.fan", endId: "plug", instanceId: "motherboard-2", portId: "cha-fan-2", requires: ["motherboard", "sfan2"], essential: false },
 ] as const;
 
 /** The liquid cooler's two leads, in place of the air cooler's fan lead when it is the cooler fitted. */
@@ -95,7 +112,7 @@ export interface SimpleModel {
   kind: "legacy" | "plan";
   /** Learner parts that fill the build, one per slot. */
   parts: readonly PartSpec[];
-  /** Other parts on the bench that fill the same slot as one of `parts` (legacy only). */
+  /** Other parts on the bench that are not required: the other choice for a slot (legacy only) and the case's own fans. */
   alternatives: readonly PartSpec[];
   partList: readonly SimplePartKey[];
   swappable: readonly SimplePartKey[];
@@ -125,11 +142,13 @@ const legacyPartOrder = (state: PCBuildState): SimplePartKey[] => {
   return [cpu, "ram", "ram2", "storage", ...(cooler === "aio" ? ["motherboard", "aio"] : ["cooler", "motherboard"]), "gpu", "psu"];
 };
 
+const LEGACY_SUPPLIED_FANS = suppliedFanSpecs("corsair-4000d-airflow-black", ["fan-9", "fan-10"]);
+
 export const LEGACY_MODEL: SimpleModel = {
   kind: "legacy",
   parts: LEGACY_PARTS,
-  alternatives: LEGACY_ALTERNATIVES,
-  partList: ["cpu", "cpu2", "ram", "ram2", "cooler", "aio", "storage", "motherboard", "gpu", "psu"],
+  alternatives: [...LEGACY_ALTERNATIVES, ...LEGACY_SUPPLIED_FANS],
+  partList: ["cpu", "cpu2", "ram", "ram2", "cooler", "aio", "storage", "motherboard", "gpu", "psu", ...LEGACY_SUPPLIED_FANS.map((f) => f.key)],
   swappable: ["cpu", "cpu2", "cooler", "aio"],
   removable: ["cooler", "aio"],
   boardPrep: ["cpu", "ram", "ram2", "storage"],
@@ -208,7 +227,7 @@ export const isPositionKey = (key: SimplePartKey) => roleOf(key) === "fan" || (r
 /** What a key is: `ram2` → ram, `storage3` → storage, `fan1` → fan, `cpu2` → cpu. */
 export const roleOf = (key: SimplePartKey): SimpleRole => {
   const base = key.replace(/\d+$/, "");
-  return (base === "" ? "cpu" : base) as SimpleRole;
+  return (base === "" ? "cpu" : base === "sfan" ? "fan" : base) as SimpleRole;
 };
 const isCoolerKey = (key: SimplePartKey) => slotOf(key) === "cooler";
 
@@ -494,7 +513,7 @@ export function slotCovers(state: PCBuildState): { id: string; open: boolean }[]
   const board = state.parts.find((p) => p.instanceId === active.parts.find((x) => x.key === "motherboard")?.id);
   const casePart = board?.attachments[0] && state.parts.find((p) => p.instanceId === board.attachments[0]!.target.hostInstanceId);
   const covers = casePart && pcCatalog.entries.find((e) => e.id === casePart.catalogId)?.mountPoints.find((m) => m.retention?.kind === "slot_covers")?.retention;
-  return covers ? slotCoverIds(covers).map((id) => ({ id, open: casePart.mechanisms?.[id] === "open" })) : [];
+  return covers ? slotCoverIds(covers).map((id) => ({ id, open: slotCoverOpen(casePart.mechanisms, covers, id) })) : [];
 }
 /** True when the board is in a case with an expansion-slot cover a card's bracket needs still in. */
 export const caseCoversClosed = (state: PCBuildState): boolean => slotCovers(state).some((c) => !c.open);
@@ -597,7 +616,7 @@ export function simplePositions(state: PCBuildState, key: SimplePartKey): Simple
     if (!fits && !(m.kind === (part.category === "storage" ? "drive_bay" : "fan_mount"))) return [];
     const occupant = heldBy(m.id);
     const known = ALL_SIMPLE_PARTS.find((p) => p.id === occupant?.instanceId)?.key;
-    return [{ id: m.id, label: m.label, fits: fits && !covered.has(m.id), occupant: occupant ? (known ?? occupant.instanceId) : null, supplied: Boolean(occupant && !known), radiator: covered.has(m.id) }];
+    return [{ id: m.id, label: m.label, fits: fits && !covered.has(m.id), occupant: occupant ? (known ?? occupant.instanceId) : null, supplied: Boolean(occupant && (!known || partSpec(known).supplied)), radiator: covered.has(m.id) }];
   });
 }
 
@@ -755,8 +774,9 @@ function radiatorCover(state: PCBuildState, key: SimplePartKey): { fans: string[
   const own = new Set(radiator?.moveFans.map(([fan]) => fan));
   return { fans, supplied: fans.filter((id) => own.has(id)) };
 }
-/** Fans still in the radiator's way: the case's own (which one explicit step can move) and those the learner fitted. */
-export const simpleRadiatorCover = (state: PCBuildState, key: SimplePartKey) => radiatorCover(state, key);
+/** The fans (case's own or the learner's) sitting where the radiator goes, as part keys: each is taken out by its own steps. */
+export const simpleFansInTheWay = (state: PCBuildState, key: SimplePartKey): SimplePartKey[] =>
+  radiatorCover(state, key).fans.flatMap((id) => ALL_SIMPLE_PARTS.find((p) => p.id === id)?.key ?? []);
 
 /** The steps that move one case fan to its place for a radiator: out, the airflow it needs there, in, home, screwed. */
 const moveFanActions = (state: PCBuildState, radiator: NonNullable<PartSpec["radiator"]>, only?: ReadonlySet<string>): PCAction[] =>
@@ -769,8 +789,8 @@ const moveFanActions = (state: PCBuildState, radiator: NonNullable<PartSpec["rad
   ] : []));
 
 /**
- * The learner's own step before a radiator: the case's own fans that cover its places move to the top, as exhaust
- * (`fans:<key>` in the saved steps). A fan the learner fitted is never moved: it has to be taken out by hand.
+ * Old saves only (`fans:<key>`, from before the case's fans could be worked on one by one): the case's own fans that
+ * cover the radiator's places move to the top, as exhaust. No control calls this; a fan in the way is taken out by hand.
  */
 export function clearRadiatorFans(state: PCBuildState, key: SimplePartKey): Engine {
   const radiator = partSpec(key).radiator;
@@ -780,9 +800,8 @@ export function clearRadiatorFans(state: PCBuildState, key: SimplePartKey): Engi
 }
 
 /**
- * Puts the liquid cooler's radiator in the case. Fans in its way are refused (`fanInTheWay`): the learner clears them
- * (`clearRadiatorFans`, or taking their own fan out). Only replaying an old save (`migrate`, from before that step
- * existed) moves the case's own fans as part of this step.
+ * Puts the liquid cooler's radiator in the case. Any fan in its way is refused (`fanInTheWay`): the learner takes
+ * it out themself, one step at a time. Only replaying an old save (`migrate`) moves the case's own fans here.
  */
 export function placeRadiator(state: PCBuildState, key: SimplePartKey, migrate = false): Engine {
   const spec = partSpec(key);

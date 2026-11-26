@@ -10,7 +10,7 @@ import { CheckIcon, CrossIcon } from "../icons";
 import { BuildCompanion, type CompanionMessage } from "./BuildCompanion";
 import { pcCatalog } from "./catalog";
 import { askCompanionAi, companionAskRequest, fetchTutorStatus, type AiStatus } from "./companion-ai";
-import { buildContext, companionSay, coolerDoneLine, coolerRemovalLine, coolerStepLine, heldLines, intentOf, m2StepLine, mountingRemovalLine, nextLine, pickupLine, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
+import { buildContext, companionSay, partName, coolerDoneLine, coolerRemovalLine, coolerStepLine, heldLines, intentOf, m2StepLine, mountingRemovalLine, nextLine, pickupLine, topicOf, type CompanionEvent, type CompanionLine, type CompanionSay, type Selection } from "./companion";
 import { aimClick, aimTargets, createStepGate, m2LiftPose, nextHandStep, type HandStep } from "./click-assembly";
 import { focusOn, moveCamera, selectPart } from "./scene/scene-store";
 import { applyCoolerStep, applyMountingStep, boardFrameScrews, coolerStepHistory, mountingDismantling, mountingStepHistory, nextCoolerRemoval, nextCoolerStep, nextMountingRemoval, type CoolerStep, type MountingStep } from "./cooler-assembly";
@@ -105,9 +105,12 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (!planned) return t(`parts.${key}`);
     const n = key.match(/\d+$/)?.[0];
     const e = entryOf(partSpec(key)?.catalogId);
-    return `${t(`roles.${roleOf(key)}`)}${n && roleOf(key) !== "fan" ? ` ${n}` : ""}${e ? ` · ${short ? shortModel(e.model) : e.model}` : ""}`;
+    const supplied = partSpec(key)?.supplied;
+    return `${t(`roles.${roleOf(key)}`)}${n && (roleOf(key) !== "fan" || supplied) ? ` ${n}` : ""}${e ? ` · ${short ? shortModel(e.model) : e.model}` : ""}${supplied ? ` (${t("suppliedTag")})` : ""}`;
   };
   const cableName = (key: SimpleCableKey) => t(`cables.${key}.name`);
+  /** A robot line as plain text (a part named in it is written out as this page names it). */
+  const lineWords = (l: CompanionLine) => t(`companion.${l.key}`, Object.fromEntries(Object.entries(l.values ?? {}).map(([k, v]) => [k, typeof v === "object" && "part" in v ? label(v.part, true) : v])) as never);
   /** The robot's short name for a planned part: its role only (the model is on the tile). */
   const roleLabel = (key: SimplePartKey) => t(`roles.${roleOf(key)}`);
   /** Where a lead goes: on a planned build, the real header or socket of the chosen board or part. */
@@ -647,6 +650,12 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
    */
   function takeCoolerStep(key: SimplePartKey, step: CoolerStep, removal = false) {
     if (handsOff() || !step) return;
+    // A fan in the radiator's way is not moved for the learner: the step selects it, and its own steps take it out.
+    if (step.kind === "clearFans") {
+      choosePart(step.fan);
+      speak({ lines: [{ key: "cooler.clearFans", values: { fan: partName(step.fan) } }], mood: "point", point: "scene" });
+      return;
+    }
     if (!takeStep()) return;
     const r = applyCoolerStep(state, key, step);
     if (!r.ok) {
@@ -883,6 +892,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   function onScenePart(instanceId: string) {
     const part = ALL_SIMPLE_PARTS.find((p) => p.id === instanceId);
     if (part && !simplePartInstalled(state, part.key)) { choosePart(part.key); return; }
+    // A fitted fan or drive (the case's own included) is selected to work on it: its screws, then lifting it out.
+    if (part && !selection && isPositionKey(part.key)) { choosePart(part.key); return; }
     // An installed part, the case or a case fan: not a place for what is in hand, and not something to pick up.
     if (selection?.kind === "part") react({ type: "wrongPlace", key: selection.key, place: instanceId });
     else if (selection?.kind === "cable") react({ type: "wrongPort", key: selection.key, portOf: null });
@@ -1160,7 +1171,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   function CoolerPanel() {
     const key = selectedPart!;
     const disabled = !ready || handsOff();
-    const words = (l: { key: string; values?: Record<string, unknown> } | null) => (l ? t(`companion.${l.key}`, l.values as never) : "");
+    const words = (l: CompanionLine | null) => (l ? lineWords(l) : "");
     const step = nextCoolerStep(state, key);
     const removal = nextCoolerRemoval(state, key);
     const part = state.parts.find((p) => p.instanceId === partSpec(key).id);
@@ -1565,7 +1576,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
       const coolerStep = nextCoolerStep(state, key);
       const line = coolerStep ? coolerStepLine(state, key) : null;
       if (!coolerStep || !line) return { label: t("installed"), why: t("toolbar.nothing") };
-      const words = t(`companion.${line.key}`, line.values as never);
+      const words = lineWords(line);
       if (coolerStep.kind === "cpuFirst" || coolerStep.kind === "boardFirst") return { label: t("install"), why: words };
       if (coolerStep.kind === "backplate") return { label: t("toolbar.more"), run: openPartOptions };
       return { label: words, run: () => takeCoolerStep(key, coolerStep) };

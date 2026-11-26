@@ -293,6 +293,12 @@ export interface RetentionSpec {
 
 /** The mechanism ids of a case's expansion-slot covers a card's bracket needs out, from the first x16 slot (`slot-covers:1`, `:2`...). */
 export const slotCoverIds = (ret: Pick<RetentionSpec, "id" | "openings">) => Array.from({ length: ret.openings ?? 2 }, (_, i) => `${ret.id}:${i + 1}`);
+/**
+ * Whether one expansion-slot cover is out: its own mechanism, else the old single `slot-covers` state that raw builds
+ * saved before covers were separate (the cover's own state, once set, wins over it).
+ */
+export const slotCoverOpen = (mechanisms: Record<string, MechanismState> | undefined, ret: Pick<RetentionSpec, "id">, coverId: string): boolean =>
+  (mechanisms?.[coverId] ?? mechanisms?.[ret.id]) === "open";
 
 /** The documented orientation of a keyed part in this place, and how far off-centre it may be lowered. */
 export interface KeyingSpec {

@@ -4,10 +4,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { pc } from "@ytl/simulation";
 import { guideFocus } from "./guide";
 import { simpleSceneTargets } from "./simple-scene";
+import { applyCoolerStep, nextCoolerStep } from "./cooler-assembly";
 import { planModel, rebaseProgress, snapshotFromHistory, type PlannedBuild } from "./plan-model";
 import {
   activateSimpleModel, applySimpleStep, createSimpleBuild, firstAttachment, LEGACY_MODEL, parseSimpleSnapshot, placeSimplePart, simpleBlock, simpleBuildFromSnapshot,
-  clearRadiatorFans, placeRadiator, simpleCableConnected, simpleRadiatorCover, simpleLiftBlock, simpleOrientationAdvice, simplePartInstalled, simplePositions, simpleRequiredScrews, withSimpleStep, emptySimpleSnapshot, type SimpleSnapshot, type SimpleStep,
+  placeRadiator, simpleCableConnected, simpleFansInTheWay, simpleAllPartsIn, simplePartsProgress, undoSimpleStep, simpleLiftBlock, simpleOrientationAdvice, simplePartInstalled, simplePositions, simpleRequiredScrews, withSimpleStep, emptySimpleSnapshot, type SimpleSnapshot, type SimpleStep,
 } from "./simple-model";
 
 const plan = (over: Partial<pc.BuildPlan> = {}): PlannedBuild => ({
@@ -144,24 +145,60 @@ describe("case fans (stage 9)", () => {
     expect(firstAttachment(against.state, "fan1")?.target.mountPointId).toBe("fan-top-1");
   });
 
-  it("never moves a fan for a radiator by itself: the case's own fan is moved by its own step, a fan the learner fitted blocks until taken out", () => {
+  it("never moves a fan for a radiator: each fan in the way is the learner's own selectable part, taken out screw by screw", () => {
     activateSimpleModel(planModel(plan({ cooler: "arctic-liquid-freezer-iii-280", storage: ["samsung-990-pro-1tb"] })));
     const start = createSimpleBuild();
-    // Left alone, the case's own fan covers the radiator's places: refused, nothing moved.
+    const rear = firstAttachment(start, "sfan2")?.target.mountPointId;
+    // The case's own fans are parts of the build, fitted at the start and supplied; the radiator names the one in its way.
+    expect(simplePartInstalled(start, "sfan1")).toBe(true);
+    expect(simpleFansInTheWay(start, "aio")).toEqual(["sfan1"]);
+    expect(nextCoolerStep(start, "aio")).not.toEqual({ kind: "radiator" });
     expect(placeRadiator(start, "aio")).toMatchObject({ ok: false, reason: "fanInTheWay" });
-    const cleared = clearRadiatorFans(start, "aio");
-    expect(cleared.ok).toBe(true);
-    if (!cleared.ok) return;
-    const own = simpleRadiatorCover(start, "aio").supplied[0]!;
-    const moved = cleared.state.parts.find((p) => p.instanceId === own)!;
-    expect(moved.attachments[0]!.target.mountPointId).toMatch(/^fan-top-/);
-    expect(placeRadiator(cleared.state, "aio").ok).toBe(true);
-    // A fan the learner fitted at a covered front place: not moved, and the case's own fan step does not touch it.
-    const withOwn = steps("prep:fan1:airflow:intake", "place:fan1@fan-front-3", ...screws("fan1", 4)).state;
-    expect(simpleRadiatorCover(withOwn, "aio").fans).toContain(simpleRadiatorCover(withOwn, "aio").fans.find((id) => !simpleRadiatorCover(withOwn, "aio").supplied.includes(id)));
-    const afterClear = clearRadiatorFans(withOwn, "aio");
-    expect(afterClear.ok && placeRadiator(afterClear.state, "aio")).toMatchObject({ ok: false, reason: "fanInTheWay" });
-    expect(afterClear.ok && firstAttachment(afterClear.state, "fan1")?.target.mountPointId).toBe("fan-front-3");
+    expect(applyCoolerStep(start, "aio", { kind: "clearFans", fan: "sfan1" })).toMatchObject({ ok: false, reason: "fanInTheWay" });
+    // One screw per input, then the lift: nothing else moves and no step is skipped.
+    expect(simpleLiftBlock(start, "sfan1")).toBe("unscrewFirst");
+    const out = steps(...unscrews("sfan1", 4), "lift:sfan1");
+    expect(simplePartInstalled(out.state, "sfan1")).toBe(false);
+    expect(firstAttachment(out.state, "sfan2")?.target.mountPointId).toBe(rear);
+    expect(simplePartsProgress(out.state)).toBe(simplePartsProgress(start));
+    const fitted = placeRadiator(out.state, "aio");
+    expect(fitted.ok).toBe(true);
+    // The removed fan is the learner's to put elsewhere (or leave off): a different valid place, the airflow they choose, each screw.
+    const free = simplePositions(out.state, "sfan1").find((x) => x.fits && !x.occupant && x.id !== start.parts.find((p) => p.instanceId === "fan-9")?.attachments[0]?.target.mountPointId)!;
+    const refit = steps(...unscrews("sfan1", 4), "lift:sfan1", `prep:sfan1:airflow:${simpleOrientationAdvice(out.state, "sfan1", free.id)}`, `place:sfan1@${free.id}`, ...screws("sfan1", 4));
+    expect(simplePartInstalled(refit.state, "sfan1")).toBe(true);
+    expect(firstAttachment(refit.state, "sfan1")?.target.mountPointId).toBe(free.id);
+    // Saved and reloaded, the same build comes back; undo takes one step.
+    const again = parseSimpleSnapshot(JSON.parse(JSON.stringify(refit.snapshot)))!;
+    expect(firstAttachment(simpleBuildFromSnapshot(again), "sfan1")?.target.mountPointId).toBe(free.id);
+    expect(simplePartInstalled(simpleBuildFromSnapshot(undoSimpleStep(again)!), "sfan1")).toBe(false);
+  });
+
+  it("a fan the learner fitted at a covered place blocks the radiator like the case's own, until taken out", () => {
+    activateSimpleModel(planModel(plan({ cooler: "arctic-liquid-freezer-iii-280", storage: ["samsung-990-pro-1tb"] })));
+    const withOwn = steps(...unscrews("sfan1", 4), "lift:sfan1", "prep:fan1:airflow:intake", "place:fan1@fan-front-3", ...screws("fan1", 4)).state;
+    expect(simpleFansInTheWay(withOwn, "aio")).toEqual(["fan1"]);
+    expect(placeRadiator(withOwn, "aio")).toMatchObject({ ok: false, reason: "fanInTheWay" });
+    expect(firstAttachment(withOwn, "fan1")?.target.mountPointId).toBe("fan-front-3");
+  });
+
+  it("old saves: fans:/rad: steps still move the case's own fans, explicitly, and are valid saved steps", () => {
+    activateSimpleModel(planModel(plan({ cooler: "arctic-liquid-freezer-iii-280", storage: ["samsung-990-pro-1tb"] })));
+    const start = createSimpleBuild();
+    const moved = applySimpleStep(start, "fans:aio");
+    expect(firstAttachment(moved, "sfan1")?.target.mountPointId).toMatch(/^fan-top-/);
+    expect(placeRadiator(moved, "aio").ok).toBe(true);
+    const replay = applySimpleStep(start, "rad:aio");
+    expect(firstAttachment(replay, "sfan1")?.target.mountPointId).toMatch(/^fan-top-/);
+  });
+
+  it("taking a supplied fan out leaves startup and the rest alone: its lead must be unplugged first, and its lead cannot be plugged while it is out", () => {
+    activateSimpleModel(planModel(plan()));
+    const plugged = createSimpleBuild();
+    expect(simpleBlock(plugged, "sfan1")).toBeNull();
+    const without = steps(...unscrews("sfan1", 4), "lift:sfan1").state;
+    expect(simpleAllPartsIn(without)).toBe(simpleAllPartsIn(plugged));
+    expect(simpleCableConnected(without, "caseFan1")).toBe(false);
   });
 
   it("a board's removal needs its leads and card unscrewed first, and carries its CPU along", () => {

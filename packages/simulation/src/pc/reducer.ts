@@ -21,7 +21,7 @@ import type {
   RgbPreference,
   TutorTargetRef,
 } from "@ytl/contracts";
-import { pcTarget, slotCoverIds } from "@ytl/contracts";
+import { pcTarget, slotCoverIds, slotCoverOpen } from "@ytl/contracts";
 import { checkConnect } from "./cabling";
 import { applyHardware, backplateRule, coolerMounting, coolerMountingGate, liftedCooler } from "./hardware";
 import { cableSpecOf } from "./catalog";
@@ -247,7 +247,8 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
       const occAttachment = occupant?.attachments.find((a) => a.target.hostInstanceId === at.hostInstanceId && a.target.mountPointId === at.mountPointId);
       const current = host.mechanisms?.[action.mechanismId] ?? "closed";
       // The bare id of the slot covers is every cover a bracket needs, so it is not "already" until all are.
-      const sameState = ret.kind === "slot_covers" && !coverOf ? slotCoverIds(ret).every((c) => (host.mechanisms?.[c] ?? "closed") === action.state) : current === action.state;
+      const coverNow = (id: string) => (slotCoverOpen(host.mechanisms, ret, id) ? "open" : "closed");
+      const sameState = ret.kind === "slot_covers" ? (coverOf ? coverNow(action.mechanismId) === action.state : slotCoverIds(ret).every((c) => coverNow(c) === action.state)) : current === action.state;
       if (sameState) return ok({});
       const blocked = (en: string, ar: string) => fail("retention_blocked", pcTarget.mount(at), { why: L(en, ar) });
       const lever = mount.fastener?.count ?? 0;
@@ -392,7 +393,7 @@ export function applyAction(state: PCBuildState, action: PCAction, catalog: PCCa
         const caseAt = hostPart.attachments[0]?.target;
         const casePart = caseAt && partById(v, caseAt.hostInstanceId);
         const covers = casePart && entryOf(v, casePart)?.mountPoints.find((m) => m.retention?.kind === "slot_covers")?.retention;
-        const shut = covers && slotCoverIds(covers).findIndex((c) => (casePart.mechanisms?.[c] ?? "closed") !== "open");
+        const shut = covers && slotCoverIds(covers).findIndex((c) => !slotCoverOpen(casePart.mechanisms, covers, c));
         if (covers && shut !== undefined && shut >= 0) return fail("retention_closed", pcTarget.mount(action.target), { mechanism: L(`The case's expansion slot cover ${shut + 1}`, `غطاء فتحة التوسعة ${shut + 1} في الكيس`) });
       }
       if (detailed && place?.keying) {

@@ -303,7 +303,8 @@ export function coolerStepLine(state: PCBuildState, key: SimplePartKey): Compani
     case "place": return { key: spec.radiator ? "cooler.placeBlock" : "cooler.place" };
     case "screw": return { key: step.to === "engaged" ? "cooler.screwEngage" : "cooler.screwTight", values: { n: step.index + 1, total: Math.max(bodyTotal, 2) } };
     case "radiatorScrew": return { key: "cooler.radiatorScrew", values: { n: step.count, total: spec.radiator?.screws ?? 8 } };
-    case "lever": case "plate": case "ilm": case "frame": case "clean": case "paste": case "film": case "ring": case "vrmFan": case "clearFans": case "radiator": return { key: `cooler.${step.kind}` };
+    case "clearFans": return { key: "cooler.clearFans", values: { fan: partName(step.fan) } };
+    case "lever": case "plate": case "ilm": case "frame": case "clean": case "paste": case "film": case "ring": case "vrmFan": case "radiator": return { key: `cooler.${step.kind}` };
     default: return null;
   }
 }

@@ -11,8 +11,8 @@ models' documents. A stage is "done" only when its verification gate (brief, sec
 | 5 — Motherboard into case | 2026-11-25 completion scope / review | existing fitting + new removal under review; carried-assembly cable blocker confirmed |
 | 6 — Power supply | 2026-11-25 completion scope / review | independent fitting and per-screw removal implemented; final acceptance pending |
 | 7 — SATA SSD / HDD | 2026-11-25 completion scope / review | selectable bay + staged fasteners implemented; scene/robot targets and final acceptance pending |
-| 8 — Graphics card | 2026-11-25 completion scope / review | existing flow audited; individual slot covers/bracket screw steps remain |
-| 9 — Case fans | 2026-11-25 completion scope / review | position choices and orientation advice implemented; bank limits/migration/visual review pending |
+| 8 — Graphics card | 2026-11-25 completion scope / review | individual slot covers (`slot-covers:N`) and per-screw bracket steps implemented and unit-tested; browser acceptance pending |
+| 9 — Case fans | 2026-11-25 completion scope / review | position choices, orientation advice, the case's own fans as selectable parts (`sfan`), no automatic fan moves for a radiator, rear-fan/I/O clearance implemented and unit-tested; browser and visual acceptance pending |
 | 10 — Wiring | 2026-11-25 completion scope / review | existing per-end flow retained; remaining review and final acceptance pending |
 | 11 — Final check and startup | 2026-11-25 completion scope / review | existing engine startup retained; final readiness actions and full acceptance pending |
 

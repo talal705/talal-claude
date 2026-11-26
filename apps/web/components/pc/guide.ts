@@ -7,10 +7,11 @@
 //   nothing in hand   → the next step: the part to pick up, the port of the next lead, the power button
 //   running, complete → celebrate beside the case
 import type { PCBuildState } from "@ytl/contracts";
+import { nextHandStep } from "./click-assembly";
 import { nextAction, type Selection } from "./companion";
 import {
   ALL_SIMPLE_CABLES, cableSpec, isPositionKey, isRamKey, partSpec, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
-  simplePartInstalled, simplePrerequisites, simpleRadiatorTarget, simpleSlotFilled, simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf,
+  roleOf, simplePartInstalled, simplePrerequisites, simpleRetention, slotCovers, simpleRadiatorTarget, simpleSlotFilled, simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf,
   type SimpleCableKey, type SimplePartKey,
 } from "./simple-model";
 
@@ -22,7 +23,7 @@ export type GuideTarget =
   /** A moving piece of a CPU socket: its lever, its load plate, or its orientation mark. */
   | { kind: "socket"; hostInstanceId: string; placeId: string; what: "lever" | "plate" | "mark"; socket: "lga" | "zif" }
   /** One drawn piece of a part (a memory slot's clip). */
-  | { kind: "solid"; hostInstanceId: string; solidId: string }
+  | { kind: "solid"; hostInstanceId: string; solidId: string; /** One plate of a stack (a case's expansion-slot cover), counted from the top. */ slice?: { index: number } }
   | { kind: "powerButton" };
 
 export interface GuideFocus {
@@ -66,6 +67,24 @@ function missingBefore(state: PCBuildState, key: SimplePartKey): SimplePartKey |
   return null;
 }
 
+/**
+ * A graphics card: the robot points at what the next step works on. A rear cover is its own plate in the case's
+ * rear wall, the latch is the slot's own, the screws are at the card's bracket; aligning and seating stay at the slot.
+ */
+function gpuTargets(state: PCBuildState, key: SimplePartKey): GuideTarget[] | null {
+  const step = nextHandStep(state, key, null);
+  const ret = simpleRetention(state, key);
+  if (!step || !ret) return null;
+  if (step.kind === "covers") {
+    const covers = slotCovers(state);
+    const caseId = state.parts.find((p) => p.instanceId === partSpec("motherboard").id)?.attachments[0]?.target.hostInstanceId;
+    return caseId ? [{ kind: "solid", hostInstanceId: caseId, solidId: "slot-covers", slice: { index: covers.findIndex((c) => c.id === step.id) } }] : null;
+  }
+  if (step.kind === "mechanism") return [{ kind: "solid", hostInstanceId: ret.hostInstanceId, solidId: `${ret.mountPointId}-latch` }];
+  if (step.kind === "fasten") return [{ kind: "part", instanceId: partId(key) }];
+  return null;
+}
+
 function forPart(state: PCBuildState, key: SimplePartKey, chosen: string | null = null): GuideFocus {
   if (simplePartInstalled(state, key)) return { targets: [{ kind: "part", instanceId: partId(key) }], reason: "place", subject: { part: key } };
   // The other CPU or cooler is in: point at it, the one to swap (or to unplug first).
@@ -87,7 +106,8 @@ function forPart(state: PCBuildState, key: SimplePartKey, chosen: string | null 
     const first = missingBefore(state, key);
     if (first) return { targets: [{ kind: "part", instanceId: partId(first) }], reason: "prerequisite", subject: { part: first } };
   }
-  return { targets: placesOf(state, key, chosen), reason: "place", subject: { part: key } };
+  const card = roleOf(key) === "gpu" ? gpuTargets(state, key) : null;
+  return { targets: card ?? placesOf(state, key, chosen), reason: "place", subject: { part: key } };
 }
 
 function forCable(state: PCBuildState, key: SimpleCableKey): GuideFocus {

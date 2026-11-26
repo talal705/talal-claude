@@ -76,6 +76,17 @@ if (!(await st()).history.some((x) => x.startsWith("place:motherboard"))) {
 if (process.env.DEBUG_BOARD) console.log("hist tail:", JSON.stringify((await st()).history.slice(-4)), "says:", (await st()).lines);
 for (let i = 0; i < 12 && !(await st()).placed.includes("motherboard"); i += 1) { await lab.getByRole("button", { name: ar ? /اربط البرغي/ : /Tighten screw/ }).first().click(); await page.waitForTimeout(900); }
 ok("motherboard fitted with the pump block already on it", (await st()).placed.includes("motherboard"));
+// The case's own front fan sits where the radiator goes. Nothing moves it for the learner: its own steps take it out
+// (four screws, one per click, then the lift), and then the radiator can go in.
+await press(liquid); await opened();
+await click1();
+s = await st();
+ok("with the fan in the way the radiator step only names the fan (nothing moved, no radiator yet)", !s.history.some((x) => x.startsWith("rad:") || x.startsWith("fans:")), JSON.stringify(s.history.slice(-4)));
+await press(tile(ar ? /^مروحة الكيس 1/ : /^Case fan 1/));
+for (let i = 0; i < 4; i += 1) { await lab.getByRole("button", { name: ar ? /فك البرغي/ : /Take out screw/ }).first().click(); await page.waitForTimeout(900); }
+await lab.getByRole("button", { name: ar ? /ارفع المروحة/ : /Lift the fan out/ }).click(); await page.waitForTimeout(900);
+s = await st();
+ok("the supplied fan came out by four single screw steps and its own lift", s.history.filter((x) => x === "unscrew:sfan1").length === 4 && s.history.at(-1) === "lift:sfan1", JSON.stringify(s.history.slice(-6)));
 await press(liquid); await opened();
 let n = 0;
 while (n++ < 24 && !(await st()).history.includes("radscrew:aio:8")) await click1();

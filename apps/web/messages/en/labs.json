@@ -791,6 +791,8 @@
       "ram2": "RAM stick 2",
       "cpu2": "CPU · Core i9",
       "aio": "Liquid cooler 280",
+      "sfan1": "Case fan 1 (supplied)",
+      "sfan2": "Case fan 2 (supplied)",
       "ram3": "RAM stick 3",
       "ram4": "RAM stick 4",
       "storage2": "Drive 2",
@@ -832,6 +834,7 @@
     "disconnect": "Unplug cable",
     "loose": "Loose",
     "fanOptional": "Case fan · optional for startup",
+    "suppliedTag": "supplied with the case",
     "powerOff": "Turn off the PC",
     "turnOffFirst": "Turn the PC off before changing a cable.",
     "fitCableParts": "Fit these parts first: {parts}.",
@@ -1084,7 +1087,7 @@
         "ilmBack": "The original socket frame is back. Close the plate and lock the lever over the CPU, or lift the CPU out.",
         "done": "The cooler is on and connected.",
         "notWired": "The cooler is mounted. Its cables come later, in the wiring stage.",
-        "clearFans": "Before the radiator goes in, move the case's own fans out of its way: they go to the top as exhaust fans. A fan you fitted yourself is never moved; take it out first."
+        "clearFans": "{fan} sits where the radiator goes. Take it out first: unplug its lead, take its screws out, lift it out. You can fit it somewhere else afterwards, or leave it off."
       },
       "resume": {
         "ramOver": "You're holding the stick over {slot}.",
@@ -1133,7 +1136,7 @@
         "turnOffFirst": "Turn the PC off before swapping the {part}.",
         "notSwappable": "Use Undo to take the {part} back out.",
         "substeps": "First tick the steps in the panel, then fit it.",
-        "fanInTheWay": "A fan you fitted sits where the radiator goes. Take that fan out first, then fit the radiator."
+        "fanInTheWay": "A fan sits where the radiator goes. Take that fan out first (its screws, then lift it out), then fit the radiator."
       },
       "installed": {
         "cpu": "The processor is seated and its lever is closed.",

@@ -7,7 +7,7 @@
 import type { CatalogEntry, PCAction, PCBuildState, PortSpec } from "@ytl/contracts";
 import { pc } from "@ytl/simulation";
 import { pcCatalog, suppliedPartActions } from "./catalog";
-import { applySimpleStep, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, type SimpleStep, type CableExtraEnd, type CableSpec, type PartSpec, type SimpleModel, type SimplePartKey, type SimpleSnapshot } from "./simple-model";
+import { applySimpleStep, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, suppliedFanSpecs, type SimpleStep, type CableExtraEnd, type CableSpec, type PartSpec, type SimpleModel, type SimplePartKey, type SimpleSnapshot } from "./simple-model";
 
 /** What the learner is building for. */
 export type BuildPurpose = "study" | "gaming" | "creator";
@@ -130,6 +130,7 @@ export function planModel(build: PlannedBuild): SimpleModel {
   // Fan places already taken by the case's own fans.
   const fanSizeOf = (instanceId: string) => { const e = entry(initial.parts.find((p) => p.instanceId === instanceId)?.catalogId, "fan"); return e?.spec.sizeMm ?? 0; };
   const suppliedFans = supplied.instanceIds.map((instanceId) => ({ instanceId, mount: initial.parts.find((p) => p.instanceId === instanceId)!.attachments[0]!.target.mountPointId, sizeMm: fanSizeOf(instanceId) }));
+  const caseFans = suppliedFanSpecs(caseE.id, supplied.instanceIds);
   const takenFan = new Set(suppliedFans.map((f) => f.mount));
   let radiator: PartSpec["radiator"];
   if (liquid) {
@@ -287,7 +288,7 @@ export function planModel(build: PlannedBuild): SimpleModel {
     if (!lead || !header) continue;
     usedPorts.add(`${boardId}/${header.id}`);
     caseFan += 1;
-    const ownKey = fanKeys.find((k) => idOf.get(k) === fanId);
+    const ownKey = fanKeys.find((k) => idOf.get(k) === fanId) ?? caseFans.find((f) => f.id === fanId)?.key;
     cables.push({ key: `caseFan${caseFan}`, id: lead.id, endId: specOf(initial, lead.id)!.ends.find((e) => e.function === "fan_motor")!.id, instanceId: boardId, portId: header.id, requires: ownKey ? [ownKey, "motherboard"] : ["motherboard"], essential: false });
   }
 
@@ -316,8 +317,8 @@ export function planModel(build: PlannedBuild): SimpleModel {
   return {
     kind: "plan",
     parts,
-    alternatives: [],
-    partList,
+    alternatives: caseFans,
+    partList: [...partList, ...caseFans.map((f) => f.key)],
     swappable: [],
     removable: [],
     boardPrep,
@@ -335,7 +336,7 @@ export function planModel(build: PlannedBuild): SimpleModel {
 }
 
 /** A SATA drive or a case fan of a plan, read from its own spec (not from whichever model is on the page). */
-const isPositionSpec = (p: PartSpec) => /^fan\d*$/.test(p.key) || (/^storage\d*$/.test(p.key) && !/^m2-\d+$/.test(p.mount));
+const isPositionSpec = (p: PartSpec) => /^s?fan\d*$/.test(p.key) || (/^storage\d*$/.test(p.key) && !/^m2-\d+$/.test(p.mount));
 
 /**
  * Progress of `snapshot` (made under `from`) carried over to the model `to` after parts were
@@ -344,10 +345,11 @@ const isPositionSpec = (p: PartSpec) => /^fan\d*$/.test(p.key) || (/^storage\d*$
  * moved. Every other step stays, in its order; a step that can no longer be taken is dropped.
  */
 export function rebaseProgress(snapshot: { placed: string[]; connected: string[]; history: string[]; powered: boolean }, from: SimpleModel, to: SimpleModel) {
-  const fromPart = new Map(from.parts.map((p) => [p.key, p]));
-  const toPart = new Map(to.parts.map((p) => [p.key, p]));
+  // The case's own fans (alternatives) count too, so their steps survive a change that does not touch the case.
+  const fromPart = new Map([...from.parts, ...from.alternatives].map((p) => [p.key, p]));
+  const toPart = new Map([...to.parts, ...to.alternatives].map((p) => [p.key, p]));
   // Instance IDs shift when a part is added or removed earlier in the list; compare by part key instead.
-  const keyOfId = (m: SimpleModel) => new Map(m.parts.map((p) => [p.id, p.key]));
+  const keyOfId = (m: SimpleModel) => new Map([...m.parts, ...m.alternatives].map((p) => [p.id, p.key]));
   const fromKeys = keyOfId(from);
   const toKeys = keyOfId(to);
   const hostKey = (keys: Map<string, string>, id: string) => keys.get(id) ?? id;

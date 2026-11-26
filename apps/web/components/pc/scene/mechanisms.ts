@@ -1,7 +1,7 @@
 // The scene's view of the retention mechanisms the engine tracks: the CPU load plate and lever, the
 // socket cover, memory, PCIe and M.2 latches, and the case's expansion-slot covers. The drawing follows `InstalledPart.mechanisms`, so what the
 // learner sees is always the state the engine checks (no separate animation state).
-import { slotCoverIds, type InstalledPart, type MountPointSpec } from "@ytl/contracts";
+import { slotCoverIds, slotCoverOpen, type InstalledPart, type MountPointSpec } from "@ytl/contracts";
 import { catalogIndex } from "../catalog";
 import type { PartGeometry, Quat, Solid, Vec3 } from "./geometry";
 import { add, compose, IDENTITY, rotate, type PlacedPart } from "./placement";
@@ -45,7 +45,7 @@ function drawMechanisms(geometry: PartGeometry, part: InstalledPart, socketDrawn
       if (!covers?.size) continue;
       const total = covers.count ?? 7;
       const per = covers.size[1] / total;
-      const out = new Set(slotCoverIds(ret).flatMap((id, i) => (part.mechanisms?.[id] === "open" ? [i] : [])));
+      const out = new Set(slotCoverIds(ret).flatMap((id, i) => (slotCoverOpen(part.mechanisms, ret, id) ? [i] : [])));
       const top = covers.at[1] + covers.size[1] / 2;
       solids.splice(solids.indexOf(covers), 1);
       for (let from = 0; from < total; ) {

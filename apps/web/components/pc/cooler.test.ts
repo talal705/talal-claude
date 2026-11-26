@@ -7,7 +7,7 @@ import { nextHandStep } from "./click-assembly";
 import { companionSay, mountingRemovalLine } from "./companion";
 import { planModel, rebaseProgress, snapshotFromHistory } from "./plan-model";
 import {
-  activateSimpleModel, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, installSimplePart, LEGACY_MODEL, liftSimplePart, lowerSimplePart, parseSimpleSnapshot, setSimpleMechanism, simpleBuildFromSnapshot, simplePartInstalled,
+  activateSimpleModel, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, installSimplePart, LEGACY_MODEL, liftSimplePart, unscrewSimplePart, lowerSimplePart, parseSimpleSnapshot, setSimpleMechanism, simpleBuildFromSnapshot, simplePartInstalled,
   simpleCableConnected, simpleCablesFor, simpleRetention, undoSimpleStep, type SimpleSnapshot, type SimpleStep,
 } from "./simple-model";
 import en from "../../messages/en/labs.json";
@@ -26,7 +26,7 @@ function walk(state: PCBuildState, key: string, limit = 60): { state: PCBuildSta
   let s = state;
   for (let i = 0; i < limit; i += 1) {
     const step = nextCoolerStep(s, key);
-    if (!step || step.kind === "cpuFirst" || step.kind === "boardFirst") break;
+    if (!step || step.kind === "cpuFirst" || step.kind === "boardFirst" || step.kind === "clearFans") break;
     const r = applyCoolerStep(s, key, step);
     if (!r.ok) throw new Error(`${JSON.stringify(step)} refused: ${JSON.stringify(r)}`);
     history.push(coolerStepHistory(s, key, step));
@@ -131,9 +131,16 @@ describe("Liquid Freezer III 280 (the practice build's liquid cooler): block, ra
     const early = walk(withCpu(), "aio").state;
     const boarded = [...["ram", "ram2", "storage"]].reduce((s, k) => must(installSimplePart(s, k)), early);
     const inCase = must(installSimplePart(boarded, "motherboard"));
-    const { steps, state } = walk(inCase, "aio");
-    // The case's own front fan covers the radiator's places: moving it is the learner's own step first.
-    expect(kinds(steps).slice(0, 2)).toEqual(["clearFans", "radiator"]);
+    // The case's own front fan covers the radiator's places: the cooler only names it, and the learner takes it out
+    // by its own steps (screws, then lift); nothing is moved for them.
+    const stuck = walk(inCase, "aio");
+    expect(kinds(stuck.steps)).toEqual([]);
+    expect(nextCoolerStep(stuck.state, "aio")).toEqual({ kind: "clearFans", fan: "sfan1" });
+    let freed = stuck.state;
+    for (let i = 0; i < 4; i += 1) freed = must(unscrewSimplePart(freed, "sfan1"));
+    freed = must(liftSimplePart(freed, "sfan1"));
+    const { steps, state } = walk(freed, "aio");
+    expect(kinds(steps)[0]).toBe("radiator");
     expect(kinds(steps).filter((k) => k === "radiatorScrew").length).toBe(8);
     expect(simplePartInstalled(state, "aio")).toBe(true);
     expect(simpleCoolerProgress(state, "aio")).toMatchObject({ mechanicallyComplete: true, connected: false });
@@ -238,9 +245,12 @@ describe("taking a cooler off (physical removal, never Undo)", () => {
   it("a liquid cooler: the radiator comes off before the pump block", () => {
     const early = walk(withCpu(), "aio").state;
     const boarded = [...["ram", "ram2", "storage"]].reduce((s, k) => must(installSimplePart(s, k)), early);
+    // Whole-fit (old saves, tests) clears the case's own fan as `fans:` always did; the page takes it out by hand.
     const complete = walk(must(installSimplePart(boarded, "motherboard")), "aio").state;
-    expect(simplePartInstalled(complete, "aio")).toBe(true);
-    const out = remove(complete, "aio");
+    expect(simplePartInstalled(complete, "aio")).toBe(false);
+    const fitted = must(installSimplePart(complete, "aio"));
+    expect(simplePartInstalled(fitted, "aio")).toBe(true);
+    const out = remove(fitted, "aio");
     expect(out.taken.filter((k) => k === "radiatorUnscrew").length).toBe(8);
     expect(out.taken.indexOf("liftRadiator")).toBeLessThan(out.taken.indexOf("liftBody"));
     expect(out.taken.at(-1)).toBe("liftBody");

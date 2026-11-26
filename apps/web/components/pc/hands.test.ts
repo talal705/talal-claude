@@ -6,6 +6,7 @@ import {
   placeSimplePart, prepSimplePart, withSimpleStep, type SimpleStep, screwSimplePart, slotCovers, unscrewSimplePart, simpleOrientationAdvice, simpleScrewOrder, withPlace, withPrep, withScrew,
 } from "./simple-model";
 import { nextHandStep } from "./click-assembly";
+import { guideFocus } from "./guide";
 import { applyCoolerStep, nextCoolerStep } from "./cooler-assembly";
 
 afterEach(() => activateSimpleModel(LEGACY_MODEL));
@@ -176,6 +177,35 @@ describe("graphics card: covers and bracket screws one at a time", () => {
     expect(nextHandStep(s, "gpu", null)).toEqual({ kind: "fasten" });
     s = must(screwSimplePart(s, "gpu"));
     expect(nextHandStep(s, "gpu", null)).toBeNull();
+  });
+
+  it("reads an old raw build whose case only has the single slot-covers state: open covers stay open, and one can still go back", () => {
+    const raw = (s: ReturnType<typeof board>) => ({ ...s, parts: s.parts.map((p) => (p.instanceId === "case-1" ? { ...p, mechanisms: { ...p.mechanisms, "slot-covers": "open" as const } } : p)) });
+    let s = raw(board());
+    expect(slotCovers(s).map((c) => c.open)).toEqual([true, true]);
+    expect(caseCoversClosed(s)).toBe(false);
+    s = must(setSimpleMechanism(s, "pcie-x16-1-latch", "open"));
+    s = must(lowerSimplePart(s, "gpu", aligned));
+    // With the card in, its covers cannot go back (the engine reads the old state too).
+    expect(setSimpleMechanism(s, "slot-covers:1", "closed").ok).toBe(false);
+    let bare = raw(board());
+    bare = must(setSimpleMechanism(bare, "slot-covers:1", "closed"));
+    expect(slotCovers(bare).map((c) => c.open)).toEqual([false, true]);
+    expect(lowerSimplePart(must(setSimpleMechanism(bare, "pcie-x16-1-latch", "open")), "gpu", aligned)).toMatchObject({ ok: false, reason: "openFirst" });
+  });
+
+  it("the robot points at the actual cover, then the slot's latch, the slot while aligning, and the card for its screws", () => {
+    let s = board();
+    const point = () => guideFocus(s, { kind: "part", key: "gpu" }, false, false)?.targets[0];
+    expect(point()).toEqual({ kind: "solid", hostInstanceId: "case-1", solidId: "slot-covers", slice: { index: 0 } });
+    s = must(setSimpleMechanism(s, "slot-covers:1", "open"));
+    expect(point()).toEqual({ kind: "solid", hostInstanceId: "case-1", solidId: "slot-covers", slice: { index: 1 } });
+    s = must(setSimpleMechanism(s, "slot-covers:2", "open"));
+    expect(point()).toEqual({ kind: "solid", hostInstanceId: "motherboard-2", solidId: "pcie-x16-1-latch" });
+    s = must(setSimpleMechanism(s, "pcie-x16-1-latch", "open"));
+    expect(point()).toEqual({ kind: "mount", hostInstanceId: "motherboard-2", placeId: "pcie-x16-1" });
+    s = must(lowerSimplePart(s, "gpu", aligned));
+    expect(point()).toEqual({ kind: "part", instanceId: "gpu-7" });
   });
 
   it("refuses the card until every cover its bracket needs is out, and names none as done by itself", () => {
