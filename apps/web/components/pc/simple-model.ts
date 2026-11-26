@@ -1387,7 +1387,10 @@ const isStep = (step: unknown): step is SimpleStep => {
   if (kind === "lift") { const base = rest.split(":")[0]; return isPartKey(rest) || (/^[a-z0-9]+:rad$/.test(rest) && isPartKey(base)); }
   if (kind === "hw") { const m = /^([a-z0-9]+):([a-z_]+):([a-z0-9]*)$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
   if (kind === "radscrew") { const m = /^([a-z0-9]+):(\d{1,2})$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
-  if (kind === "plug") { const m = /^(.+):(\d)$/.exec(rest); return Boolean(m && isCableKey(m[1])); }
+  if (kind === "plug" || kind === "unplug") {
+    const end = parseEndStep(rest);
+    return Boolean(end && isCableKey(end.key) && Number.isSafeInteger(end.index) && end.index < simpleCableEnds(end.key).length && (kind === "plug" || end.portId === null));
+  }
   if (kind === "prep") { const m = /^([a-z0-9]+):(paste|film|standoffs|io_shield|psu_fan|airflow|backplate):([a-z]*)$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
   if (kind === "screw") { const m = /^([a-z0-9]+):(\d{1,2})$/.exec(rest); return Boolean(m && isPartKey(m[1])); }
   return kind === "mech" && /^[a-z0-9-]+(:lever|:near|:stand|:screws|:film|:\d)?:(open|closed)$/.test(rest);

@@ -5,7 +5,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { pcCatalog } from "./catalog";
 import {
-  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, hasModelledMounting, isPositionKey, isRamKey, partSpec, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
+  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, hasModelledMounting, isPositionKey, isRamKey, parseEndStep, partSpec, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
   simpleCablesFor, simpleCableOrder, simplePartInstalled, simplePartOrder, simplePrerequisites, simpleRuleBlock, REMOVABLE, simpleRamRecommended, simpleSlotFilled, simpleSlotPart, simpleTarget, slotOf,
   caseCoversClosed, isM2Key, simpleM2Slots, simpleRamSlots, simpleRamTargetFor, simpleRetention,
   type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimpleHeld, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,

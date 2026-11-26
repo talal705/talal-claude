@@ -5,6 +5,7 @@ import { planModel, parsePlannedBuild, rebaseProgress, snapshotFromHistory, type
 import {
   activateSimpleModel, connectSimpleCable, createSimpleBuild, emptySimpleSnapshot, installSimplePart, LEGACY_MODEL, parseSimpleSnapshot, SIMPLE_PARTS, simplePartOrder,
   simpleAssemblyComplete, simpleBuildFromSnapshot, simpleCablesFor, simpleRuleBlock, startSimplePC, withCable, withPart, type SimpleSnapshot,
+  actualEndPort, plugSimpleEnd, simpleCableEnds, simpleCableConnected, simplePortChoices, unplugSimpleEnd, undoSimpleStep, withPlug, withUnplug,
 } from "./simple-model";
 
 const build = (parts: pc.BuildPlan): PlannedBuild => ({ version: 1, purpose: "gaming", workload: "1080p", parts });
@@ -179,5 +180,105 @@ describe("hands-on cables", () => {
     if (!r2.ok) throw new Error(JSON.stringify(r2));
     expect(simpleCableConnected(r2.state, "cpuPower")).toBe(true);
     activateSimpleModel(LEGACY_MODEL);
+  });
+});
+
+describe("cable endpoint persistence", () => {
+  function unwired(parts: pc.BuildPlan = gaming) {
+    activateSimpleModel(planModel(build(parts)));
+    return snapshotFromHistory(assembleAll().snapshot.history.filter((step) => !step.startsWith("cable:")));
+  }
+
+  function dataEnd(snapshot: SimpleSnapshot) {
+    const state = simpleBuildFromSnapshot(snapshot);
+    const cable = simpleCablesFor(state).find((c) => c.key.startsWith("sataData"))!;
+    const ends = simpleCableEnds(cable.key);
+    const index = ends.findIndex((e) => e.instanceId === cable.instanceId);
+    const end = ends[index]!;
+    const alternate = simplePortChoices(state, end).find((p) => p.fits && !p.occupied && p.portId !== end.portId)!;
+    expect(alternate).toBeDefined();
+    return { state, key: cable.key, ends, index, end, port: alternate.portId };
+  }
+
+  it("reloads the actual equivalent SATA port instead of silently changing it to the preferred port", () => {
+    const snapshot = unwired();
+    const { state, key, index, end, port } = dataEnd(snapshot);
+    expect(plugSimpleEnd(state, key, index, port, false).ok).toBe(true);
+    const saved = withPlug(snapshot, key, index, port);
+    const restored = parseSimpleSnapshot(JSON.parse(JSON.stringify(saved)))!;
+    expect(restored).not.toBeNull();
+    expect(actualEndPort(simpleBuildFromSnapshot(restored), end)).toBe(port);
+  });
+
+  it("rejects invalid endpoint saves instead of replaying an unknown cable, endpoint or socket", () => {
+    const snapshot = unwired();
+    const { key, index } = dataEnd(snapshot);
+    for (const step of [`plug:missing-lead:0`, `plug:${key}:99`, `plug:${key}:${index}@missing-port`, `unplug:${key}:${index}@sata-1`, `plug:${key}:${index}@`]) {
+      expect(parseSimpleSnapshot({ ...snapshot, history: [...snapshot.history, step] }), step).toBeNull();
+    }
+  });
+
+  it("unplugs only one end and undo restores that end to its actual socket", () => {
+    const snapshot = unwired();
+    const { key, ends, index, end, port } = dataEnd(snapshot);
+    const otherIndex = index === 0 ? 1 : 0;
+    const other = ends[otherIndex]!;
+    const wired = withPlug(withPlug(snapshot, key, otherIndex, other.portId), key, index, port);
+    expect(simpleCableConnected(simpleBuildFromSnapshot(wired), key)).toBe(true);
+    const removed = withUnplug(wired, key, index);
+    const after = simpleBuildFromSnapshot(parseSimpleSnapshot(JSON.parse(JSON.stringify(removed)))!);
+    expect(actualEndPort(after, end)).toBeNull();
+    expect(actualEndPort(after, other)).toBe(other.portId);
+    expect(removed.connected).not.toContain(key);
+    const undone = simpleBuildFromSnapshot(undoSimpleStep(removed)!);
+    expect(actualEndPort(undone, end)).toBe(port);
+    expect(simpleCableConnected(undone, key)).toBe(true);
+  });
+
+  it("keeps old endpoint saves readable and preserves actual ports when an unrelated fan is added", () => {
+    const snapshot = unwired();
+    const { key, index, end, port } = dataEnd(snapshot);
+    const old = withPlug(snapshot, key, index);
+    expect(actualEndPort(simpleBuildFromSnapshot(parseSimpleSnapshot(JSON.parse(JSON.stringify(old)))!), end)).toBe(end.portId);
+    const from = planModel(build(gaming));
+    const next = planModel(build({ ...gaming, fans: [...gaming.fans!, "arctic-p12-pwm-pst"] }));
+    const rebased = rebaseProgress(withPlug(snapshot, key, index, port), from, next);
+    activateSimpleModel(next);
+    expect(actualEndPort(simpleBuildFromSnapshot(snapshotFromHistory(rebased.history)), end)).toBe(port);
+  });
+
+  it("still refuses an equivalent socket already used by another drive and a reversed plug", () => {
+    const snapshot = unwired({ ...gaming, storage: ["seagate-barracuda-2tb-st2000dm008", "samsung-870-evo-1tb"] });
+    const { state, key, index, end, port } = dataEnd(snapshot);
+    expect(plugSimpleEnd(state, key, index, port, true)).toMatchObject({ ok: false, reason: "reversed" });
+    const first = plugSimpleEnd(state, key, index, port, false);
+    if (!first.ok) throw new Error(first.reason);
+    const second = simpleCablesFor(first.state).find((c) => c.key.startsWith("sataData") && c.key !== key)!;
+    const secondIndex = simpleCableEnds(second.key).findIndex((e) => e.instanceId === end.instanceId);
+    expect(plugSimpleEnd(first.state, second.key, secondIndex, port, false)).toMatchObject({ ok: false, reason: "wrongPort" });
+  });
+
+  it("requires power off before taking an endpoint out", () => {
+    const snapshot = unwired();
+    const { key, index, port } = dataEnd(snapshot);
+    let state = simpleBuildFromSnapshot(withPlug(snapshot, key, index, port));
+    for (const action of [{ type: "set_wall_power", connected: true }, { type: "set_psu_switch", on: true }, { type: "press_power" }] as const) {
+      const result = pc.applyAction(state, action, pcCatalog);
+      if (!result.ok) throw new Error(result.rejection.message.en);
+      state = result.state;
+    }
+    expect(unplugSimpleEnd(state, key, index)).toMatchObject({ ok: false, reason: "turnOffFirst" });
+  });
+
+  it("explains endpoint undo steps in both languages, including the new actual-port format", async () => {
+    const snapshot = unwired();
+    const { key, index, port } = dataEnd(snapshot);
+    const { undoLine } = await import("./companion");
+    const lines = [undoLine(`plug:${key}:${index}@${port}`), undoLine(`unplug:${key}:${index}`)];
+    expect(lines.map((l) => l.key)).toEqual(["undo.plug", "undo.unplug"]);
+    for (const messages of [(await import("../../messages/en/labs.json")).default, (await import("../../messages/ar/labs.json")).default]) {
+      const undo = messages.simplePc.companion.undo as Record<string, string>;
+      for (const line of lines) expect(undo[line.key.slice(5)]).toBeTruthy();
+    }
   });
 });

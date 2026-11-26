@@ -623,7 +623,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (handsOff() || !plugHold || plugHold.key !== key) return;
     if (!takeStep()) return;
     if (!plugHold.portId) { speak({ lines: [{ key: "hands.pickPort" }], mood: "point", point: "cables" }); return; }
-    const r = plugSimpleEnd(state, key, endIndex, plugHold.portId, plugHold.reversed);
+    const portId = plugHold.portId;
+    const r = plugSimpleEnd(state, key, endIndex, portId, plugHold.reversed);
     if (!r.ok) {
       if (r.reason === "reversed") {
         const end = simpleCableEnds(key)[endIndex]!;
@@ -637,7 +638,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     }
     const ends = simpleCableEnds(key);
     const all = ends.every((e) => simpleEndPlugged(r.state, e));
-    commit(r.state, (sn) => withPlug(sn, key, endIndex));
+    commit(r.state, (sn) => withPlug(sn, key, endIndex, portId));
     setVerdict(null);
     setPlugHold({ key, portId: null, reversed: true });
     if (all) { setSelection(null); setPlugHold(null); react({ type: "connected", key }, r.state, false, null); }
@@ -1138,10 +1139,10 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
         {captive && <p className={styles.cablesNote}>{t("hands.captive")}</p>}
         {end && <div className={styles.holdControls} role="group" aria-label={t("hands.endInto", { part: hostName(end.instanceId) })}>
           <div className={styles.holdRow} role="radiogroup" aria-label={t("hands.whichPort")}>
-            {choices.map((c) => <button key={c.portId} type="button" role="radio" aria-checked={hold.portId === c.portId} onClick={() => setPlugHold({ ...hold, portId: c.portId })}>{hold.portId === c.portId ? "● " : ""}{locale === "ar" ? c.label.ar : c.label.en}</button>)}
+            {choices.map((c) => <button key={c.portId} type="button" role="radio" disabled={disabled} aria-checked={hold.portId === c.portId} onClick={() => setPlugHold({ ...hold, portId: c.portId })}>{hold.portId === c.portId ? "● " : ""}{locale === "ar" ? c.label.ar : c.label.en}{c.occupied && ` · ${t("hands.positionTag.taken")}`}</button>)}
           </div>
           <p className={styles.alignState} aria-live="polite">{t(hold.reversed ? "hands.plugReversed" : "hands.plugMatched")}</p>
-          <div className={styles.holdRow}><button type="button" onClick={() => setPlugHold({ ...hold, reversed: !hold.reversed })}>{t("hands.turnPlug")}</button></div>
+          <div className={styles.holdRow}><button type="button" disabled={disabled} onClick={() => setPlugHold({ ...hold, reversed: !hold.reversed })}>{t("hands.turnPlug")}</button></div>
           <button className={styles.installButton} type="button" disabled={disabled} onClick={() => handPlug(key, next)}>{t("hands.plugIn")}</button>
         </div>}
         <p className={styles.cablesNote}>{t("hands.plugNote")}</p>
