@@ -3,7 +3,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { catalogIndex } from "./catalog";
 import type { Selection } from "./companion";
-import { ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, isPositionKey, simplePositions, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableEnds, simpleCablesFor, simpleEndPlugged, simplePartInstalled, simplePortChoices, simpleRadiatorTarget, simpleTarget } from "./simple-model";
+import { ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, isPositionKey, simplePositions, simpleBlock, simpleCableBlock, simpleCableConnected, simpleActiveEnd, simpleCableEnds, simpleCablesFor, simplePartInstalled, simplePortChoices, simpleRadiatorTarget, simpleTarget } from "./simple-model";
 
 /** The second stick lies beside the first; every other part keeps the place it always had. */
 export const SECOND_RAM_ID = "ram-11";
@@ -43,7 +43,7 @@ function siblingMounts(hostCatalogId: string, mountId: string): string[] {
  * `chosen`: the bay or fan place the learner picked for the selected part. A SATA drive or case fan shows every place
  * of its kind as a click (`pick:`), only the chosen one glowing: no place is suggested before the learner chooses.
  */
-export function simpleSceneTargets(state: PCBuildState, selection: Selection, chosen: string | null = null): SimpleSceneTarget[] {
+export function simpleSceneTargets(state: PCBuildState, selection: Selection, chosen: string | null = null, endIndex: number | null = null): SimpleSceneTarget[] {
   if (!selection || state.power.pressed) return [];
   if (selection.kind === "part") {
     if (simplePartInstalled(state, selection.key) || simpleBlock(state, selection.key)) return [];
@@ -68,8 +68,8 @@ export function simpleSceneTargets(state: PCBuildState, selection: Selection, ch
     ];
   }
   if (simpleCableConnected(state, selection.key) || simpleCableBlock(state, selection.key)) return [];
-  // The end being plugged now (a modular lead's power-supply side first): its planned socket and every free equivalent one glow.
-  const own = simpleCableEnds(selection.key).find((end) => !simpleEndPlugged(state, end));
+  // The end being plugged now (the one chosen, else a modular lead's power-supply side first): its planned socket and every free equivalent one glow.
+  const own = simpleCableEnds(selection.key)[simpleActiveEnd(state, selection.key, endIndex)];
   if (!own) return [];
   const hostReady = (instanceId: string) => ALL_SIMPLE_PARTS.some((part) => part.id === instanceId && simplePartInstalled(state, part.key));
   const free = (instanceId: string, portId: string) => !state.cables.some((cable) => Object.values(cable.ends).some((end) => end?.kind === "part" && end.instanceId === instanceId && end.portId === portId));

@@ -23,7 +23,7 @@ describe("find the fault", () => {
     };
     for (const kind of availableFaults()) {
       const broken = withFault(kind)!;
-      const r = startSimplePC(broken, { evenIfIncomplete: true });
+      const r = startSimplePC(broken);
       expect(r.ok, kind).toBe(false);
       const fixed = fixes[kind]!(broken)!;
       expect(startSimplePC(fixed).ok, kind).toBe(true);
@@ -31,7 +31,7 @@ describe("find the fault", () => {
   });
 
   it("a half-seated module powers on but fails POST", () => {
-    const r = startSimplePC(withFault("ramUnseated")!, { evenIfIncomplete: true }).startup;
+    const r = startSimplePC(withFault("ramUnseated")!).startup;
     expect(r.stages.find((s) => s.stage === "power")?.status).toBe("passed");
     expect(r.stages.find((s) => s.stage === "post")?.status).toBe("failed");
   });

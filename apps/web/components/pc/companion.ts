@@ -5,7 +5,7 @@
 import type { PCBuildState } from "@ytl/contracts";
 import { pcCatalog } from "./catalog";
 import {
-  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, hasModelledMounting, nextReadiness, isPositionKey, isRamKey, parseEndStep, partSpec, SIMPLE_PARTS, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
+  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, hasModelledMounting, nextReadiness, isPositionKey, isRamKey, parseEndStep, partSpec, SIMPLE_PARTS, simpleAllPartsIn, simpleBootPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
   simpleCablesFor, simpleCableOrder, simplePartInstalled, simplePartOrder, simplePrerequisites, simpleRuleBlock, REMOVABLE, simpleRamRecommended, simpleSlotFilled, simpleSlotPart, simpleTarget, slotOf,
   caseCoversClosed, isM2Key, simpleM2Slots, simpleRamSlots, simpleRamTargetFor, simpleRetention,
   type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimpleHeld, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,
@@ -510,7 +510,7 @@ export function companionSay(event: CompanionEvent, state: PCBuildState, powered
     case "restart":
       return nextSay([{ key: "restart" }], "wave");
     case "powerFail":
-      if (!simpleAllPartsIn(state)) return nextSay([{ key: "power.partsMissing" }], "concerned");
+      if (!simpleBootPartsIn(state)) return nextSay([{ key: "power.partsMissing" }], "concerned");
       if (event.rule === "needsLiquidCooler") return { lines: [{ key: "power.needsLiquid" }], mood: "concerned", point: "parts" };
       return {
         lines: event.missingCable ? [{ key: "power.cableMissing", values: { cable: { cable: event.missingCable } } }] : [{ key: "power.failed" }],

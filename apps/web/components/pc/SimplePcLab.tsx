@@ -16,9 +16,9 @@ import { focusOn, moveCamera, selectPart } from "./scene/scene-store";
 import { applyCoolerStep, applyMountingStep, boardFrameScrews, coolerStepHistory, mountingDismantling, mountingStepHistory, nextCoolerRemoval, nextCoolerStep, nextMountingRemoval, type CoolerStep, type MountingStep } from "./cooler-assembly";
 import {
   ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, cableSpec, firstAttachment, partSpec, createSimpleBuild, emptySimpleSnapshot, installSimplePart, isM2Key, isRamKey, lastSimpleStep, M2_WHOLE_TILT_DEG, simpleM2Heatsink, simpleM2Slots,
-  parseSimpleSnapshot, SIMPLE_PART_LIST, SIMPLE_PARTS, SIMPLE_SAVE_KEY, simpleAllPartsIn, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot,
+  parseSimpleSnapshot, SIMPLE_PART_LIST, SIMPLE_PARTS, SIMPLE_SAVE_KEY, simpleAllPartsIn, simpleBootPartsIn, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot,
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
-  simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, unplugSimpleEnd, withUnplug, nextReadiness, pressSimplePower, setSimpleSystem, simpleSystemValue, type SystemControl, actualEndPort, simpleSocketName, withoutPart, withPart, withSwap,
+  simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, unplugSimpleEnd, withUnplug, simpleActiveEnd, nextReadiness, pressSimplePower, setSimpleSystem, simpleSystemValue, type SystemControl, actualEndPort, simpleSocketName, withoutPart, withPart, withSwap,
   hasModelledMounting, withSimpleStep, activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
   withMechanism, withLower, withSeat, withLift, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, unscrewSimplePart, withUnscrew, isPositionKey, simplePositions, simpleLiftBlock, simpleOrientationAdvice, simpleRequiredScrews, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, caseCoversClosed, slotCovers, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot, type SimpleStep,
 } from "./simple-model";
@@ -150,7 +150,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const [attempt, setAttempt] = useState<{ state: PCBuildState; startup: StartupResult } | null>(null);
   const built = useMemo(() => simpleBuildFromSnapshot(saved), [saved]);
   /** The lead in hand: which port the learner has picked for its next end, and whether the plug is turned the wrong way. */
-  const [plugHold, setPlugHold] = useState<{ key: string; portId: string | null; reversed: boolean } | null>(null);
+  const [plugHold, setPlugHold] = useState<{ key: string; portId: string | null; reversed: boolean; end: number | null } | null>(null);
   /** The bay or fan place the learner chose for a SATA drive or a case fan, until it is placed (then the build says where it is). */
   const [position, setPosition] = useState<{ key: SimplePartKey; id: string } | null>(null);
   /** Physical steps ticked for the part in hand (they reset when another part is picked up). */
@@ -170,11 +170,11 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const startup = useMemo(() => pc.evaluateStartup(state, pcCatalog), [state]);
   /** The bay or fan place chosen for the part in hand (the same one in the controls, the scene, the robot and the saved step). */
   const chosenPosition = selection?.kind === "part" && position?.key === selection.key ? position.id : null;
-  const targets = useMemo(() => simpleSceneTargets(state, selection, chosenPosition), [state, selection, chosenPosition]);
+  const targets = useMemo(() => simpleSceneTargets(state, selection, chosenPosition, selection?.kind === "cable" && plugHold?.key === selection.key ? plugHold.end : null), [state, selection, chosenPosition, plugHold]);
   const powered = mode === "fault" ? Boolean(fault?.solved) : saved.powered;
   /** The steps the guidance reads: the fault build's own while it is on the page, else the saved progress. */
   const stepsTaken = mode === "fault" ? (fault?.trail ?? []) : saved.history;
-  const guide = useMemo(() => (view.guide && mode === "guided" ? guideFocus(state, selection, powered, guided, chosenPosition) : null), [view.guide, mode, state, selection, powered, guided, chosenPosition]);
+  const guide = useMemo(() => (view.guide && mode === "guided" ? guideFocus(state, selection, powered, guided, chosenPosition, selection?.kind === "cable" && plugHold?.key === selection.key ? plugHold : null) : null), [view.guide, mode, state, selection, powered, guided, chosenPosition, plugHold]);
   const progress = simplePartsProgress(state);
   /** The leads of this build: the liquid cooler's two replace the air cooler's one when it is fitted. */
   const leads = useMemo(() => simpleCablesFor(state), [state]);
@@ -295,7 +295,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const next: Selection = { kind: "cable", key };
     setSelection(next);
     // A plug comes out of the bag any way round: turning it to match the socket's key is the learner's job.
-    setPlugHold({ key, portId: null, reversed: true });
+    setPlugHold({ key, portId: null, reversed: true, end: null });
     setGuided(true);
     setTab("cables");
     react({ type: "select", selection: next }, state, saved.powered, next);
@@ -640,7 +640,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const all = ends.every((e) => simpleEndPlugged(r.state, e));
     commit(r.state, (sn) => withPlug(sn, key, endIndex, portId));
     setVerdict(null);
-    setPlugHold({ key, portId: null, reversed: true });
+    setPlugHold({ key, portId: null, reversed: true, end: null });
     if (all) { setSelection(null); setPlugHold(null); react({ type: "connected", key }, r.state, false, null); }
     else speak({ lines: [{ key: "hands.endIn" }], mood: "point", point: "cables" });
   }
@@ -795,7 +795,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     }
     commit(r.state, (sn) => withUnplug(sn, key, endIndex));
     setVerdict(null);
-    setPlugHold({ key, portId: null, reversed: true });
+    // The end just taken out is the one to plug next; no stale socket or turn is carried over.
+    setPlugHold({ key, portId: null, reversed: true, end: endIndex });
     react({ type: "unplugged", key }, r.state, false, selection);
   }
 
@@ -906,7 +907,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     else setSelection(null);
     setVerdict(null);
     if (step.startsWith("part:")) setTab("parts");
-    react({ type: "undo", step }, after, false, pose ? { kind: "part", key: pose.key } : null);
+    react({ type: "undo", step }, after, next.powered, pose ? { kind: "part", key: pose.key } : null);
   }
 
   function restart() {
@@ -970,7 +971,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     }
     const missing = leads.find((c) => c.essential && !simpleCableConnected(state, c.key))?.key ?? null;
     if (result.rule) setTab("parts");
-    else if (progress === SIMPLE_PARTS.length) setTab("cables");
+    else if (simpleBootPartsIn(state)) setTab("cables");
     react({ type: "powerFail", missingCable: missing, rule: result.rule }, state, false, null);
   }
 
@@ -978,7 +979,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   function power() {
     setConfirmRestart(false);
     if (!fault) return;
-    const result = startSimplePC(fault.state, { evenIfIncomplete: true });
+    const result = startSimplePC(fault.state);
     setAttempt({ state: fault.state, startup: result.startup });
     setVerdict(result.ok ? "success" : "failure");
     setFailedRule(result.ok ? null : result.rule);
@@ -1031,7 +1032,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const ruleText = planned ? t("planner.findingText.exercise_needs_liquid") : t("needsLiquid");
   // Every part and lead is in but the panel, mains or PSU switch is not set: that is what to do first.
   const unreadied = nextReadiness(state)?.control !== "power" ? nextReadiness(state) : null;
-  const missingMessage = rule ? ruleText : progress < SIMPLE_PARTS.length ? t("missing") : firstMissingCable ? t("missingCable", { cable: cableName(firstMissingCable.key) }) : unreadied ? t("ready.fixFirst", { step: t(`ready.do.${unreadied.control}.${unreadied.value}`) }) : t("checkCables");
+  const missingMessage = rule ? ruleText : !simpleBootPartsIn(state) ? t("missing") : firstMissingCable ? t("missingCable", { cable: cableName(firstMissingCable.key) }) : unreadied ? t("ready.fixFirst", { step: t(`ready.do.${unreadied.control}.${unreadied.value}`) }) : t("checkCables");
   const placeName = (key: SimplePartKey) => {
     // A memory module: the slot it is in, else the slot it is held over, else none. Never a default slot.
     if (isRamKey(key)) {
@@ -1147,10 +1148,10 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   function CablePanel() {
     const key = selectedCable!;
     const ends = simpleCableEnds(key);
-    const next = ends.findIndex((e) => !simpleEndPlugged(state, e));
+    const hold = plugHold?.key === key ? plugHold : { key, portId: null, reversed: true, end: null };
+    const next = simpleActiveEnd(state, key, hold.end);
     const end = ends[next];
     const disabled = !ready || handsOff() || Boolean(cableBlocked);
-    const hold = plugHold?.key === key ? plugHold : { key, portId: null, reversed: true };
     const choices = end ? simplePortChoices(state, end) : [];
     // A choice made for another end (or before an undo) is not carried over.
     const picked = choices.some((c) => c.portId === hold.portId) ? hold.portId : null;
@@ -1163,7 +1164,11 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
           {ends.map((e, i) => {
             const socket = actualEndPort(state, e);
             const socketName = socket ? simpleSocketName(state, e.instanceId, socket) : null;
-            return <li key={i}><span aria-hidden="true">{simpleEndPlugged(state, e) ? "✓" : i + 1}</span> {t("hands.endInto", { part: hostName(e.instanceId) })}
+            const loose = !simpleEndPlugged(state, e);
+            const choosable = loose && ends.filter((x) => !simpleEndPlugged(state, x)).length > 1;
+            return <li key={i}><span aria-hidden="true">{loose ? i + 1 : "✓"}</span> {choosable
+              ? <button type="button" aria-pressed={next === i} disabled={!ready || handsOff()} onClick={() => setPlugHold({ ...hold, end: i, portId: null })}>{t("hands.endInto", { part: hostName(e.instanceId) })}</button>
+              : t("hands.endInto", { part: hostName(e.instanceId) })}
               {socketName && <> · {socketName[lang]} <button type="button" disabled={!ready || handsOff()} aria-label={t("hands.unplugEnd", { part: hostName(e.instanceId) })} onClick={() => unplugEnd(key, i)}>{t("hands.unplugEndShort")}</button></>}
             </li>;
           })}

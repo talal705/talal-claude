@@ -10,7 +10,7 @@ import type { PCBuildState } from "@ytl/contracts";
 import { nextHandStep } from "./click-assembly";
 import { nextAction, type Selection } from "./companion";
 import {
-  ALL_SIMPLE_CABLES, isPositionKey, isRamKey, partSpec, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableEnds, simpleCableMissingParts, simpleEndPlugged, simpleEndSocket,
+  ALL_SIMPLE_CABLES, isPositionKey, isRamKey, partSpec, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleActiveEnd, simpleCableEnds, simpleCableMissingParts, simpleEndSocket, simplePortChoices,
   roleOf, simplePartInstalled, simplePrerequisites, simpleRetention, slotCovers, simpleRadiatorTarget, simpleSlotFilled, simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf,
   type SimpleCableKey, type SimplePartKey,
 } from "./simple-model";
@@ -40,10 +40,12 @@ export interface GuideFocus {
 
 const partId = (key: SimplePartKey) => partSpec(key).id;
 /** The socket of the end being plugged now (or, for a lead that is in, the one to unplug first). */
-const portTarget = (state: PCBuildState, key: SimpleCableKey): GuideTarget => {
+const portTarget = (state: PCBuildState, key: SimpleCableKey, picked: { end: number | null; portId: string | null } | null = null): GuideTarget => {
   const ends = simpleCableEnds(key);
-  const end = ends.find((e) => !simpleEndPlugged(state, e)) ?? ends.at(-1)!;
-  return { kind: "port", hostInstanceId: end.instanceId, placeId: simpleEndSocket(state, end) };
+  const end = ends[simpleActiveEnd(state, key, picked?.end ?? null)] ?? ends.at(-1)!;
+  // A free socket the learner has chosen for this end is the one the robot points at, ahead of the planned one.
+  const chosen = picked?.portId && simplePortChoices(state, end).some((c) => c.portId === picked.portId && c.fits && !c.occupied) ? picked.portId : null;
+  return { kind: "port", hostInstanceId: end.instanceId, placeId: chosen ?? simpleEndSocket(state, end) };
 };
 
 /** The places a part goes: its own, and a liquid cooler's radiator place in the case. */
@@ -115,7 +117,7 @@ function forPart(state: PCBuildState, key: SimplePartKey, chosen: string | null 
   return { targets: card ?? placesOf(state, key, chosen), reason: "place", subject: { part: key } };
 }
 
-function forCable(state: PCBuildState, key: SimpleCableKey): GuideFocus {
+function forCable(state: PCBuildState, key: SimpleCableKey, picked: { end: number | null; portId: string | null } | null = null): GuideFocus {
   if (simpleCableBlock(state, key) === "fitCableParts") {
     const missing = simpleCableMissingParts(state, key)[0];
     if (missing) {
@@ -124,18 +126,18 @@ function forCable(state: PCBuildState, key: SimpleCableKey): GuideFocus {
       return { targets: [{ kind: "part", instanceId: partId(part) }], reason: "prerequisite", subject: { part } };
     }
   }
-  return { targets: [portTarget(state, key)], reason: "place", subject: { cable: key } };
+  return { targets: [portTarget(state, key, picked)], reason: "place", subject: { cable: key } };
 }
 
 /**
  * Where the robot goes now. `null` keeps it parked out of sight: nothing in hand and the learner
  * has not asked for help (guidance only starts once they select something or ask).
  */
-/** `chosen`: the bay or fan place the learner picked for the selected part, if any. */
-export function guideFocus(state: PCBuildState, selection: Selection, powered: boolean, asked: boolean, chosen: string | null = null): GuideFocus | null {
+/** `chosen`: the bay or fan place the learner picked for the selected part, if any; `picked`: the end and socket the learner chose for the selected lead. */
+export function guideFocus(state: PCBuildState, selection: Selection, powered: boolean, asked: boolean, chosen: string | null = null, picked: { end: number | null; portId: string | null } | null = null): GuideFocus | null {
   if (powered && simpleAssemblyComplete(state)) return { targets: [{ kind: "powerButton" }], reason: "celebrate" };
   if (selection?.kind === "part" && !powered) return forPart(state, selection.key, chosen);
-  if (selection?.kind === "cable" && !powered) return forCable(state, selection.key);
+  if (selection?.kind === "cable" && !powered) return forCable(state, selection.key, picked);
   if (!asked) return null;
   const next = nextAction(state, powered);
   switch (next.kind) {

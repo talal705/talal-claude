@@ -1195,7 +1195,7 @@
         "essentials": "The {cable} lead is in. That's every lead it needs to start!",
         "all": "The {cable} lead is in. Every cable is connected!"
       },
-      "unplugged": "The {cable} lead is unplugged.",
+      "unplugged": "One end of the {cable} lead is out.",
       "wrong": {
         "place": "That's not where the {part} goes. Tap the glowing {place}.",
         "ramSlot": "Not that slot. With two sticks, use A2 and B2. Tap the glowing {place}.",

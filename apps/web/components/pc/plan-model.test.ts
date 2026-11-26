@@ -4,7 +4,7 @@ import { pcCatalog } from "./catalog";
 import { planModel, parsePlannedBuild, rebaseProgress, snapshotFromHistory, type PlannedBuild } from "./plan-model";
 import {
   activateSimpleModel, connectSimpleCable, createSimpleBuild, emptySimpleSnapshot, installSimplePart, LEGACY_MODEL, parseSimpleSnapshot, SIMPLE_PARTS, simplePartOrder,
-  simpleAssemblyComplete, simpleBuildFromSnapshot, simpleCablesFor, simpleRuleBlock, startSimplePC, withCable, withPart, type SimpleSnapshot,
+  simpleAllPartsIn, simpleBootPartsIn, simplePartInstalled, simpleAssemblyComplete, simpleBuildFromSnapshot, simpleCablesFor, simpleRuleBlock, startSimplePC, withCable, withPart, type SimpleSnapshot,
   actualEndPort, nextReadiness, plugSimpleEnd, pressSimplePower, setSimpleSystem, simpleSystemValue, withSimpleStep, lastSimpleStep, simpleCableEnds, simpleCableConnected, simplePortChoices, unplugSimpleEnd, undoSimpleStep, withPlug, withUnplug, withoutCable,
 } from "./simple-model";
 
@@ -291,6 +291,25 @@ describe("cable endpoint persistence", () => {
     expect(simpleEndSocket(placed, end)).toBe(port);
   });
 
+  it("points the robot and the lit sockets at the end and socket the learner chose, not a fixed first one", async () => {
+    const { simpleSceneTargets } = await import("./simple-scene");
+    const { guideFocus } = await import("./guide");
+    const snapshot = unwired();
+    const { state, key, ends, end, port } = dataEnd(snapshot);
+    const first = ends.findIndex((e) => e.instanceId !== end.instanceId);
+    const boardIndex = ends.indexOf(end);
+    // Two loose ends: choosing the board end lights the board's sockets, and the picked alternate socket is the robot's target.
+    const lit = simpleSceneTargets(state, { kind: "cable", key }, null, boardIndex).filter((t) => t.role === "target");
+    expect(lit.every((t) => t.hostInstanceId === end.instanceId)).toBe(true);
+    const focus = guideFocus(state, { kind: "cable", key }, false, true, null, { end: boardIndex, portId: port });
+    expect(focus?.targets).toEqual([{ kind: "port", hostInstanceId: end.instanceId, placeId: port }]);
+    // Without a choice it is the first loose end; a wrong (look-alike) pick is ignored.
+    const dflt = guideFocus(state, { kind: "cable", key }, false, true, null, null);
+    expect(dflt?.targets).toEqual([expect.objectContaining({ hostInstanceId: ends[first]!.instanceId })]);
+    const wrong = simplePortChoices(state, end).find((c) => !c.fits);
+    if (wrong) expect(guideFocus(state, { kind: "cable", key }, false, true, null, { end: boardIndex, portId: wrong.portId })?.targets).toEqual([expect.objectContaining({ placeId: end.portId })]);
+  });
+
   it("keeps old endpoint saves readable and preserves actual ports when an unrelated fan is added", () => {
     const snapshot = unwired();
     const { key, index, end, port } = dataEnd(snapshot);
@@ -425,11 +444,52 @@ describe("readiness and startup", () => {
     expect(rebased).not.toContain("sys:power:on");
   });
 
-  it("still starts an older save that says the PC runs, and its first power-off needs no new step", () => {
-    activateSimpleModel(LEGACY_MODEL);
-    const saved = parseSimpleSnapshot({ version: 3, placed: [], connected: [], history: [], powered: false })!;
-    expect(saved.powered).toBe(false);
-    expect(startSimplePC(simpleBuildFromSnapshot(saved), { evenIfIncomplete: true }).ok).toBe(false);
+  it("boots a sound build with an optional additional fan not fitted: the engine decides, not a part count", () => {
+    const plan = { ...gaming, storage: ["samsung-990-pro-1tb"] };
+    activateSimpleModel(planModel(build(plan)));
+    let state = createSimpleBuild();
+    for (const key of simplePartOrder(state)) {
+      if (SIMPLE_PARTS.find((p) => p.key === key)?.catalogId === "arctic-p12-pwm-pst" || simplePartInstalled(state, key)) continue;
+      const r = installSimplePart(state, key);
+      if (!r.ok) throw new Error(`${key}: ${r.reason}`);
+      state = r.state;
+    }
+    for (const c of simpleCablesFor(state).filter((x) => x.essential)) {
+      const r = connectSimpleCable(state, c.key);
+      if (!r.ok) throw new Error(`${c.key}: ${r.reason}`);
+      state = r.state;
+    }
+    for (const [control, value] of [["panel", "closed"], ["wall", "in"], ["psu", "on"]] as const) {
+      const r = setSimpleSystem(state, control, value);
+      if (!r.ok) throw new Error(r.reason);
+      state = r.state;
+    }
+    expect(simpleAllPartsIn(state)).toBe(false);
+    expect(simpleBootPartsIn(state)).toBe(true);
+    const result = pressSimplePower(state);
+    expect(result.ok).toBe(true);
+    // Booting is not finishing: the optional fan and its lead are still to do.
+    expect(simpleAssemblyComplete(result.state)).toBe(false);
+  });
+
+  it("a missing boot part is reported by the engine and by the boot-part check, not by the optional fan", () => {
+    activateSimpleModel(planModel(build(gaming)));
+    const empty = createSimpleBuild();
+    expect(simpleBootPartsIn(empty)).toBe(false);
+    expect(pressSimplePower(empty).ok).toBe(false);
+  });
+
+  it("refuses malformed or impossible readiness steps in a save", () => {
+    activateSimpleModel(planModel(build(gaming)));
+    const base = assembleAll().snapshot;
+    for (const bad of ["sys:panel:sideways", "sys:fan:on", "sys:power", "sys:power:on:extra", "sys:wall:in:", "sys:"]) {
+      expect(parseSimpleSnapshot({ ...base, history: [...base.history, bad] })).toBeNull();
+    }
+    // A step the engine cannot take (a second "panel closed") is refused too, as is changing a switch while running.
+    const closed = withSimpleStep(base, "sys:panel:closed");
+    expect(parseSimpleSnapshot({ ...closed, history: [...closed.history, "sys:panel:closed"] })).toBeNull();
+    const on = readied(base, [...steps, "sys:power:on"]);
+    expect(parseSimpleSnapshot({ ...on, history: [...on.history, "sys:wall:out"], powered: true })).toBeNull();
   });
 });
 

@@ -645,6 +645,8 @@ export function simpleSlotPart(state: PCBuildState, slot: SimpleSlot): SimplePar
 export const simpleSlotFilled = (state: PCBuildState, slot: SimpleSlot) => simpleSlotPart(state, slot) !== null;
 /** Every slot filled: one CPU, every RAM stick, the drives, one cooler, the board, the card, the PSU and the fans. */
 export const simpleAllPartsIn = (state: PCBuildState) => SIMPLE_PARTS.every((p) => simpleSlotFilled(state, slotOf(p.key)));
+/** Every part a boot can need: all of them but the case fans, which are optional. */
+export const simpleBootPartsIn = (state: PCBuildState) => SIMPLE_PARTS.every((p) => roleOf(p.key) === "fan" || simpleSlotFilled(state, slotOf(p.key)));
 /** How many of the slots are filled. */
 export const simplePartsProgress = (state: PCBuildState) => SIMPLE_PARTS.filter((p) => simpleSlotFilled(state, slotOf(p.key))).length;
 /** A part a lead or another part needs: `cpu` is met by either CPU; any other key by that part. */
@@ -1098,6 +1100,11 @@ export function simpleCableEnds(key: SimpleCableKey): CableExtraEnd[] {
   return [...(spec.extra ?? []), { cableId: spec.id, endId: spec.endId, instanceId: spec.instanceId, portId: spec.portId }];
 }
 export const simpleEndPlugged = endAt;
+/** The end being plugged: the one the learner clicked if it is still loose, else the first loose one (-1 when every end is in). */
+export function simpleActiveEnd(state: PCBuildState, key: SimpleCableKey, preferred: number | null = null): number {
+  const ends = simpleCableEnds(key);
+  return preferred !== null && ends[preferred] && !endAt(state, ends[preferred]!) ? preferred : ends.findIndex((e) => !endAt(state, e));
+}
 /** What a plug of this connector is held and keyed by, for the orientation hint. */
 export function simplePlugKeying(connector: string): "latch" | "ramp" | "pin" | "none" {
   if (/atx|eps|pcie|psu_modular|12v|12vhpwr|sata_power|sata_data/.test(connector)) return "latch";
@@ -1241,8 +1248,7 @@ export function setSimpleSystem(state: PCBuildState, control: SystemControl, val
  * Presses the power button on the build as it stands (the switches are the learner's own steps) and reads what the
  * engine says. On success the PC is running; on a failed try nothing changes, so wiring stays editable.
  */
-export function pressSimplePower(state: PCBuildState, opts: { evenIfIncomplete?: boolean } = {}): { ok: boolean; state: PCBuildState; startup: StartupResult; rule: SimpleRule | null } {
-  if (!opts.evenIfIncomplete && !simpleAllPartsIn(state)) return { ok: false, state, startup: pc.evaluateStartup(state, pcCatalog), rule: null };
+export function pressSimplePower(state: PCBuildState): { ok: boolean; state: PCBuildState; startup: StartupResult; rule: SimpleRule | null } {
   const pressed = state.power.pressed ? state : run(state, [SYSTEM.power.on]);
   const startup = pc.evaluateStartup(pressed, pcCatalog);
   const rule = simpleRuleBlock(pressed);
@@ -1251,11 +1257,10 @@ export function pressSimplePower(state: PCBuildState, opts: { evenIfIncomplete?:
 }
 
 /** One-action start for the fault finder and older saves: panel, mains and PSU switch, then the button. */
-export function startSimplePC(state: PCBuildState, opts: { evenIfIncomplete?: boolean } = {}): { ok: boolean; state: PCBuildState; startup: StartupResult; rule: SimpleRule | null } {
-  // "Find the fault" presses power on whatever is there: a half-seated module must show as a failed POST.
-  if (!opts.evenIfIncomplete && !simpleAllPartsIn(state)) return { ok: false, state, startup: pc.evaluateStartup(state, pcCatalog), rule: null };
+export function startSimplePC(state: PCBuildState): { ok: boolean; state: PCBuildState; startup: StartupResult; rule: SimpleRule | null } {
+  // The real engine judges the build as it stands (a half-seated module shows as a failed POST); nothing here adds a requirement.
   if (!state.power.pressed) state = run(state, [SYSTEM.panel.closed, SYSTEM.wall.in, SYSTEM.psu.on]);
-  return pressSimplePower(state, opts);
+  return pressSimplePower(state);
 }
 
 /** Every part fitted and every lead connected, case fans included: the whole build, not only what boots. */
