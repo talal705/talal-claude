@@ -7,7 +7,7 @@
 import type { CatalogEntry, PCAction, PCBuildState, PortSpec } from "@ytl/contracts";
 import { pc } from "@ytl/simulation";
 import { pcCatalog, suppliedPartActions } from "./catalog";
-import { applySimpleStep, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, suppliedFanSpecs, type SimpleStep, type CableExtraEnd, type CableSpec, type PartSpec, type SimpleModel, type SimplePartKey, type SimpleSnapshot } from "./simple-model";
+import { applySimpleStep, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, parseEndStep, suppliedFanSpecs, type SimpleStep, type CableExtraEnd, type CableSpec, type PartSpec, type SimpleModel, type SimplePartKey, type SimpleSnapshot } from "./simple-model";
 
 /** What the learner is building for. */
 export type BuildPurpose = "study" | "gaming" | "creator";
@@ -390,7 +390,7 @@ export function rebaseProgress(snapshot: { placed: string[]; connected: string[]
     const kind = step.slice(0, step.indexOf(":"));
     const key = step.slice(step.indexOf(":") + 1);
     if (kind === "cable") return keepCable(key);
-    if (kind === "plug") return keepCable(key.slice(0, key.lastIndexOf(":")));
+    if (kind === "plug" || kind === "unplug") { const end = parseEndStep(key); return !!end && keepCable(end.key); }
     // Levers and latches belong to the board: they stay unless the board itself changed.
     if (kind === "mech") return !changed.has("motherboard");
     // prep:<part>:<what>:<value>, screw:<part>:<corner> and place:<part>@<position> belong to their part.

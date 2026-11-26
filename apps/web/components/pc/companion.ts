@@ -198,7 +198,7 @@ export function undoLine(step: string): CompanionLine {
   switch (kind) {
     case "part": return withPart("part");
     case "cable": { const v = cable(rest); return v ? { key: "undo.cable", values: v } : { key: "undo.step" }; }
-    case "plug": { const v = cable(rest.slice(0, rest.lastIndexOf(":"))); return v ? { key: "undo.plug", values: v } : { key: "undo.step" }; }
+    case "plug": case "unplug": { const v = cable(parseEndStep(rest)?.key ?? ""); return v ? { key: `undo.${kind}`, values: v } : { key: "undo.step" }; }
     case "lower": return withPart("lower");
     case "seat": return withPart("seat");
     case "lift": return withPart("lift");

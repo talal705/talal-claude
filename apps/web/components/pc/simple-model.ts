@@ -4,7 +4,7 @@
 // kept so every saved build replays) or a build the learner planned (`plan-model.ts`). The exported
 // lists below are live bindings that `activateSimpleModel` replaces, so every reader sees the build
 // that is on the page.
-import { slotCoverIds, slotCoverOpen, type PCAction, type PCBuildState, type PrepKind, type StartupResult } from "@ytl/contracts";
+import { slotCoverIds, slotCoverOpen, type PCAction, type PCBuildState, type PortSpec, type PrepKind, type StartupResult } from "@ytl/contracts";
 import { pc } from "@ytl/simulation";
 import { pcCatalog, SUPPLIED_PARTS, suppliedPartActions } from "./catalog";
 import { installCoolerWhole, migrateCoolerSteps } from "./cooler-assembly";
@@ -242,7 +242,7 @@ const isCoolerKey = (key: SimplePartKey) => slotOf(key) === "cooler";
  *   a CPU or a module; replaying it opens and closes their mechanisms (the explicit migration of those saves).
  * - `cable:<key>`: a lead connected.
  */
-export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}` | `lower:${string}` | `seat:${string}` | `lift:${string}` | `fasten:${string}` | `unfasten:${string}` | `prep:${string}` | `place:${string}` | `unscrew:${string}` | `screw:${string}` | `plug:${string}` | `hw:${string}` | `rad:${string}` | `fans:${string}` | `radscrew:${string}`;
+export type SimpleStep = `part:${string}` | `cable:${string}` | `mech:${string}` | `lower:${string}` | `seat:${string}` | `lift:${string}` | `fasten:${string}` | `unfasten:${string}` | `prep:${string}` | `place:${string}` | `unscrew:${string}` | `screw:${string}` | `plug:${string}` | `unplug:${string}` | `hw:${string}` | `rad:${string}` | `fans:${string}` | `radscrew:${string}`;
 /**
  * Saved progress. `placed` and `connected` say what is fitted; `history` is the same steps in the
  * order they were taken, so the latest one can be undone without breaking what depends on it.
@@ -1033,14 +1033,30 @@ export function simpleRuleBlock(state: PCBuildState): SimpleRule | null {
   return rule.cpuKeys.some((k) => simplePartInstalled(state, k)) && !rule.coolerKeys.some((k) => simplePartInstalled(state, k)) ? "needsLiquidCooler" : null;
 }
 
-const endAt = (state: PCBuildState, cableId: string, endId: string, instanceId: string, portId: string) => {
-  const end = state.cables.find((c) => c.id === cableId)?.ends[endId];
-  return end?.kind === "part" && end.instanceId === instanceId && end.portId === portId;
+/** The catalog port `portId` of a fitted part, or undefined. */
+const portOf = (state: PCBuildState, instanceId: string, portId: string) => {
+  const part = state.parts.find((p) => p.instanceId === instanceId);
+  return pcCatalog.entries.find((e) => e.id === part?.catalogId)?.ports.find((x) => x.id === portId);
+};
+/** Two sockets that take the same plug the same way: connector, function, keying and role (a board's main EPS and its auxiliary one are not swapped) all match. */
+const sameKind = (a: PortSpec, b: PortSpec) => a.connector === b.connector && a.function === b.function && a.keying === b.keying && a.requirement === b.requirement;
+/** The port of `instanceId` this end is plugged into now, or null. */
+export function actualEndPort(state: PCBuildState, end: CableExtraEnd): string | null {
+  const to = state.cables.find((c) => c.id === end.cableId)?.ends[end.endId];
+  return to?.kind === "part" && to.instanceId === end.instanceId ? to.portId : null;
+}
+/** Plugged into the planned socket or an equivalent one (a preferred port is a recommendation, not the only fit). */
+const endAt = (state: PCBuildState, end: CableExtraEnd) => {
+  const actual = actualEndPort(state, end);
+  if (!actual) return false;
+  if (actual === end.portId) return true;
+  const [planned, there] = [portOf(state, end.instanceId, end.portId), portOf(state, end.instanceId, actual)];
+  return Boolean(planned && there && sameKind(planned, there));
 };
 export function simpleCableConnected(state: PCBuildState, key: SimpleCableKey): boolean {
   const spec = cableSpec(key);
   if (!spec) return false;
-  return endAt(state, spec.id, spec.endId, spec.instanceId, spec.portId) && (spec.extra ?? []).every((e) => endAt(state, e.cableId, e.endId, e.instanceId, e.portId));
+  return simpleCableEnds(key).every((end) => endAt(state, end));
 }
 
 export function simpleCableBlock(state: PCBuildState, key: SimpleCableKey): SimpleCableBlock | null {
@@ -1060,7 +1076,7 @@ export function connectSimpleCable(state: PCBuildState, key: SimpleCableKey): { 
   // A modular cable goes into the power supply first, then into the part; a SATA data cable into the drive, then the board.
   const ends = [...(spec.extra ?? []), { cableId: spec.id, endId: spec.endId, instanceId: spec.instanceId, portId: spec.portId }];
   for (const e of ends) {
-    if (endAt(state, e.cableId, e.endId, e.instanceId, e.portId)) continue;
+    if (endAt(state, e)) continue;
     // A plug in the wrong header comes out before it goes into the right one.
     if (state.cables.find((c) => c.id === e.cableId)?.ends[e.endId]) {
       const off = pc.applyAction(state, { type: "disconnect_cable_end", cableId: e.cableId, endId: e.endId }, pcCatalog);
@@ -1081,7 +1097,7 @@ export function simpleCableEnds(key: SimpleCableKey): CableExtraEnd[] {
   const spec = cableSpec(key);
   return [...(spec.extra ?? []), { cableId: spec.id, endId: spec.endId, instanceId: spec.instanceId, portId: spec.portId }];
 }
-export const simpleEndPlugged = (state: PCBuildState, end: CableExtraEnd) => endAt(state, end.cableId, end.endId, end.instanceId, end.portId);
+export const simpleEndPlugged = endAt;
 /** What a plug of this connector is held and keyed by, for the orientation hint. */
 export function simplePlugKeying(connector: string): "latch" | "ramp" | "pin" | "none" {
   if (/atx|eps|pcie|psu_modular|12v|12vhpwr|sata_power|sata_data/.test(connector)) return "latch";
@@ -1089,43 +1105,71 @@ export function simplePlugKeying(connector: string): "latch" | "ramp" | "pin" | 
   if (/argb|rgb/.test(connector)) return "pin";
   return "none";
 }
-const portOf = (state: PCBuildState, instanceId: string, portId: string) => {
-  const part = state.parts.find((p) => p.instanceId === instanceId);
-  return pcCatalog.entries.find((e) => e.id === part?.catalogId)?.ports.find((x) => x.id === portId);
-};
+type Localized = { en: string; ar: string };
+export interface SimplePortChoice { portId: string; label: Localized; connector: string; /** Takes this lead's plug (the planned socket or an equivalent one). */ fits: boolean; occupied: boolean }
+const taken = (state: PCBuildState, instanceId: string, portId: string) =>
+  state.cables.some((c) => Object.values(c.ends).some((to) => to?.kind === "part" && to.instanceId === instanceId && to.portId === portId));
 /**
- * The ports a learner can try one end in: the right one and the look-alikes on the same part
- * (an EPS socket beside a PCIe one, a 12 V RGB header beside a 5 V ARGB one, the other fan headers).
- * Sockets identical to the right one are left out, so a choice is right or wrong, never ambiguous.
+ * The ports a learner can try one end in: the sockets that really take it (the planned one and every equivalent one:
+ * same connector, function and keying) and the look-alikes on the same part (an EPS socket beside a PCIe one, a 12 V
+ * RGB header beside a 5 V ARGB one, a CPU fan header beside a case fan header), which the engine refuses.
  */
-export function simplePortChoices(state: PCBuildState, end: CableExtraEnd): { portId: string; label: { en: string; ar: string }; connector: string }[] {
+export function simplePortChoices(state: PCBuildState, end: CableExtraEnd): SimplePortChoice[] {
   const part = state.parts.find((p) => p.instanceId === end.instanceId);
   const entry = pcCatalog.entries.find((e) => e.id === part?.catalogId);
   const right = entry?.ports.find((p) => p.id === end.portId);
   if (!entry || !right) return [];
   const family = (c: string) => (/argb|rgb|fan|pump/.test(c) ? "header" : /atx|eps|pcie|psu_modular|12v|sata_power/.test(c) ? "power" : /sata_data/.test(c) ? "data" : c);
-  const same = (p: typeof right) => p.connector === right.connector && (p as { keying?: string }).keying === (right as { keying?: string }).keying;
+  const fits = (p: PortSpec) => p.id === right.id || sameKind(p, right);
   return entry.ports
-    .filter((p) => p.id === right.id || (family(p.connector) === family(right.connector) && !same(p)))
-    .slice(0, 8)
-    .map((p) => ({ portId: p.id, label: p.label, connector: p.connector }));
+    .filter((p) => fits(p) || family(p.connector) === family(right.connector))
+    .sort((a, b) => Number(fits(b)) - Number(fits(a)))
+    .slice(0, 12)
+    .map((p) => ({ portId: p.id, label: p.label, connector: p.connector, fits: fits(p), occupied: taken(state, end.instanceId, p.id) }));
 }
+/** The socket to point at for this end: where it sits, else its planned one, else the first free equivalent. */
+export function simpleEndSocket(state: PCBuildState, end: CableExtraEnd): string {
+  const here = actualEndPort(state, end);
+  if (here) return here;
+  if (!taken(state, end.instanceId, end.portId)) return end.portId;
+  return simplePortChoices(state, end).find((c) => c.fits && !c.occupied)?.portId ?? end.portId;
+}
+
+// Recorded forms: `plug:<lead>:<end>@<port>` (the socket actually used), `plug:<lead>:<end>` (older saves: the planned one)
+// and `unplug:<lead>:<end>` (one end taken out). Always read through `parseEndStep`.
+const END_STEP = /^(.+):(\d+)(?:@([\w.-]+))?$/;
+export function parseEndStep(rest: string): { key: SimpleCableKey; index: number; portId: string | null } | null {
+  const m = END_STEP.exec(rest);
+  return m ? { key: m[1]!, index: Number(m[2]), portId: m[3] ?? null } : null;
+}
+export const endStep = (kind: "plug" | "unplug", key: SimpleCableKey, index: number, portId?: string): SimpleStep => `${kind}:${key}:${index}${portId ? `@${portId}` : ""}`;
+
 export type SimplePlugBlock = "reversed" | "wrongPort" | "turnOffFirst" | "fitCableParts";
-/** Plugs one end into a port, turned as the learner holds it. Only the planned port, the right way round, goes in. */
-export function plugSimpleEnd(state: PCBuildState, key: SimpleCableKey, endIndex: number, portId: string, reversed: boolean): { ok: true; state: PCBuildState } | { ok: false; reason: SimplePlugBlock; message?: { en: string; ar: string } } {
+const wrongSocket = (state: PCBuildState, end: CableExtraEnd, portId: string): Localized => {
+  const [planned, chosen] = [portOf(state, end.instanceId, end.portId), portOf(state, end.instanceId, portId)];
+  return chosen && planned
+    ? { en: `${chosen.label.en} is not a socket for this plug. It goes in ${planned.label.en}, or a socket of the same kind.`, ar: `${chosen.label.ar} مو مدخل لهذا الراس. مكانه ${planned.label.ar} أو مدخل من نفس النوع.` }
+    : { en: "That socket is not on this part.", ar: "هذا المدخل مو في هذي القطعة." };
+};
+/**
+ * Plugs one end into a socket, turned as the learner holds it. The planned socket and any equivalent free one (same
+ * connector, function and keying) take it, the right way round; the engine still checks keying, cable family and occupancy.
+ */
+export function plugSimpleEnd(state: PCBuildState, key: SimpleCableKey, endIndex: number, portId: string, reversed: boolean): { ok: true; state: PCBuildState } | { ok: false; reason: SimplePlugBlock; message?: Localized } {
   const blocked = simpleCableBlock(state, key);
   if (blocked === "turnOffFirst") return { ok: false, reason: "turnOffFirst" };
   if (blocked) return { ok: false, reason: "fitCableParts" };
   const end = simpleCableEnds(key)[endIndex];
   if (!end) return { ok: false, reason: "wrongPort" };
-  if (portId !== end.portId) {
-    // Let the engine say why a different socket does not take this plug; if it would, it is still not this lead's place.
+  const [planned, chosen] = [portOf(state, end.instanceId, end.portId), portOf(state, end.instanceId, portId)];
+  if (!planned || !chosen || !(chosen.id === planned.id || sameKind(chosen, planned))) {
+    // Look-alike or unknown socket: the engine's own reason when it refuses, else why it is still not this plug's place.
     const tryIt = pc.applyAction(state, { type: "connect_cable_end", cableId: end.cableId, endId: end.endId, to: { kind: "part", instanceId: end.instanceId, portId } }, pcCatalog);
-    return { ok: false, reason: "wrongPort", ...(tryIt.ok ? {} : { message: tryIt.rejection.message }) };
+    return { ok: false, reason: "wrongPort", message: tryIt.ok ? wrongSocket(state, end, portId) : tryIt.rejection.message };
   }
-  if (reversed && simplePlugKeying(portOf(state, end.instanceId, end.portId)?.connector ?? "") !== "none") return { ok: false, reason: "reversed" };
+  if (reversed && simplePlugKeying(planned.connector) !== "none") return { ok: false, reason: "reversed" };
   if (simpleEndPlugged(state, end)) return { ok: true, state };
-  // A plug sitting in the wrong header comes out before it goes into the right one.
+  // A plug sitting in a wrong header comes out before it goes into the right one.
   if (state.cables.find((c) => c.id === end.cableId)?.ends[end.endId]) {
     const off = pc.applyAction(state, { type: "disconnect_cable_end", cableId: end.cableId, endId: end.endId }, pcCatalog);
     if (!off.ok) return { ok: false, reason: "wrongPort", message: off.rejection.message };
@@ -1133,6 +1177,15 @@ export function plugSimpleEnd(state: PCBuildState, key: SimpleCableKey, endIndex
   }
   const r = pc.applyAction(state, { type: "connect_cable_end", cableId: end.cableId, endId: end.endId, to: { kind: "part", instanceId: end.instanceId, portId } }, pcCatalog);
   return r.ok ? { ok: true, state: r.state } : { ok: false, reason: "wrongPort", message: r.rejection.message };
+}
+
+/** Takes one end of a lead out; every other end stays where it is. The PC must be off. */
+export function unplugSimpleEnd(state: PCBuildState, key: SimpleCableKey, endIndex: number): { ok: true; state: PCBuildState } | { ok: false; reason: "turnOffFirst" | "notPlugged" } {
+  if (state.power.pressed) return { ok: false, reason: "turnOffFirst" };
+  const end = simpleCableEnds(key)[endIndex];
+  if (!end || !actualEndPort(state, end)) return { ok: false, reason: "notPlugged" };
+  const off = pc.applyAction(state, { type: "disconnect_cable_end", cableId: end.cableId, endId: end.endId }, pcCatalog);
+  return off.ok ? { ok: true, state: off.state } : { ok: false, reason: "notPlugged" };
 }
 
 export function disconnectSimpleCable(state: PCBuildState, key: SimpleCableKey): { ok: true; state: PCBuildState } | { ok: false; reason: SimpleCableBlock } {
@@ -1189,7 +1242,12 @@ export function applySimpleStep(state: PCBuildState, step: SimpleStep): PCBuildS
     : kind === "lift" ? (rest.endsWith(":rad") ? liftSimplePart(state, rest.slice(0, -":rad".length), "radiator") : liftSimplePart(state, rest))
     : kind === "fasten" ? fastenSimplePart(state, rest)
     : kind === "unfasten" ? unfastenSimplePart(state, rest)
-    : kind === "plug" ? (() => { const i = rest.lastIndexOf(":"); const k = rest.slice(0, i); const end = simpleCableEnds(k)[Number(rest.slice(i + 1))]; return end ? plugSimpleEnd(state, k, Number(rest.slice(i + 1)), end.portId, false) : null; })()
+    : kind === "plug" || kind === "unplug" ? (() => {
+      const e = parseEndStep(rest);
+      const end = e && simpleCableEnds(e.key)[e.index];
+      if (!e || !end) return null;
+      return kind === "unplug" ? unplugSimpleEnd(state, e.key, e.index) : plugSimpleEnd(state, e.key, e.index, e.portId ?? end.portId, false);
+    })()
     : kind === "prep" ? (() => { const [k, prep, value] = rest.split(":"); return prepSimplePart(state, k!, prep as PrepKind, value ?? ""); })()
     : kind === "place" ? placeSimplePart(state, rest.split("@")[0]!, rest.split("@")[1])
     : kind === "unscrew" ? unscrewSimplePart(state, rest)
@@ -1214,17 +1272,25 @@ export function simpleBuildFromSnapshot(snapshot: SimpleSnapshot): PCBuildState 
 export function deriveSimpleLists(history: readonly SimpleStep[]): { placed: SimplePartKey[]; connected: SimpleCableKey[] } {
   const placed: SimplePartKey[] = [];
   const connected: SimpleCableKey[] = [];
+  const plugged = new Map<SimpleCableKey, Set<number>>();
   for (const step of history) {
     const kind = step.slice(0, step.indexOf(":"));
     const key = kind === "lower" ? step.slice(step.indexOf(":") + 1).split(":")[0]! : kind === "place" ? step.slice(step.indexOf(":") + 1).split("@")[0]! : step.slice(step.indexOf(":") + 1);
     if ((kind === "part" || kind === "lower" || kind === "place") && !placed.includes(key)) placed.push(key);
     // A lift of the radiator alone (`lift:aio:rad`) leaves the cooler's block where it is.
     if (kind === "lift" && !step.endsWith(":rad") && placed.includes(key)) placed.splice(placed.indexOf(key), 1);
-    if (kind === "cable" && !connected.includes(key)) connected.push(key);
-    if (kind === "plug") {
-      const k = key.slice(0, key.lastIndexOf(":"));
-      const plugged = new Set(history.slice(0, history.indexOf(step) + 1).filter((x) => x.startsWith(`plug:${k}:`)));
-      if (!connected.includes(k) && cableSpec(k) && plugged.size >= simpleCableEnds(k).length) connected.push(k);
+    if (kind === "cable" && !connected.includes(key)) { connected.push(key); if (cableSpec(key)) plugged.set(key, new Set(simpleCableEnds(key).keys())); }
+    if (kind === "plug" || kind === "unplug") {
+      // An end is in from its plug step until its unplug step; a lead is connected while every end is in.
+      const e = parseEndStep(step.slice(step.indexOf(":") + 1));
+      const total = e && cableSpec(e.key) ? simpleCableEnds(e.key).length : 0;
+      if (!e || !total) continue;
+      const ends = plugged.get(e.key) ?? new Set<number>();
+      if (kind === "plug") ends.add(e.index); else ends.delete(e.index);
+      plugged.set(e.key, ends);
+      const whole = ends.size >= total;
+      if (whole && !connected.includes(e.key)) connected.push(e.key);
+      if (!whole && connected.includes(e.key)) connected.splice(connected.indexOf(e.key), 1);
     }
   }
   return { placed, connected };
@@ -1264,9 +1330,14 @@ export const withCable = (snapshot: SimpleSnapshot, key: SimpleCableKey): Simple
 
 const withHistory = (snapshot: SimpleSnapshot, history: SimpleStep[]): SimpleSnapshot => ({ ...snapshot, history, ...deriveSimpleLists(history) });
 
-export const withoutCable = (snapshot: SimpleSnapshot, key: SimpleCableKey): SimpleSnapshot =>
-  withHistory(snapshot, snapshot.history.filter((step) => step !== `cable:${key}` && !step.startsWith(`plug:${key}:`)));
-export const withPlug = (snapshot: SimpleSnapshot, key: SimpleCableKey, endIndex: number) => withStep(snapshot, `plug:${key}:${endIndex}`);
+/** Whole-lead removal for older flows and tests: every step of that lead leaves the history. */
+export const withoutCable = (snapshot: SimpleSnapshot, key: SimpleCableKey): SimpleSnapshot => {
+  const ofLead = (step: string) => step === `cable:${key}` || (/^(un)?plug:/.test(step) && parseEndStep(step.slice(step.indexOf(":") + 1))?.key === key);
+  return withHistory(snapshot, snapshot.history.filter((step) => !ofLead(step)));
+};
+/** One end plugged into the socket it actually went in, or taken out again. */
+export const withPlug = (snapshot: SimpleSnapshot, key: SimpleCableKey, endIndex: number, portId?: string) => withStep(snapshot, endStep("plug", key, endIndex, portId));
+export const withUnplug = (snapshot: SimpleSnapshot, key: SimpleCableKey, endIndex: number) => withStep(snapshot, endStep("unplug", key, endIndex));
 
 /** Takes a cooler back out (`simpleRemoveBlock` must allow it): its step leaves the history. */
 export const withoutPart = (snapshot: SimpleSnapshot, key: SimplePartKey): SimpleSnapshot =>

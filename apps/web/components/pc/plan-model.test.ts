@@ -172,7 +172,7 @@ describe("hands-on cables", () => {
     if (!r1.ok) throw new Error(JSON.stringify(r1));
     state = r1.state;
     const device = ends.at(-1)!;
-    const wrong = simplePortChoices(state, device).find((c) => c.portId !== device.portId);
+    const wrong = simplePortChoices(state, device).find((c) => !c.fits);
     expect(wrong).toBeDefined();
     expect(plugSimpleEnd(state, "cpuPower", ends.length - 1, wrong!.portId, false)).toMatchObject({ ok: false, reason: "wrongPort" });
     const r2 = plugSimpleEnd(state, "cpuPower", ends.length - 1, device.portId, false);

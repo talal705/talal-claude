@@ -4,6 +4,20 @@ Current site brand: **بيئة التدريب الافتراضية (VTE)** in Ar
 **Virtual Training Environment (VTE)** in English. Older references below use the former name.
 The repository and hosting identifiers remain `talal-claude`; saved-data keys are unchanged.
 
+## Current status — 2026-11-26 continuation
+
+Reviewed feature checkpoint: `feat/assembly-completion` at `72330d6` (repair packet `0fa7056`, Stage8 `9276afa`, Stage9 `72330d6`).
+The latest interrupted wiring work is preserved separately on **`wip/wiring-2026-11-26`** in this same isolated worktree.
+Claude reached its five-hour limit while implementing Stage10 (reported reset20:40 Asia/Riyadh, 2026-11-26).
+
+The saved Stage9 checkpoint passes relevant independent tests/types/messages; final browser/production-build gates remain.
+The partial Stage10 source **fails type checking** because companion.ts lacks the `parseEndStep` import, and its actual-port
+selection is not yet wired into the UI save callback. Model probes and 85 relevant tests pass, but that is not full acceptance.
+Stage11 readiness/startup work remains. No `main` merge or production deployment was made.
+
+Read `docs/handoff/2026-11-26/CODEX_REVIEW.md` and **`NEXT_CLAUDE_PROMPT.txt`** for the exact remaining commands and gates.
+Continue that WIP branch without reverting reviewed work; integrate it back only after fixing the listed issues and final checks.
+
 ## Current work — assembly completion checkpoint (2026-11-25)
 
 The owner authorized continuing the full agreed PC-assembly roadmap through Stage 11, with Claude implementing and
