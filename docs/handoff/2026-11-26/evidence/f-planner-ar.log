@@ -1,0 +1,10 @@
+PASS  the suggested gaming build has one drive 
+PASS  the 870 EVO tile has a button to add it 
+PASS  a second, different drive is added 
+PASS  a duplicate copy of the same drive is added 
+PASS  each chosen copy has its own remove button 
+PASS  removing one copy removes exactly that one drive 
+PASS  the plan survives a reload 
+PASS  no page errors 
+8 passed, 0 failed
+exit=0

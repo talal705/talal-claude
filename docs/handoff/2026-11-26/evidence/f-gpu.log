@@ -1,0 +1,12 @@
+PASS  one click takes out exactly one slot cover 
+PASS  the second cover is its own step 
+PASS  the PCIe latch is its own step 
+PASS  bringing the card over the slot changes no build state; the robot says to turn it 
+PASS  after turning it, the card goes in as one step 
+PASS  a double click on the screw button is one screw 
+PASS  the second bracket screw is its own step and the card is installed 
+PASS  the camera never moved on its own 
+PASS  reload keeps the installed card 
+PASS  no page errors 
+10 passed, 0 failed
+exit=0

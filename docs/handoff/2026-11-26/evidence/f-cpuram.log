@@ -1,0 +1,12 @@
+PASS  CPU installed through the toolbar, one step per click 
+PASS  CPU: the wrong turn was refused and turned only by the learner's clicks 
+PASS  no CPU step moved the camera 
+PASS  CPU history ends with the lever locked 
+PASS  RAM held over DIMM_A2 by its slot button 
+PASS  reload with the module in hand: nothing changed, the robot names DIMM_A2 
+PASS  RAM installed in DIMM_A2, one step per click; the reversed module was refused first 
+PASS  no memory step moved the camera 
+PASS  no page errors 
+
+9 passed, 0 failed
+exit=0
