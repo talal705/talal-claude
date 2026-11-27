@@ -7,5 +7,5 @@ export default {
   '@ytl/simulation':`${root}/packages/simulation/src/index.ts`,
   '@ytl/curriculum':`${root}/packages/curriculum/src/index.ts`,
   '@ytl/catalog':`${root}/content/catalog/index.ts`,
- }},test:{include:['docs/handoff/2026-11-26/review/equivalent-sata-port.test.ts']},
+ }},test:{include:['docs/handoff/2026-11-26/review/*.test.ts']},
 };

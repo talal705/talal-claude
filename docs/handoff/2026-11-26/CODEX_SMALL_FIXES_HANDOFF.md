@@ -1,3 +1,5 @@
+CURRENT NOTE (2026-11-27): Historical review/packet; reproduced findings below are resolved through cfa731c. Read CODEX_FINAL_REVIEW.md for the current status and exact verification limits.
+
 # Codex small-fixes handoff — 2026-11-26
 
 The owner explicitly authorized Codex to implement a bounded small-fix/test/handoff packet to reduce Claude's work.

@@ -6,21 +6,21 @@ models' documents. A stage is "done" only when its verification gate (brief, sec
 
 | Stage | Plan | Status |
 |---|---|---|
-| 3 — M.2 storage | `2026-11-21-stage3-m2-storage.md` | implemented and verified locally; awaiting review |
-| 4 — CPU cooling (air, AIO) | `2026-11-22-stage4-cpu-cooling.md` | implemented, awaiting Codex review (`feat/stage4-cooling`) |
-| 5 — Motherboard into case | 2026-11-25 completion scope / review | carried-assembly cable blocker repaired and regression-tested; final browser acceptance pending |
-| 6 — Power supply | 2026-11-25 completion scope / review | independent fitting and per-screw removal implemented; final acceptance pending |
-| 7 — SATA SSD / HDD | 2026-11-25 completion scope / review | selectable bays, staged fasteners and scene/guide consistency implemented and unit-tested; final browser acceptance pending |
-| 8 — Graphics card | 2026-11-25 completion scope / review | individual slot covers (`slot-covers:N`) and per-screw bracket steps implemented and unit-tested; browser acceptance pending |
-| 9 — Case fans | 2026-11-25 completion scope / review | position choices, orientation advice, the case's own fans as selectable parts (`sfan`), no automatic fan moves for a radiator, rear-fan/I/O clearance implemented and unit-tested; browser and visual acceptance pending |
-| 10 — Wiring | 2026-11-26 Codex small-fix handoff | per-end disconnect UI, actual/alternate sockets, clickable ends, physical shared-PSU-source save derivation (+ legacy list migration) implemented; unit suite and targeted real-browser runs pass (see `PROJECT_HANDOFF.md` top); **not accepted** until Codex review |
-| 11 — Final check and startup | 2026-11-25 completion scope / review | readiness steps (panel, mains, PSU switch, power button, power off) as saved `sys:` steps, engine-only startup judgement (no optional-part prerequisite), failure/recovery implemented; browser runs pass (see `PROJECT_HANDOFF.md` top); **not accepted** until Codex review |
+| 3 — M.2 storage | `2026-11-21-stage3-m2-storage.md` | implemented;31-case M.2 browser regression passed (EN desktop); see final review |
+| 4 — CPU cooling (air, AIO) | `2026-11-22-stage4-cpu-cooling.md` | reviewed current cooling fixes;40 air +16 AIO local browser checks passed; documented hardware approximations remain |
+| 5 — Motherboard into case | 2026-11-25 completion scope / review | carried-assembly blocker repaired; independent probe and AIO carried-board browser path pass |
+| 6 — Power supply | 2026-11-25 completion scope / review | independent fitting/removal covered by24-case PSU/SATA/fan browser run (EN desktop) |
+| 7 — SATA SSD / HDD | 2026-11-25 completion scope / review | selectable bays/fasteners covered by24-case PSU/SATA/fan browser run; duplicate planner removal8 EN + 8 AR passed |
+| 8 — Graphics card | 2026-11-25 completion scope / review | individual covers, latch and per-screw installation10-case browser run passed (EN desktop); removal/AR/narrow browser checks remain unrun |
+| 9 — Case fans | 2026-11-25 completion scope / review | position/orientation/supplied-fan paths covered by PSU/SATA/fan and AIO browser runs; exact device/geometry limits remain documented |
+| 10 — Wiring | 2026-11-26 Codex small-fix handoff | per-end disconnect UI, actual/alternate sockets, clickable ends, physical shared-PSU-source save derivation (+ legacy list migration) implemented; unit suite and targeted real-browser runs pass (see `PROJECT_HANDOFF.md` top); Codex reviewed current fixes; remaining manual/visual limits in final review |
+| 11 — Final check and startup | 2026-11-25 completion scope / review | readiness steps (panel, mains, PSU switch, power button, power off) as saved `sys:` steps, engine-only startup judgement (no optional-part prerequisite), failure/recovery implemented; browser runs pass (see `PROJECT_HANDOFF.md` top); Codex reviewed current fixes; remaining manual/visual limits in final review |
 
 2026-11-25: the owner authorized continuing through Stage 11 without another stage-approval pause.
-The isolated branch is `feat/assembly-completion`. This is a **partial checkpoint**, not a release.
+Current reviewed branch is `fix/wiring-handoff-2026-11-26`; earlier `feat/assembly-completion` notes are historical. This is not a production release.
 See `docs/handoff/2026-11-25/review/IMPLEMENTATION_SCOPE.txt`, `CODEX_REVIEW.md` and `RESUME_CLAUDE.txt`.
 The 2026-11-25 carried-board reproduction was subsequently fixed. Continue branch `fix/wiring-handoff-2026-11-26` from
-`docs/handoff/2026-11-26/CODEX_SMALL_FIXES_HANDOFF.md`; final Stage10/11 and browser gates remain.
+`docs/handoff/2026-11-26/CODEX_SMALL_FIXES_HANDOFF.md`; current results and remaining verification limits are in `docs/handoff/2026-11-26/CODEX_FINAL_REVIEW.md`.
 
 ## Already present before Stage 3 (to audit, not rebuild)
 
