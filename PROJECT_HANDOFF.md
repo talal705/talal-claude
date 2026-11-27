@@ -4,6 +4,12 @@ Current site brand: **بيئة التدريب الافتراضية (VTE)** in Ar
 **Virtual Training Environment (VTE)** in English. Older references below use the former name.
 The repository and hosting identifiers remain `talal-claude`; saved-data keys are unchanged.
 
+## Latest follow-up — protected preview smoke-tested, 2026-11-27
+
+Codex used the newly available native computer-use connection and the owner's existing Chrome session to open the actual protected preview. Its Vercel dashboard visibly confirmed **Ready / Latest**, branch `fix/wiring-handoff-2026-11-26`, source **4d28127**. Deployed checks covered storage add/removal/reload, CPU click steps and orientation refusal, undo/reload/resume, Arabic/RTL, RAM clip/orientation/seating, RGB and M.2_1's source note and saved held state. No protection/sharing setting changed; no product code was edited.
+
+This resolves the earlier access obstacle for a **bounded deployed smoke check**, not a remote rerun of the 436 local assertions. Physical-touch hardware remains pending, and `main` merge/production publication remain unapproved. Exact evidence and limits: `docs/handoff/2026-11-27/DEPLOYED_PREVIEW_VERIFICATION.md`. Earlier local results and implementation records below remain historical evidence.
+
 ## Latest verification — Codex final PC journey, 2026-11-27
 
 Owner authorized Codex to complete the four final verification tasks directly. Product source at `0619a3b` (checkout `1b15b24`) is unchanged; no confirmed product defect required a repair. A fresh production build **`-f6Q4maBozU16L9dULuXh`**, served on the separate local port **3027**, passed **436 browser assertions**: fresh planner-to-startup journeys 49 EN1440 + 49 AR430, plus 338 assertions in 14 targeted runs for GPU removal, wiring/startup, robot targets, old saves, touch emulation, cooling and individually screwed parts. Types/messages/build passed; Vitest 88 files **1127 passed / 21 skipped**, preservation configs 1 + 3 passed. Failed harness/environment attempts are preserved separately and not counted as passes.

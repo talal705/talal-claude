@@ -2,6 +2,10 @@
 
 The owner asked Codex to carry out the four final verification tasks directly. This packet tests the current PC experience; it does not certify unrelated website sections, every hardware variant, or manufacturer-exact geometry.
 
+## Deployed follow-up — authentication obstacle resolved
+
+After the local packet, native computer use became available. Codex opened the protected preview through the owner's existing authorized Chrome session and verified its actual dashboard source **4d28127**, Ready/Latest. A bounded live smoke check passed for storage add/removal/reload, CPU click steps and orientation refusal, undo/reload/resume, Arabic/RTL, RAM clip/orientation/seating, RGB and M.2 slot/source-note/resume state. Exact observations and limits: `DEPLOYED_PREVIEW_VERIFICATION.md`. The 436 local assertions were **not** rerun remotely. No protection setting or product code changed. The physical phone/tablet gate remains pending.
+
 ## Source and build
 
 - Branch: `fix/wiring-handoff-2026-11-26`.
@@ -14,7 +18,7 @@ The owner asked Codex to carry out the four final verification tasks directly. T
 
 | Task | Actual result |
 |---|---|
-| Verify deployed preview | **Blocked by authentication.** GitHub reports Vercel deployment success, and its check-run feedback URL supplies the branch hostname. An actual request to that hostname returned the page title **Login – Vercel**, not VTE. No deployed-app acceptance is claimed. |
+| Verify deployed preview | **Bounded deployed smoke check passed later**, through authorized native Chrome, on source 4d28127. The original unauthenticated request showed Login – Vercel; that obstacle is preserved as history. See the follow-up above; full remote acceptance is not claimed. |
 | Complete learner journey | **Passed locally:** 49/49 EN1440 and 49/49 AR430, from fresh isolated browser storage, with no assembly-state seed or engine mutation. |
 | Real touch device | **Pending.** Touch emulation passed 12/12 EN1440 and 12/12 AR430; no physical-device control connection is available. Emulation is not a physical-device pass. |
 | Repair and prepare release | No confirmed product defect was found in this packet. Harness assumptions were corrected, affected runs completed, engineering gates passed, evidence preserved and handoff updated. Main merge/production release remain unapproved. |
@@ -63,7 +67,7 @@ Evidence, exact commands, build fingerprints and final/failed logs: `evidence/re
 
 ## Remaining gates and continuation
 
-1. Obtain authorized access to the protected preview and verify the deployed application and its exact source commit. The branch URL confirmed through GitHub is `https://talal-claude-git-fix-wiring-handoff-2026-11-26-talal705.vercel.app/pc`; the successful source-checkout Vercel status points to `https://vercel.com/talal705/talal-claude/6ap4SKAgfhJtaLmrTWShpFoogEEv`. Neither is evidence that the deployed app was tested.
+1. **Resolved for the bounded smoke check:** authorized native Chrome opened the app, and its actual Vercel dashboard confirmed source 4d28127. The earlier unauthenticated blocker is historical; use `DEPLOYED_PREVIEW_VERIFICATION.md` for the latest deployed evidence.
 2. Perform `PHYSICAL_TOUCH_CHECKLIST.md` on an actual phone/tablet and record results.
 3. Repair any genuine issue found in those gates, then review the concrete final result with the owner before merging `main` or publishing production.
 
