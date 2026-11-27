@@ -7,7 +7,7 @@ import { pcCatalog } from "./catalog";
 import {
   ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, hasModelledMounting, nextReadiness, isPositionKey, isRamKey, parseEndStep, partSpec, SIMPLE_PARTS, simpleAllPartsIn, simpleBootPartsIn, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
   simpleCablesFor, simpleCableOrder, simplePartInstalled, simplePartOrder, simplePrerequisites, simpleRuleBlock, REMOVABLE, simpleRamRecommended, simpleSlotFilled, simpleSlotPart, simpleTarget, slotOf,
-  caseCoversClosed, isM2Key, simpleM2Slots, simpleRamSlots, simpleRamTargetFor, simpleRetention,
+  caseCoversClosed, isM2Key, simpleM2Slots, simpleRamSlots, simpleRamTargetFor, simpleM2OpenFirstKey, simpleRetention,
   type SimpleBlock, type SimpleCableBlock, type SimpleCableKey, type SimpleHeld, type SimplePartKey, type SimpleRemoveBlock, type SimpleRule, type SimpleStep,
 } from "./simple-model";
 import { attachmentOf, nextHandStep } from "./click-assembly";
@@ -377,7 +377,7 @@ export function m2StepLine(state: PCBuildState, key: SimplePartKey, held: Simple
     case "lower": return slot ? { key: "hands.m2Ready", values: slot } : { key: "hands.m2Pick" };
     case "seat": return slot ? { key: "hands.m2PressFlat", values: slot } : null;
     case "mechanism": {
-      if (step.desired === "open") return { key: "hands.m2OpenFirst" };
+      if (step.desired === "open") return { key: simpleM2OpenFirstKey(state, key, slotId) };
       return { key: simpleRetention(state, key, slotId)?.kind === "m2_screw" ? "hands.m2ScrewNow" : "hands.m2LatchNow" };
     }
     default: return null;

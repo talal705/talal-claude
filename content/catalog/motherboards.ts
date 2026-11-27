@@ -1,7 +1,7 @@
 import type { MotherboardEntry, MountPointSpec } from "@ytl/contracts";
 import { FASTENER_NOTE, L, NO_ASSET, boardPorts, dimmSlots, lgaSocketDetail, m2Heatsink, m2QLatch, pcieSlotDetail, sataDataCables, source, zone } from "./helpers";
 
-const socketMounts = (socket: "lga1700" | "am4", name: string): MountPointSpec[] => [
+const socketMounts = (socket: "lga1700" | "am4", name: string, manualRead = true): MountPointSpec[] => [
   {
     id: "cpu-socket",
     kind: "cpu_socket",
@@ -10,7 +10,9 @@ const socketMounts = (socket: "lga1700" | "am4", name: string): MountPointSpec[]
     fastener: { kind: "socket_lever", count: 1 },
     // ASUS manuals: lift the load lever (hold it while releasing), the CPU fits one way only, keep the PnP cap.
     ...(socket === "lga1700"
-      ? lgaSocketDetail("ASUS TUF GAMING Z790-PLUS WIFI manual E21279 pp. 1-4, 2-1, 2-2: hold the lever while releasing it; the CPU fits in one orientation; keep the PnP cap. The board's lever protector is not modelled.")
+      ? lgaSocketDetail(manualRead
+        ? "ASUS TUF GAMING Z790-PLUS WIFI manual E21279 pp. 1-4, 2-1, 2-2: hold the lever while releasing it; the CPU fits in one orientation; keep the PnP cap. The board's lever protector is not modelled."
+        : "LGA1700 load plate and lever (Intel independent loading mechanism); this board's manual was not read for the steps.")
       // ASUS FAQ 1047659 (AM4 example): lift the lever to 90°, match the CPU triangle to the socket corner, lower it straight, lower the lever.
       : { retention: { id: "cpu-socket-lever", kind: "zif_lever" as const, note: "AM4 lever per ASUS FAQ 1047659; the board is archived (not offered in the planner)." }, keying: { rotationDeg: 0, toleranceMm: 3, mark: "triangle" as const } }),
   },
@@ -315,7 +317,7 @@ export const motherboards: MotherboardEntry[] = [
     dimensions: { lengthMm: 305, widthMm: 244, heightMm: null },
     formFactor: "ATX",
     mountPoints: [
-      ...socketMounts("lga1700", "LGA1700"),
+      ...socketMounts("lga1700", "LGA1700", false),
       ...dimmSlots("ddr4", undefined, { latches: "one_side", latchEnd: "top", note: "ASUS manual E20581 (English, First Edition Aug 2022): Q-DIMM in the ASUS Q-Design list; p. 1-5 DIMM_A1, DIMM_A2, DIMM_B1, DIMM_B2 and the recommended configurations; p. 2-6 '2.1.3 DIMM installation' shows one moving clip, the other end fixed (open the clip, match the notch, press down until it closes; remove: press the clip, lift). ASUS's official top-view photo of this board shows the clip at the top end of each slot." }),
       gpuSlot(5),
       {

@@ -1231,6 +1231,34 @@ export function simpleGpuSourceKey(): "hands.gpuSource" | "hands.gpuSourceGenera
   return partSpec("motherboard").catalogId === "asus-tuf-gaming-z790-plus-wifi" ? "hands.gpuSource" : "hands.gpuSourceGeneral";
 }
 
+/** The manuals actually read for M.2 fixing, with the page for each slot (2280 length). No other board has one. */
+const M2_MANUALS: Record<string, { board: string; manual: string; pages: Record<string, string> }> = {
+  "asus-tuf-gaming-z790-plus-wifi": { board: "TUF GAMING Z790-PLUS WIFI", manual: "E21279", pages: { "m2-1": "2-8", "m2-2": "2-10", "m2-3": "2-8", "m2-4": "2-11" } },
+  "asus-tuf-gaming-z790-plus-wifi-d4": { board: "TUF GAMING Z790-PLUS WIFI D4", manual: "E20581", pages: { "m2-1": "2-8", "m2-2": "2-10", "m2-3": "2-8", "m2-4": "2-11" } },
+  "asus-prime-b760m-a-wifi": { board: "PRIME B760M-A WIFI", manual: "E21693", pages: { "m2-1": "1-14", "m2-2": "1-14" } },
+};
+
+/** The note under the CPU's steps: a board's own manual only where it was read, else ASUS's general CPU guide. */
+export function simpleCpuSourceKey(lga: boolean): "hands.lgaSource" | "hands.lgaSourceGeneral" | "hands.zifSource" {
+  if (!lga) return "hands.zifSource";
+  return partSpec("motherboard").catalogId === "asus-tuf-gaming-z790-plus-wifi" ? "hands.lgaSource" : "hands.lgaSourceGeneral";
+}
+
+/** The note under an M.2 drive's steps: what holds it in this slot, from this board's manual where it was read. */
+export function simpleM2SourceNote(state: PCBuildState, key: SimplePartKey, slotId?: string): { key: string; values?: Record<string, string> } {
+  const retention = slotId ? simpleRetention(state, key, slotId) : null;
+  if (!slotId || !retention) return { key: "hands.m2SourcePick" };
+  const kind = retention.kind === "m2_screw" ? "Screw" : "QLatch";
+  const read = M2_MANUALS[partSpec("motherboard").catalogId];
+  const page = read?.pages[slotId];
+  return read && page ? { key: `hands.m2Source${kind}`, values: { board: read.board, manual: read.manual, page } } : { key: `hands.m2Source${kind}General` };
+}
+
+/** What the robot says when a drive's fixing is in the way: the fixing this slot has. */
+export function simpleM2OpenFirstKey(state: PCBuildState, key: SimplePartKey, slotId?: string): "hands.m2OpenFirst" | "hands.m2ScrewFirst" {
+  return simpleRetention(state, key, slotId)?.kind === "m2_screw" ? "hands.m2ScrewFirst" : "hands.m2OpenFirst";
+}
+
 /**
  * Whether going from `before` to `after` works on something behind a closed side panel: judged by what actually
  * changes (the part moved, its mechanisms or hardware, the lead end plugged or taken out), so work on the bench

@@ -18,7 +18,7 @@ import {
   ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, cableSpec, firstAttachment, partSpec, createSimpleBuild, emptySimpleSnapshot, installSimplePart, isM2Key, isRamKey, lastSimpleStep, M2_WHOLE_TILT_DEG, simpleM2Heatsink, simpleM2Slots,
   parseSimpleSnapshot, SIMPLE_PART_LIST, SIMPLE_PARTS, SIMPLE_SAVE_KEY, simpleAllPartsIn, simpleBootPartsIn, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot,
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
-  simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, unplugSimpleEnd, withUnplug, simpleActiveEnd, nextReadiness, pressSimplePower, setSimpleSystem, simpleChangesBehindPanel, simpleGpuSourceKey, simpleSystemValue, type SystemControl, actualEndPort, simpleSocketName, withoutPart, withPart, withSwap,
+  simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, unplugSimpleEnd, withUnplug, simpleActiveEnd, nextReadiness, pressSimplePower, setSimpleSystem, simpleChangesBehindPanel, simpleCpuSourceKey, simpleGpuSourceKey, simpleM2OpenFirstKey, simpleM2SourceNote, simpleSystemValue, type SystemControl, actualEndPort, simpleSocketName, withoutPart, withPart, withSwap,
   hasModelledMounting, withSimpleStep, activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
   withMechanism, withLower, withSeat, withLift, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, unscrewSimplePart, withUnscrew, isPositionKey, simplePositions, simpleLiftBlock, simpleOrientationAdvice, simpleRequiredScrews, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, caseCoversClosed, slotCovers, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot, type SimpleStep,
 } from "./simple-model";
@@ -492,7 +492,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (lockedOn || !hold || hold.key !== key) return;
     if (!takeStep()) return;
     const r = lowerSimplePart(state, key, hold);
-    if (!r.ok) { sayEngine(r.message, r.reason === "turnPart" ? "m2Turn" : r.reason === "centrePart" ? "m2Centre" : "m2OpenFirst"); return; }
+    if (!r.ok) { sayEngine(r.message, r.reason === "turnPart" ? "m2Turn" : r.reason === "centrePart" ? "m2Centre" : simpleM2OpenFirstKey(state, key, hold?.slotId).replace("hands.", "")); return; }
     const pose = { rotationDeg: hold.rotationDeg, offsetMm: hold.offsetMm, ...(hold.tiltDeg === undefined ? {} : { tiltDeg: hold.tiltDeg }), ...(hold.slotId ? { slotId: hold.slotId } : {}) };
     setHold(null);
     if (!commit(r.state, (sn) => withLower(sn, key, pose))) return;
@@ -552,7 +552,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const m2Pose = m2LiftPose(state, key);
     const r = liftSimplePart(state, key);
     if (!r.ok) {
-      const line = r.reason === "unplugFirst" ? "gpuUnplug" : r.reason === "unscrewFirst" ? "gpuUnscrew" : k === "gpu" ? "gpuReleaseFirst" : k === "ram" && ret?.nearId ? "ramOpenBoth" : `${k}OpenFirst`;
+      const line = r.reason === "unplugFirst" ? "gpuUnplug" : r.reason === "unscrewFirst" ? "gpuUnscrew" : k === "gpu" ? "gpuReleaseFirst" : k === "ram" && ret?.nearId ? "ramOpenBoth" : k === "m2" ? simpleM2OpenFirstKey(state, key).replace("hands.", "") : `${k}OpenFirst`;
       speak({ lines: [{ key: `hands.${line}` }], mood: "concerned", point: "scene" });
       return;
     }
@@ -1405,7 +1405,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
           {!frameOn && ilmOff && mountingControls(t("hands.ilmOff"))}
         </>}
         <p className={styles.hint}>{t("hands.markCpu")}</p>
-        <p className={styles.cablesNote}>{t(lga ? "hands.lgaSource" : "hands.zifSource")}</p>
+        <p className={styles.cablesNote}>{t(simpleCpuSourceKey(lga))}</p>
         <p className={styles.cablesNote}>{t("hands.note")}</p>
       </div>
     );
@@ -1487,6 +1487,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     const slotId = at?.target.mountPointId ?? (hold?.key === key ? hold.slotId : undefined);
     const hs = slotId ? simpleM2Heatsink(state, slotId) : null;
     const screw = ret.kind === "m2_screw";
+    const m2Note = simpleM2SourceNote(state, key, slotId ?? undefined);
     const disabled = !ready || handsOff();
     const button = (label: string, run: () => void, primary = true) => <button key={label} className={primary ? styles.installButton : styles.cancel} type="button" disabled={disabled} onClick={run}>{label}</button>;
     const state2 = (open: boolean) => t(open ? "hands.open" : "hands.closed");
@@ -1516,7 +1517,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
           {at && at.seating === "seated" && !ret.open && !hs?.fitted && button(t(screw ? "hands.m2ScrewOut" : "hands.openQLatch"), () => handMechanism(key, "open"), false)}
         </div>}
         <p className={styles.hint}>{t("hands.markM2")}</p>
-        <p className={styles.cablesNote}>{t("hands.m2Source")}</p>
+        <p className={styles.cablesNote}>{t(m2Note.key, m2Note.values)}</p>
         <p className={styles.cablesNote}>{t("hands.note")}</p>
       </div>
     );

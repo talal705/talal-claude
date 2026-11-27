@@ -54,6 +54,31 @@ Gates on this code: type-check, messages, `vitest apps/web packages content` 87 
 1440/430, **42 passed each** (`evidence/build-TZ9esHDj/`). The other 616-check matrix above ran on `uZ7rar7zMNAhWNTwgtCP8` and was
 not repeated (only this note's text and its key changed).
 
+**Follow-up: CPU-socket and M.2 source notes, by board and slot (third build).** Base `3af4dda`; pending change, product only in
+`SimplePcLab.tsx`, `companion.ts`, `simple-model.ts`, `labs.json` (en/ar), `content/catalog/motherboards.ts` (a note string). No engine,
+save format, geometry, camera, assembly step or route change.
+- *M.2 note* (`simpleM2SourceNote`) follows the board and the slot's actual retention: Q-Latch boards cite their own manual and the
+  page for that slot (Z790-PLUS WIFI E21279 pp. 2-8/2-10/2-8/2-11; Z790 D4 E20581, same pages); B760M-A cites E21693 p. 1-14 for the
+  screw-and-stand fixing; with no slot chosen nothing is claimed. Any other case: general guidance, labelled unverified. Pages checked
+  against the E21279 PDF (2-8 to 2-11); E20581 and E21693 pages are the catalog's existing records.
+- *CPU note* (`simpleCpuSourceKey`): the Z790-PLUS WIFI manual only on that board (the old text also called its lever steps those of the
+  H81 board, removed). D4, B760M-A and H81M-K show ASUS's general CPU guide (FAQ 1047659, which covers LGA1700/LGA115X, read in full) labelled
+  "not checked against this board's manual"; AM4 likewise. The D4 catalog note no longer claims E21279.
+- *Robot:* a screw-held slot no longer gets the Q-Latch refusal line (`m2ScrewFirst`; `simpleM2OpenFirstKey`).
+Regressions: `board-sources.test.ts` (5, red first), plus `gpu-source.test.ts`.
+**Gates on this code, all exit 0:** `npm run type-check`, `check:messages`, `vitest apps/web packages content` 88 files **1127 passed, 21 skipped**
+(DB/provider, not passes), review configs 1 + 3, `git diff --check`, `npm run build` -> BUILD_ID **`C-ppCM5hTjcfNxr1cNd47`**. Port 3011
+was confirmed to serve that exact build (page and `_buildManifest.js` carry the id) and the six product files' SHA-256 match Codex's fingerprint
+file. Browser, `board-notes.mjs`, all four planner boards, on that build: **EN 1440: 12 passed, 0 failed; AR 430: 12 passed, 0 failed**, 7 screenshots each
+inspected (`evidence/build-C-ppCM5hTjcfNxr1cNd47/`).
+*Failed/skipped/not run, kept:* the first two runs of the original harness (EN 1440 and AR 430) ended 8 passed / 3 failed, because the M.2_1 buttons are in the
+toolbar, not under `details`: harness defect, logs kept as `original-harness-FAILED-*.log`. The harness now scopes to the toolbar and captures
+screenshots with a bounded wait whose failure is a separate "not captured" line (0 occurred). Codex's earlier review copy
+(`docs/handoff/2026-11-27/review/board-notes.review.mjs`, EN 1440: 9 passed, 1 failed on a B760 screenshot timeout) is unchanged. Not run: any other
+width/language pair, drive lengths other than 2280 (the notes cover the offered 2280 drive), the 616-check matrix of the previous build (product
+files for those paths unchanged in this follow-up except as listed). The deployed preview is not inspected. Z790 D4, B760M-A and H81M-K CPU steps remain
+unverified against their own manuals.
+
 A `next start -p 3002` left from an earlier session serves this folder's `.next`, which has since been rebuilt; restart it before use.
 
 ## Earlier status — Codex review completed, 2026-11-27

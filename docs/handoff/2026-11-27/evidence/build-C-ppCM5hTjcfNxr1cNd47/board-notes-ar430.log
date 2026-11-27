@@ -1,0 +1,21 @@
+PASS  z790: the CPU note is the one for this board
+SHOT  note-cpu-z790 saved
+PASS  z790: before a slot is chosen no mechanism or manual is claimed
+PASS  z790: M.2_1 shows this board's own note
+SHOT  note-m2-z790 saved
+PASS  d4: the CPU note is the one for this board
+SHOT  note-cpu-d4 saved
+PASS  d4: before a slot is chosen no mechanism or manual is claimed
+PASS  d4: M.2_1 shows this board's own note
+SHOT  note-m2-d4 saved
+PASS  b760: the CPU note is the one for this board
+SHOT  note-cpu-b760 saved
+PASS  b760: before a slot is chosen no mechanism or manual is claimed
+PASS  b760: M.2_1 shows this board's own note
+PASS  b760: nothing on the page mentions a Q-Latch for a screw-held slot
+SHOT  note-m2-b760 saved
+PASS  h81: the CPU note is the one for this board
+SHOT  note-cpu-h81 saved
+PASS  no page errors
+12 passed, 0 failed; screenshots: 7 saved, 0 not captured
+exit 0
