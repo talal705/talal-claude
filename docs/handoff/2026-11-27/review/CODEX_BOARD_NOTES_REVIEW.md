@@ -2,6 +2,14 @@
 
 Review date: 2026-11-27. Base commit: `3af4dda` on `fix/wiring-handoff-2026-11-26`.
 
+## Completion review — `0619a3b`
+
+Claude resumed after the usage reset, fixed the original toolbar locator, separated bounded screenshot capture from product assertions, and committed the change as `0619a3b`. Codex rechecked the final product fingerprints: all six match the independently tested source below. No additional product change occurred during acceptance.
+
+Codex read the final EN1440 and AR430 logs: **12 passed / 0 failed in each**, with **7 screenshots saved / 0 missing in each**. Both repeat runs also passed. The tracked final logs and 14 panel screenshots are in `../evidence/build-C-ppCM5hTjcfNxr1cNd47/`. Codex visually inspected the Arabic B760 screw note, Arabic Z790 Q-Latch note, and earlier English D4/H81 views; the notes distinguish the actual board and fixing. The failed original runs and failed independent capture run below remain historical evidence.
+
+**Review disposition:** no confirmed blocker in this bounded source-note correction. The local code and affected browser behavior are accepted for the feature branch. This does not approve a `main` merge or production release. Protected deployed-preview behavior and physical touch hardware remain unverified. The review does not certify the simulator as manufacturer-exact hardware or full physics.
+
 ## Scope and result
 
 The six pending product files were reviewed without editing them. No confirmed product defect was found in the pending board-specific source-note changes. This is a local review, not deployed-preview approval.

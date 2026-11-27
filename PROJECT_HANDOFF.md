@@ -4,6 +4,12 @@ Current site brand: **بيئة التدريب الافتراضية (VTE)** in Ar
 **Virtual Training Environment (VTE)** in English. Older references below use the former name.
 The repository and hosting identifiers remain `talal-claude`; saved-data keys are unchanged.
 
+## Latest review — Codex, 2026-11-27
+
+Product checkpoint **`0619a3b`**, branch `fix/wiring-handoff-2026-11-26`: the pending CPU/M.2 source-note correction is reviewed. The six product-file fingerprints match Codex's independently tested source (1127 passed / 21 skipped, types/messages and both preservation configs passed). The corrected board-note browser check passed **12/12 EN1440 and 12/12 AR430** on build `C-ppCM5hTjcfNxr1cNd47`; Codex inspected the saved logs and representative EN/AR screenshots. The original harness failures are preserved. Review details: `docs/handoff/2026-11-27/review/CODEX_BOARD_NOTES_REVIEW.md`.
+
+No confirmed blocker remains in this bounded correction. The deployed preview and physical touch hardware are unverified; no `main` merge or production release is authorized. Implementation records below describe the earlier review status and build-specific coverage.
+
 ## Current status — GPU removal, side panel, robot marks, refusals (Claude, 2026-11-27; awaiting Codex review)
 
 Branch `fix/wiring-handoff-2026-11-26`, on top of `56b3af2`. Not reviewed by Codex yet; no main merge or production release.
