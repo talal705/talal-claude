@@ -1,0 +1,84 @@
+PASS study: a suggested build is available
+PASS creator: a suggested build is available
+PASS gaming: a suggested build is available
+PASS DDR4 on the DDR5 board: warning names both generations
+PASS removing one duplicate storage copy preserves the other and M.2
+PASS the catalog's Remove from my build button removes its selected drive
+PASS all planner choices survive reload
+PASS assembly begins with no learner-installed CPU, board or GPU
+STEP cpu: Release the lever and lift it -> mech:cpu-socket-plate:lever:open
+STEP cpu: Open the load plate -> mech:cpu-socket-plate:open
+STEP cpu: Bring it over its place -> mech:cpu-socket-plate:open
+STEP cpu: Lower it straight down -> mech:cpu-socket-plate:open
+STEP cpu: Lower it straight down -> mech:cpu-socket-plate:open
+STEP cpu: Lower it straight down -> lower:cpu:0:0:0
+STEP cpu: Close the load plate -> mech:cpu-socket-plate:closed
+STEP cpu: Push the lever down and lock it under its tab -> mech:cpu-socket-plate:lever:closed
+PASS cpu: fitted through individual clicks
+PASS cpu: camera remains unchanged
+STEP ram: Open the clip of Memory slot DIMM_A2 -> mech:dimm-a2-latch:open
+STEP ram: Lower it into the slot -> mech:dimm-a2-latch:open
+STEP ram: Lower it into the slot -> lower:ram:0:0:0
+STEP ram: Press it in until it clicks -> seat:ram
+PASS ram: fitted through individual clicks
+PASS ram: camera remains unchanged
+STEP ram2: Open the clip of Memory slot DIMM_B2 -> mech:dimm-b2-latch:open
+STEP ram2: Lower it into the slot -> mech:dimm-b2-latch:open
+STEP ram2: Lower it into the slot -> lower:ram2:0:0:19
+STEP ram2: Press it in until it clicks -> seat:ram2
+PASS ram2: fitted through individual clicks
+PASS ram2: camera remains unchanged
+STEP storage: Loosen the M.2 heatsink's screws -> mech:m2-hs-1:screws:open
+STEP storage: Lift the heatsink off -> mech:m2-hs-1:open
+STEP storage: Turn the Q-Latch to unlock -> mech:m2-1-qlatch:open
+STEP storage: Tilt the drive up to about 25° -> mech:m2-1-qlatch:open
+STEP storage: Slide it into the slot at an angle -> lower:storage:0:0:0:t25:sm2-1
+STEP storage: Press it in until it clicks -> seat:storage
+STEP storage: Press the drive flat and turn the Q-Latch to lock -> mech:m2-1-qlatch:closed
+STEP storage: Peel the film off the heatsink's thermal pad -> mech:m2-hs-1:film:open
+STEP storage: Put the heatsink back on -> mech:m2-hs-1:closed
+STEP storage: Tighten the heatsink's screws -> mech:m2-hs-1:screws:closed
+PASS storage: fitted through individual clicks
+PASS storage: camera remains unchanged
+STEP cooler: Lift the socket lever up. -> mech:cpu-socket-plate:lever:open
+STEP cooler: Open the CPU's load plate. -> mech:cpu-socket-plate:open
+STEP cooler: Take the original socket frame off: the cooler's contact frame replaces it. -> hw:motherboard:ilm:removed
+STEP cooler: Set the contact frame over the processor. -> hw:motherboard:frame:placed
+STEP cooler: Start frame screw 1 of 4 by hand. Don't tighten yet. -> hw:motherboard:frame_screws:1000
+STEP cooler: Start frame screw 2 of 4 by hand. Don't tighten yet. -> hw:motherboard:frame_screws:1100
+STEP cooler: Start frame screw 3 of 4 by hand. Don't tighten yet. -> hw:motherboard:frame_screws:1110
+STEP cooler: Start frame screw 4 of 4 by hand. Don't tighten yet. -> hw:motherboard:frame_screws:1111
+STEP cooler: Tighten frame screw 1 of 4, working across the frame. -> hw:motherboard:frame_screws:2111
+STEP cooler: Tighten frame screw 3 of 4, working across the frame. -> hw:motherboard:frame_screws:2121
+STEP cooler: Tighten frame screw 2 of 4, working across the frame. -> hw:motherboard:frame_screws:2221
+STEP cooler: Tighten frame screw 4 of 4, working across the frame. -> hw:motherboard:frame_screws:2222
+STEP cooler: Apply thermal paste to the processor. -> prep:cooler:paste:applied
+STEP cooler: Peel the protective film off the cooler plate. -> prep:cooler:film:removed
+STEP cooler: Lower the cooler onto the processor. -> place:cooler
+STEP cooler: Start cooler screw 1 of 2. Don't tighten yet. -> hw:cooler:screws:10
+STEP cooler: Start cooler screw 2 of 2. Don't tighten yet. -> hw:cooler:screws:11
+STEP cooler: Tighten cooler screw 1 of 2, working across. -> hw:cooler:screws:21
+STEP cooler: Tighten cooler screw 2 of 2, working across. -> hw:cooler:screws:22
+PASS cooler: fitted through individual clicks
+PASS cooler: camera remains unchanged
+PASS CPU, memory, M.2 and cooler are prepared before the board enters the case
+STEP motherboard: Lower the board onto the standoffs -> place:motherboard
+STEP motherboard: Tighten screw 1 of 9 -> screw:motherboard:0
+STEP motherboard: Tighten screw 2 of 9 -> screw:motherboard:1
+STEP motherboard: Tighten screw 3 of 9 -> screw:motherboard:2
+STEP motherboard: Tighten screw 4 of 9 -> screw:motherboard:3
+STEP motherboard: Tighten screw 5 of 9 -> screw:motherboard:4
+STEP motherboard: Tighten screw 6 of 9 -> screw:motherboard:5
+STEP motherboard: Tighten screw 7 of 9 -> screw:motherboard:6
+STEP motherboard: Tighten screw 8 of 9 -> screw:motherboard:7
+STEP motherboard: Tighten screw 9 of 9 -> screw:motherboard:8
+PASS motherboard: fitted through individual clicks
+PASS motherboard: camera remains unchanged
+FAIL journey completed without an exception: TimeoutError: locator.scrollIntoViewIfNeeded: Timeout 25000ms exceeded.
+Call log:
+  - waiting for locator('section[aria-labelledby=\'simple-pc-title\']').getByRole('group', { name: 'Your parts', exact: true }).getByRole('button').filter({ hasText: /RM850x/ }).first()
+
+DIAGNOSTIC {"ram":null,"placed":["cpu","ram","ram2","storage","cooler","motherboard"],"connected":[],"history":["mech:cpu-socket-plate:lever:open","mech:cpu-socket-plate:open","lower:cpu:0:0:0","mech:cpu-socket-plate:closed","mech:cpu-socket-plate:lever:closed","mech:dimm-a2-latch:open","lower:ram:0:0:0","seat:ram","mech:dimm-b2-latch:open","lower:ram2:0:0:19","seat:ram2","mech:m2-hs-1:screws:open","mech:m2-hs-1:open","mech:m2-1-qlatch:open","lower:storage:0:0:0:t25:sm2-1","seat:storage","mech:m2-1-qlatch:closed","mech:m2-hs-1:film:open","mech:m2-hs-1:closed","mech:m2-hs-1:screws:closed","prep:motherboard:backplate:padding","mech:cpu-socket-plate:lever:open","mech:cpu-socket-plate:open","hw:motherboard:ilm:removed","hw:motherboard:frame:placed","hw:motherboard:frame_screws:1000","hw:motherboard:frame_screws:1100","hw:motherboard:frame_screws:1110","hw:motherboard:frame_screws:1111","hw:motherboard:frame_screws:2111","hw:motherboard:frame_screws:2121","hw:motherboard:frame_screws:2221","hw:motherboard:frame_screws:2222","prep:cooler:paste:applied","prep:cooler:film:removed","place:cooler","hw:cooler:screws:10","hw:cooler:screws:11","hw:cooler:screws:21","hw:cooler:screws:22","prep:motherboard:standoffs:checked","place:motherboard","screw:motherboard:0","screw:motherboard:1","screw:motherboard:2","screw:motherboard:3","screw:motherboard:4","screw:motherboard:5","screw:motherboard:6","screw:motherboard:7","screw:motherboard:8"],"powered":false,"selection":null,"complete":false,"mood":"happy","lines":["hands.screwsDone"],"guide":{"targets":[{"kind":"part","instanceId":"storage-9"}],"reason":"next","subject":{"part":"storage2"}},"view":{"guide":true,"guideMotion":true,"rgb":false},"mode":"guided","fault":null,"faultSolved":false}
+SKIP screenshot journey-stopped: TimeoutError: locator.screenshot: Timeout 15000ms exceeded.
+PASS no uncaught page errors
+22 passed, 1 failed

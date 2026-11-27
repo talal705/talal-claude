@@ -1,0 +1,35 @@
+PASS study: a suggested build is available
+PASS creator: a suggested build is available
+PASS gaming: a suggested build is available
+PASS DDR4 on the DDR5 board: the robot's warning names both generations
+NOTE incompatibility: هذي الرام DDR4، ولوحتك تدعم DDR5؛ الشق مختلف وما تركب فيها. اختَر رام DDR5.
+PASS removing one duplicate storage copy preserves the other and M.2
+PASS the catalog's Remove from my build button removes its selected drive
+PASS a suggested case fan can be removed before assembly
+PASS adding a case fan selects exactly one copy
+PASS all planner choices survive reload
+PASS assembly begins with no learner-installed CPU, board or GPU
+STEP cpu: حرّر الذراع وارفعه -> mech:cpu-socket-plate:lever:open
+STEP cpu: افتح الغطا -> mech:cpu-socket-plate:open
+STEP cpu: جيبها فوق مكانها -> mech:cpu-socket-plate:open
+STEP cpu: نزّله بشكل مستقيم -> mech:cpu-socket-plate:open
+STEP cpu: نزّله بشكل مستقيم -> mech:cpu-socket-plate:open
+STEP cpu: نزّله بشكل مستقيم -> lower:cpu:0:0:0
+STEP cpu: سكّر الغطا -> mech:cpu-socket-plate:closed
+STEP cpu: نزّل الذراع وثبّته تحت مشبكه -> mech:cpu-socket-plate:lever:closed
+PASS cpu: fitted through individual clicks
+PASS cpu: camera remains unchanged
+STEP ram: افتح مشبك فتحة الرام DIMM_A2 -> mech:dimm-a2-latch:open
+STEP ram: نزّلها في الفتحة -> mech:dimm-a2-latch:open
+STEP ram: نزّلها في الفتحة -> lower:ram:0:0:0
+STEP ram: اضغطها لين تطق -> seat:ram
+PASS ram: fitted through individual clicks
+PASS ram: camera remains unchanged
+FAIL journey completed without an exception: TimeoutError: locator.scrollIntoViewIfNeeded: Timeout 25000ms exceeded.
+Call log:
+  - waiting for locator('section[aria-labelledby=\'simple-pc-title\']').getByRole('group', { name: 'قطعك', exact: true }).getByRole('button').filter({ hasText: /^الرام ٢/ }).first()
+
+DIAGNOSTIC {"ram":null,"placed":["cpu","ram"],"connected":[],"history":["mech:cpu-socket-plate:lever:open","mech:cpu-socket-plate:open","lower:cpu:0:0:0","mech:cpu-socket-plate:closed","mech:cpu-socket-plate:lever:closed","mech:dimm-a2-latch:open","lower:ram:0:0:0","seat:ram"],"powered":false,"selection":null,"complete":false,"mood":"happy","lines":["hands.ramIn"],"guide":{"targets":[{"kind":"part","instanceId":"ram-7"}],"reason":"next","subject":{"part":"ram2"}},"view":{"guide":true,"guideMotion":true,"rgb":false},"mode":"guided","fault":null,"faultSolved":false}
+SKIP screenshot journey-stopped: TimeoutError: locator.screenshot: Timeout 15000ms exceeded.
+PASS no uncaught page errors
+15 passed, 1 failed

@@ -4,6 +4,12 @@ Current site brand: **بيئة التدريب الافتراضية (VTE)** in Ar
 **Virtual Training Environment (VTE)** in English. Older references below use the former name.
 The repository and hosting identifiers remain `talal-claude`; saved-data keys are unchanged.
 
+## Latest verification — Codex final PC journey, 2026-11-27
+
+Owner authorized Codex to complete the four final verification tasks directly. Product source at `0619a3b` (checkout `1b15b24`) is unchanged; no confirmed product defect required a repair. A fresh production build **`-f6Q4maBozU16L9dULuXh`**, served on the separate local port **3027**, passed **436 browser assertions**: fresh planner-to-startup journeys 49 EN1440 + 49 AR430, plus 338 assertions in 14 targeted runs for GPU removal, wiring/startup, robot targets, old saves, touch emulation, cooling and individually screwed parts. Types/messages/build passed; Vitest 88 files **1127 passed / 21 skipped**, preservation configs 1 + 3 passed. Failed harness/environment attempts are preserved separately and not counted as passes.
+
+**Still pending:** actual protected-preview UI verification and a physical touch device. GitHub's confirmed branch URL opens **Login – Vercel** without authorized access; successful deployment status does not verify the app. Touch results are browser emulation only. No `main` merge or production release was made or approved. Detailed coverage, evidence and continuation: `docs/handoff/2026-11-27/RELEASE_VERIFICATION.md`; real-device checklist: `docs/handoff/2026-11-27/PHYSICAL_TOUCH_CHECKLIST.md`.
+
 ## Latest review — Codex, 2026-11-27
 
 Product checkpoint **`0619a3b`**, branch `fix/wiring-handoff-2026-11-26`: the pending CPU/M.2 source-note correction is reviewed. The six product-file fingerprints match Codex's independently tested source (1127 passed / 21 skipped, types/messages and both preservation configs passed). The corrected board-note browser check passed **12/12 EN1440 and 12/12 AR430** on build `C-ppCM5hTjcfNxr1cNd47`; Codex inspected the saved logs and representative EN/AR screenshots. The original harness failures are preserved. Review details: `docs/handoff/2026-11-27/review/CODEX_BOARD_NOTES_REVIEW.md`.

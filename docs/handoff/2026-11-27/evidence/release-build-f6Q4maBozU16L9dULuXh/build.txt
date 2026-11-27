@@ -1,0 +1,49 @@
+
+> your-tech-lab@0.1.0 build
+> npm run pc-assets && npm run runtime-assets && npm run build --workspace=@ytl/web
+
+
+> your-tech-lab@0.1.0 pc-assets
+> node scripts/copy-pc-assets.mjs
+
+pc assets: 91 files -> apps/web/public/assets/pc/
+
+> your-tech-lab@0.1.0 runtime-assets
+> node scripts/copy-runtime-assets.mjs
+
+Local TypeScript and Python runtimes ready.
+
+> @ytl/web@0.1.0 build
+> next build
+
+▲ Next.js 16.4.6 (Turbopack)
+✓ Running next.config.ts took 34ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 301ms
+  Running TypeScript ...
+  Finished TypeScript in 221ms ...
+  Collecting page data using 9 workers ...
+  Generating static pages using 9 workers (0/6) ...
+session: SESSION_SECRET is missing, shorter than 32 characters or still the placeholder; the API routes that need a session are disabled.
+  Generating static pages using 9 workers (1/6)
+  Generating static pages using 9 workers (2/6)
+  Generating static pages using 9 workers (4/6)
+✓ Generating static pages using 9 workers (6/6) in 50ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ƒ /
+├ ƒ /_not-found
+├ ƒ /api/code/review
+├ ƒ /api/execute
+├ ƒ /api/execute/[id]
+├ ƒ /api/execute/health
+├ ƒ /api/tutor/ask
+├ ƒ /api/tutor/status
+├ ƒ /network
+├ ƒ /pc
+└ ƒ /projects
+
+
+ƒ  (Dynamic)  server-rendered on demand
