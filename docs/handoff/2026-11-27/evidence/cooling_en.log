@@ -1,0 +1,43 @@
+PASS  CPU fitted first (the frame holds it down) 
+PASS  before any cooler step the scene draws the socket frame as usual 
+PASS  the backplate support is the learner's choice (padding or tape both offered) 
+PASS  backplate padding recorded and drawn 
+PASS  socket frame still drawn while lever and plate are only open 
+PASS  socket frame removed: four empty screw holes appear, no contact frame yet 
+PASS  the picture of the socket changed when the frame came off 
+PASS  contact frame placed 
+PASS  each engaged click engages exactly one more screw 
+PASS  tightening goes across the frame (second tight screw is opposite the first) 
+PASS  all four tight at the end 
+PASS  no step moved the camera 
+PASS  reload: progress untouched, the same hardware drawn again, the robot names the next cooler step 
+PASS  a double click takes one step, not two 
+PASS  cooler placed: its two screws appear as holes to fill, in order 
+PASS  cooler fully fitted, the robot says the cables come later 
+PASS  both cooler screws drawn tight, frame screws still tight 
+PASS  undo: the last screw is back to engaged in the picture 
+PASS  redo by clicking the same step returns the same picture 
+PASS  cooler taken off step by step: screws loosened, then out, then lifted 
+PASS  removed cooler leaves its screws out of the picture; the contact frame stays on the board 
+PASS  optional: exactly one removal step is offered while the contact frame is on, and nothing is taken yet 
+PASS  after the first loosening the primary action and the robot follow removal, not tightening 
+PASS  fitting is still offered, as a clearly separate alternative 
+PASS  undo restores the screw as it was in the scene, and guidance is still removal 
+PASS  reload part-way through removal: same saved steps, same picture, guidance still removal 
+PASS  the frame is not offered for lifting while a frame screw is still in: "Loosen frame screw 2 of 4, working acros" 
+PASS  the frame is not offered for lifting while a frame screw is still in: "Loosen frame screw 4 of 4, working acros" 
+PASS  the frame is not offered for lifting while a frame screw is still in: "Take frame screw 1 of 4 out." 
+PASS  the frame is not offered for lifting while a frame screw is still in: "Take frame screw 2 of 4 out." 
+PASS  the frame is not offered for lifting while a frame screw is still in: "Take frame screw 3 of 4 out." 
+PASS  the frame is not offered for lifting while a frame screw is still in: "Take frame screw 4 of 4 out." 
+PASS  the frame is not offered for lifting while a frame screw is still in: "Lift the contact frame off. The CPU stay" 
+PASS  the frame comes off only after every screw is out; the CPU stays in the socket 
+PASS  with the frame off the primary action and robot offer the original socket frame back 
+PASS  one history step per click through the whole removal (4 loosened, 4 out, frame off, ILM back) 
+PASS  the scene draws the socket as original again (no frame, no frame screws, plate back) 
+PASS  the CPU stayed in the socket (never lifted for the learner) 
+PASS  mounting steps moved no camera 
+PASS  no page errors 
+
+40 passed, 0 failed
+exit 0

@@ -4,7 +4,47 @@ Current site brand: **بيئة التدريب الافتراضية (VTE)** in Ar
 **Virtual Training Environment (VTE)** in English. Older references below use the former name.
 The repository and hosting identifiers remain `talal-claude`; saved-data keys are unchanged.
 
-## Current status — Codex review completed, 2026-11-27
+## Current status — GPU removal, side panel, robot marks, refusals (Claude, 2026-11-27; awaiting Codex review)
+
+Branch `fix/wiring-handoff-2026-11-26`, on top of `56b3af2`. Not reviewed by Codex yet; no main merge or production release.
+
+**Confirmed product defects, fixed.**
+1. *Closed side panel:* the engine refused installing into a closed case, but the page let the card's lead be taken out, its
+   screws removed, the latch opened and the card lifted with the panel closed. Now `commit` (the one place a page step is saved)
+   refuses a step whose *actual change* is behind the panel (`simpleChangesBehindPanel`: the part moved, its mechanism/hardware,
+   or the lead end plugged/taken out), says "open it first", and changes nothing. Judged per action and endpoint, so bench work,
+   opening the panel, power-off, mains and PSU switches stay free. Not an engine rule: older saves that did such steps still replay.
+2. *Robot ring through parts:* the target ring (drawn with depth test off) showed even when the target was hidden (seen on the PSU
+   socket through the case floor, `evidence/before-fix-ring-through-case-en-1440.png`). Ring and dotted line now share one
+   visibility: only while the target is in view and unobstructed.
+3. *Refusal messages:* an occupied socket said "A cable is already plugged in here." (no socket, no next step); now names it and
+   says choose a free socket or unplug first (engine message, so the advanced lab shows it too). A wrong-kind socket now ends with
+   where the plug goes. The latch-keyed reversed line now ends "Turn it round."
+
+**Tests.** `side-panel.test.ts` (each card removal/reinstall step, both lead ends, readiness controls, bench work; input state
+unchanged), `wiring-refusal.test.ts`; both red first. Browser: `gpu-install.mjs` extended (power and panel guards, saved steps and
+build unchanged for every refused action, only the card's lead end out, one screw per click, latch, straight lift, undo removes exactly
+one step and restores placement, reload, reinstall, camera compared after every single action; the view is framed per page load from
+what is on show, and loading the same build twice frames it the same). New `pointer.mjs` and `touch.mjs`.
+Harness faults fixed on the way (not product): folded part options not opened, re-clicking a selected tile/lead deselects it,
+Arabic flip label regex, `placed` true before screws, older scripts need `CHROME=<path>` on this Mac.
+
+**Gates on the final product code, all exit 0:** `npm run type-check`, `check:messages`, `vitest run apps/web packages` = 86 files,
+**1120 passed, 21 skipped** (DB/provider unconfigured), review configs 25th (1) and 26th (3), `git diff --check`, `npm run build`
+(BUILD_ID `uZ7rar7zMNAhWNTwgtCP8`).
+**Browser on that one build (software-GL Chromium/Chrome, isolated storage), 616 passed, 0 failed** (logs in
+`docs/handoff/2026-11-27/evidence/`): GPU 41 x4 and pointer 9 x4 and wiring/startup 50 x4 (en/ar, 1440/430); planner 8 + 8; legacy
+SATA 8 + 8; screwed 24; touch emulation 12 en + 12 ar (390 px); cooling 40 en + 40 ar 430; AIO 16; CPU/RAM 9; M.2 31.
+
+**Not verified / limits.** No physical touch device (touch is Chromium emulation only). The deployed preview has not been inspected.
+From the first view most board sockets are behind the case frame or the card, so the robot does not point until the learner turns or
+zooms; the scene's own cyan socket highlights (not the robot) still draw through parts and were left unchanged. The latch hint cites
+the ASUS B760 manual while the build board is Z790 (text unchanged; needs a source check). Slot-cover and bracket-screw counts remain
+documented approximations. Manual touch checklist: tap-install one part; drag the view with one finger and confirm nothing installs;
+pinch zoom; rotate the phone; check Arabic buttons are easy to hit.
+A `next start -p 3002` left from an earlier session serves this folder's `.next`, which has since been rebuilt; restart it before use.
+
+## Earlier status — Codex review completed, 2026-11-27
 
 Reviewed product checkpoint **cfa731c** on **fix/wiring-handoff-2026-11-26**. Known independently reproduced blockers are fixed, including valid legacy shared-SATA saves. Codex independently confirmed types/messages, both review configs and **1114 passed /21 skipped** in 84 files. Production build passed;346 comprehensive browser checks preceded the final parser-only migration, with8 EN + 8 AR targeted cases after it. Exact evidence, remaining visual/device limits and continuation instructions: **docs/handoff/2026-11-26/CODEX_FINAL_REVIEW.md**. No main merge/production release is authorized by this review.
 

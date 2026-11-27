@@ -165,7 +165,7 @@ const T: Record<PCDiagnosticCode, Entry> = {
     ],
   },
   port_occupied: {
-    m: ["A cable is already plugged in here.", "في كيبل موصّل هنا."],
+    m: ["{port} already has a cable in it. Choose a free socket, or unplug that cable first.", "{port} فيه كيبل موصّل. اختر مدخلًا فاضيًا، أو افصل الكيبل اللي فيه أول."],
     x: ["Unplug the cable that is there first, or choose a free socket.", "افصل الكيبل اللي هنا أول، أو اختر مدخل فاضي."],
   },
   seating_blocked: {

@@ -1322,7 +1322,8 @@
         "gpuScrewed": "Bracket screwed. The card is secure.",
         "gpuUnscrewed": "Screws out. Press the latch to release the card.",
         "gpuReleased": "Latch released. You can lift the card out now.",
-        "gpuUnplug": "Unplug the card's power cable first.",
+        "caseShut": "The side panel is closed. Open it first to work inside the case.",
+      "gpuUnplug": "Unplug the card's power cable first.",
         "gpuUnscrew": "Take the bracket screws out first.",
         "gpuReleaseFirst": "Press the slot's latch to release the card first.",
         "gpuSeatFirst": "Push the card fully in before screwing the bracket.",
@@ -1355,7 +1356,7 @@
         "liquidPrep": "Paste first: put a small drop on the CPU before the pump block goes on.",
         "pickPort": "First pick which socket this end goes into.",
         "reversed": {
-          "latch": "The clip has to sit over the socket's latch; this plug is keyed and won't go in the other way round.",
+          "latch": "The clip has to sit over the socket's latch; this plug is keyed and won't go in the other way round. Turn it round.",
           "ramp": "The ridge on the plug has to slide along the header's guide; turn it round.",
           "pin": "The blanked hole on the plug has to line up with the header's missing pin; turn it round.",
           "none": "Turn the plug round."

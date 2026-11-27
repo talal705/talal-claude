@@ -1174,7 +1174,9 @@ export function plugSimpleEnd(state: PCBuildState, key: SimpleCableKey, endIndex
   if (!planned || !chosen || !(chosen.id === planned.id || sameKind(chosen, planned))) {
     // Look-alike or unknown socket: the engine's own reason when it refuses, else why it is still not this plug's place.
     const tryIt = pc.applyAction(state, { type: "connect_cable_end", cableId: end.cableId, endId: end.endId, to: { kind: "part", instanceId: end.instanceId, portId } }, pcCatalog);
-    return { ok: false, reason: "wrongPort", message: tryIt.ok ? wrongSocket(state, end, portId) : tryIt.rejection.message };
+    // The engine's reason for refusing, followed by where this plug does go.
+    const why = tryIt.ok ? null : tryIt.rejection.message;
+    return { ok: false, reason: "wrongPort", message: why && planned ? { en: `${why.en} It goes in ${planned.label.en}.`, ar: `${why.ar} مكانه ${planned.label.ar}.` } : wrongSocket(state, end, portId) };
   }
   if (reversed && simplePlugKeying(planned.connector) !== "none") return { ok: false, reason: "reversed" };
   if (simpleEndPlugged(state, end)) return { ok: true, state };
@@ -1220,6 +1222,30 @@ const SYSTEM = {
 export type SystemControl = keyof typeof SYSTEM;
 /** Where the controls stand when a build is ready to start, in the order a builder would set them. */
 const READY: readonly (readonly [SystemControl, string])[] = [["panel", "closed"], ["wall", "in"], ["psu", "on"], ["power", "on"]];
+
+/**
+ * Whether going from `before` to `after` works on something behind a closed side panel: judged by what actually
+ * changes (the part moved, its mechanisms or hardware, the lead end plugged or taken out), so work on the bench
+ * and the readiness controls stay free. The engine refuses installing into a closed case; the page uses this to
+ * refuse taking apart there too, without making older saves that did so fail to replay.
+ */
+export function simpleChangesBehindPanel(before: PCBuildState, after: PCBuildState): boolean {
+  if (before.sidePanelOpen) return false;
+  const inCase = (state: PCBuildState, id: string): boolean => {
+    const part = state.parts.find((p) => p.instanceId === id);
+    if (!part) return false;
+    return pcCatalog.entries.find((e) => e.id === part.catalogId)?.category === "case" || part.attachments.some((a) => inCase(state, a.target.hostInstanceId));
+  };
+  const behind = (id: string) => inCase(before, id) || inCase(after, id);
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  const work = (p: PCBuildState["parts"][number] | undefined) => [p?.attachments, p?.mechanisms, p?.prep, p?.hardware];
+  if (after.parts.some((p) => !same(work(p), work(before.parts.find((x) => x.instanceId === p.instanceId))) && behind(p.instanceId))) return true;
+  return after.cables.some((c) => {
+    const was = before.cables.find((x) => x.id === c.id)?.ends ?? {};
+    return Object.keys({ ...was, ...c.ends }).some((end) => !same(was[end] ?? null, c.ends[end] ?? null)
+      && [was[end], c.ends[end]].some((to) => to?.kind === "part" && behind(to.instanceId)));
+  });
+}
 
 /** The value a control stands at in the engine's state (`closed`/`open`, `in`/`out`, `on`/`off`). */
 export function simpleSystemValue(state: PCBuildState, control: SystemControl): string {

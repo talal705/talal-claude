@@ -1,0 +1,19 @@
+PASS  an old whole-part save loads with CPU, memory and storage in 
+PASS  pump block placed on the CPU through documented steps (frame, paste, film first) 
+PASS  the radiator is not fitted yet: the block and the radiator are separate steps 
+PASS  no AIO step moved the camera 
+PASS  without the board in the case the robot says the board comes first (nothing fitted early) 
+PASS  motherboard fitted with the pump block already on it 
+PASS  with the fan in the way the radiator step only names the fan (nothing moved, no radiator yet) 
+PASS  the step selected the supplied fan to work on 
+PASS  the supplied fan came out by four single screw steps and its own lift 
+PASS  radiator mounted and screwed one screw per click (1..8) 
+PASS  radiator fans are not counted as extra parts 
+PASS  mechanically complete; the robot says the pump and fan cables come later 
+PASS  a double click on the removal button takes one step 
+PASS  removal: radiator unscrewed and lifted before the block's own screws and lift 
+PASS  the block's screws are gone from the picture after removal 
+PASS  no page errors 
+
+16 passed, 0 failed
+exit 0

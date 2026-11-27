@@ -242,6 +242,7 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
   const eyes = useRef<THREE.Group>(null);
   const flame = useRef<THREE.Mesh>(null);
   const line = useRef<THREE.Group>(null);
+  const marks = useRef<THREE.Group>(null);
 
   const points = useMemo(
     () => (focus ? focus.targets.map((target) => targetPoint(target, placed, geometry, state, caseId)).filter((p): p is Vec3 => p !== null) : []),
@@ -344,7 +345,7 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
       // Its radius measured across the screen (the camera's own up), whatever the view's angle.
       const edge = at.clone().add(new THREE.Vector3(0, BASE_RADIUS * node.scale.y, 0).applyQuaternion(camera.quaternion));
       const centre = px(at);
-      return { shown: true, centre, radiusPx: Math.abs(px(edge)[1] - centre[1]), target: points[0] ? px(new THREE.Vector3(...points[0])) : null, pointing: pointing.current, occluded: occluded.current, blocker: blocker.current, avoid: avoid.map((a) => px(new THREE.Vector3(...a))), size: [size.width, size.height] };
+      return { shown: true, centre, radiusPx: Math.abs(px(edge)[1] - centre[1]), target: points[0] ? px(new THREE.Vector3(...points[0])) : null, pointing: pointing.current, marks: marks.current?.visible ?? false, occluded: occluded.current, blocker: blocker.current, avoid: avoid.map((a) => px(new THREE.Vector3(...a))), size: [size.width, size.height] };
     };
     return () => { delete w.__ytlRobot; };
   }, [camera, size, points, avoid]);
@@ -434,8 +435,10 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
     }
     if (eyes.current) eyes.current.scale.y = animate && time % 4.2 > 4.05 ? 0.15 : 1;
     if (flame.current) flame.current.scale.set(7, 11 + (animate ? Math.sin(time * 10) * 0.7 : 0), 7);
-    // The dotted line from the fingertip to the target, when the target is not already glowing.
-    if (line.current) line.current.visible = canPoint;
+    // The ring and the dotted line are drawn over everything, so they show only while the target can be seen:
+    // otherwise they would appear through whatever stands in front of it.
+    if (marks.current) marks.current.visible = canPoint;
+    // The dotted line from the fingertip to the target.
     if (line.current && pointer.current && target && canPoint) {
       const tip = pointer.current.localToWorld(new THREE.Vector3(0, -36, 0));
       const dots = line.current.children;
@@ -488,10 +491,10 @@ export function GuideRobot({ focus, placed, geometry, state, obstacles, caseId, 
         </group>
       </group>
       {shown && showLine && (
-        <>
+        <group ref={marks} visible={false}>
           {showRings && points.map((p, i) => <TargetRing key={i} at={p} color={markColor} animate={animate} />)}
           <group ref={line}>{Array.from({ length: 9 }, (_, i) => <mesh key={i} geometry={DOT} material={markMaterial(markColor)} scale={2.2} renderOrder={40} raycast={noRaycast} />)}</group>
-        </>
+        </group>
       )}
     </>
   );
