@@ -148,6 +148,8 @@ try {
 
   // Screws, one per click; the latch and lift are not offered while they hold the card.
   await selectCard();
+  // The note names the manual read for this board, the real button, and what is simplified.
+  ok("the card's note cites the Z790 manual page and says the button is not drawn", (await lab.getByText(T.hands.gpuSource, { exact: true }).count()) === 1 && /E21279/.test(T.hands.gpuSource) && !/B760/.test(T.hands.gpuSource));
   ok("while screwed, neither the latch nor lifting is offered", (await release().count()) === 0 && (await lift().count()) === 0);
   n = (await hist()).length;
   await unscrew().evaluate((el) => el.scrollIntoView({ block: "center" })); await unscrew().dblclick(); await page.waitForTimeout(1500);

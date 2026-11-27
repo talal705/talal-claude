@@ -31,8 +31,9 @@ const gpuSlot = (pcieGeneration: number): MountPointSpec => ({
   pcieGeneration,
   label: L(`PCIe ${pcieGeneration}.0 x16 slot (graphics card)`, `فتحة PCIe ${pcieGeneration}.0 x16 (كرت الشاشة)`),
   fastener: { kind: "case_screw", count: 2 },
-  // TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-19: push the PCIe push-latch fully down before fitting;
-  // to remove, lift the card slightly and press the PCIe Slot Q-Release button. Other boards: not verified.
+  // TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-19: pressing the PCIe Slot Q-Release button before fitting makes
+  // sure the push-latch is fully down; to remove, lift the card slightly while pressing the button. The lab does
+  // not draw the button: the slot latch stands for it. Other boards: not verified.
   ...pcieSlotDetail("Push-latch / Q-Release as in the TUF GAMING Z790-PLUS WIFI manual p. 2-19; on other boards the latch type is not verified."),
 });
 

@@ -38,10 +38,22 @@ SATA 8 + 8; screwed 24; touch emulation 12 en + 12 ar (390 px); cooling 40 en + 
 
 **Not verified / limits.** No physical touch device (touch is Chromium emulation only). The deployed preview has not been inspected.
 From the first view most board sockets are behind the case frame or the card, so the robot does not point until the learner turns or
-zooms; the scene's own cyan socket highlights (not the robot) still draw through parts and were left unchanged. The latch hint cites
-the ASUS B760 manual while the build board is Z790 (text unchanged; needs a source check). Slot-cover and bracket-screw counts remain
+zooms; the scene's own cyan socket highlights (not the robot) still draw through parts and were left unchanged. (The latch note's wrong B760 citation is fixed, below.) Slot-cover and bracket-screw counts remain
 documented approximations. Manual touch checklist: tap-install one part; drag the view with one finger and confirm nothing installs;
 pinch zoom; rotate the phone; check Arabic buttons are easy to hit.
+**Follow-up: the card's source note (second build).** The note cited "TUF GAMING B760-PLUS WIFI (E21279)". Checked against ASUS's
+manual itself: E21279 (First Edition, November 2022) is the TUF GAMING **Z790-PLUS WIFI** manual, and its p. 2-19 describes the
+**PCIe Slot Q-Release button** (press before fitting so the push-latch is fully down; lift the card slightly while pressing it to
+remove). The note (en/ar) now says that for this board, and that the lab does not draw the button (the slot latch stands for it and
+lifting is a separate step). Every other board gets `hands.gpuSourceGeneral`: general guidance, said to be unverified, citing no
+manual (`simpleGpuSourceKey`, `gpu-source.test.ts`, red first). Catalog comment corrected to match; no rule or data change.
+Not checked here: the other manual citations the page shows (M.2 Q-Latch, Intel socket steps) are Z790 references and may show on
+other boards.
+Gates on this code: type-check, messages, `vitest apps/web packages content` 87 files **1122 passed, 21 skipped**, review configs
+(1 + 3), `git diff --check`, build **`TZ9esHDjtJ_wewq_APVYt`**, all exit 0. Re-run on that build: `gpu-install.mjs` en/ar x
+1440/430, **42 passed each** (`evidence/build-TZ9esHDj/`). The other 616-check matrix above ran on `uZ7rar7zMNAhWNTwgtCP8` and was
+not repeated (only this note's text and its key changed).
+
 A `next start -p 3002` left from an earlier session serves this folder's `.next`, which has since been rebuilt; restart it before use.
 
 ## Earlier status — Codex review completed, 2026-11-27

@@ -1224,6 +1224,14 @@ export type SystemControl = keyof typeof SYSTEM;
 const READY: readonly (readonly [SystemControl, string])[] = [["panel", "closed"], ["wall", "in"], ["psu", "on"], ["power", "on"]];
 
 /**
+ * The note under the card's steps. The PCIe release has been read in one board's manual only
+ * (TUF GAMING Z790-PLUS WIFI, E21279, p. 2-19); every other board gets general guidance, said to be unverified.
+ */
+export function simpleGpuSourceKey(): "hands.gpuSource" | "hands.gpuSourceGeneral" {
+  return partSpec("motherboard").catalogId === "asus-tuf-gaming-z790-plus-wifi" ? "hands.gpuSource" : "hands.gpuSourceGeneral";
+}
+
+/**
  * Whether going from `before` to `after` works on something behind a closed side panel: judged by what actually
  * changes (the part moved, its mechanisms or hardware, the lead end plugged or taken out), so work on the bench
  * and the readiness controls stay free. The engine refuses installing into a closed case; the page uses this to
