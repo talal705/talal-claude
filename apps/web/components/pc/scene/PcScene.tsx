@@ -1297,6 +1297,9 @@ function Camera({ placed, aside, ready }: { placed: Map<string, PlacedPart>; asi
   const command = useScene((state) => state.camera);
   const controls = useMemo(() => new OrbitControls(camera, gl.domElement), [camera, gl]);
   const sphere = useMemo(() => buildSphere(placed, aside), [placed, aside]);
+  // Read by the pan limit below, which outlives a render.
+  const bounds = useRef(sphere);
+  bounds.current = sphere;
   const partCount = placed.size;
   const initialViewDone = useRef(false);
   const orbitCentre = useRef<THREE.Vector3 | null>(null);
@@ -1304,12 +1307,24 @@ function Camera({ placed, aside, ready }: { placed: Map<string, PlacedPart>; asi
 
   useEffect(() => {
     controls.enableDamping = false;
-    // Orbit and zoom around the middle; a secondary-button drag must not move the pivot.
-    controls.enablePan = false;
-    controls.zoomToCursor = false;
-    controls.minDistance = 60;
+    // The learner's own camera (owner decision, 2026-11-28): orbit at any height, pan (right-drag, Shift-drag or
+    // two fingers) and zoom towards the pointer for close details. Only "Focus selected part" and "Reset view" move it
+    // otherwise; installing, selecting and re-rendering never do.
+    controls.enablePan = true;
+    controls.screenSpacePanning = true;
+    controls.zoomToCursor = true;
+    controls.minDistance = 40;
     controls.maxDistance = 9000;
     const onChange = () => {
+      // The pivot stays near the build, so a pan can never lose it (Reset view brings back the whole build).
+      const { center, radius } = bounds.current;
+      const away = controls.target.clone().sub(center);
+      const limit = radius * 1.5 + 200;
+      if (away.length() > limit) {
+        const back = away.setLength(away.length() - limit);
+        controls.target.sub(back);
+        camera.position.sub(back);
+      }
       invalidate();
       // Whatever the tutor points at moved on screen.
       getTargetRegistry().invalidate();
@@ -1854,9 +1869,16 @@ function Contents({ state, startup, reducedMotion, noModel, rtl, simple = false,
   useEffect(() => {
     if (!focus) return;
     const host = placed.get(focus.hostInstanceId);
+    if (!host) return;
+    // The part itself ("Focus selected part"): its middle, from above its side, far enough to see all of it.
+    if (!focus.mountPointId) {
+      const corners = boxCorners(host.frame, [0, 0, 0], host.size);
+      const middle = scale(corners.reduce((sum, c) => add(sum, c), [0, 0, 0] as Vec3), 1 / corners.length);
+      return glideCamera(middle, rotate(host.frame.quat, [0, 1, 0]), Math.min(Math.max(Math.max(...host.size) * 2.2, 180), 1600), reducedMotion);
+    }
     const catalogId = state.parts.find((p) => p.instanceId === focus.hostInstanceId)?.catalogId;
     const mount = catalogId ? geometry.get(catalogId)?.mounts[focus.mountPointId] : undefined;
-    if (!host || !mount) return;
+    if (!mount) return;
     // A memory slot is long: aim at the middle of the slot itself (its mount point sits at one end) and
     // stand back far enough to see both ends and the module held over it.
     const slotSolid = focus.mountPointId.startsWith("dimm-") ? geometry.get(catalogId!)?.solids.find((x) => x.id === mount.solid && x.size) : undefined;

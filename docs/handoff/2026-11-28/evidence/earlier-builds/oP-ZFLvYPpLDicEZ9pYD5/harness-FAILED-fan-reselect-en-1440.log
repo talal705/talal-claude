@@ -1,0 +1,112 @@
+PASS planner: a suggested gaming build
+PASS planner: a SATA drive is added
+PASS planner: its own Remove from my build takes it out, the M.2 stays
+PASS the page keeps its language direction
+PASS desktop: the parts and controls sidebar is physically left of the 3D view
+PASS desktop: the sidebar's own text keeps the page direction
+PASS no page-wide horizontal overflow
+PASS card before the board is in: blocked, Install disabled
+PASS card says what is required first
+PASS the robot names the mandatory prerequisite
+PASS a refused part changes nothing
+PASS CPU: the card says it is ready
+PASS CPU: one click installed it completely
+PASS CPU: its steps were saved as one action (5 steps)
+PASS CPU: nothing else was added or removed
+PASS CPU: the camera did not move
+PASS CPU: the robot confirms it
+PASS CPU: the card shows it installed
+PASS memory: the board manual's slot is chosen and marked recommended
+PASS RAM 1: the card says it is ready
+PASS RAM 1: one click installed it completely
+PASS RAM 1: its steps were saved as one action (3 steps)
+PASS RAM 1: nothing else was added or removed
+PASS RAM 1: the camera did not move
+PASS RAM 1: the robot confirms it
+PASS RAM 1: the card shows it installed
+PASS RAM 1 went into DIMM_A2
+PASS memory 2: the taken slot cannot be chosen
+PASS memory 2: DIMM_B2 is chosen automatically
+PASS choosing DIMM_A1 makes it the place, with the recommended one as a tip
+PASS choosing a place does not move the camera or install anything
+PASS a double click installs memory 2 once
+PASS memory 2 is in DIMM_B2
+PASS one Undo restores the state before the installation
+PASS Undo leaves the camera alone and says what it did
+PASS RAM 2 again: the card says it is ready
+PASS RAM 2 again: one click installed it completely
+PASS RAM 2 again: its steps were saved as one action (3 steps)
+PASS RAM 2 again: nothing else was added or removed
+PASS RAM 2 again: the camera did not move
+PASS RAM 2 again: the robot confirms it
+PASS RAM 2 again: the card shows it installed
+PASS M.2 drive: the card says it is ready
+PASS M.2 drive: one click installed it completely
+PASS M.2 drive: its steps were saved as one action (9 steps)
+PASS M.2 drive: nothing else was added or removed
+PASS M.2 drive: the camera did not move
+PASS M.2 drive: the robot confirms it
+PASS M.2 drive: the card shows it installed
+PASS cooler (contact frame on the bench): the card says it is ready
+PASS cooler (contact frame on the bench): one click installed it completely
+PASS cooler (contact frame on the bench): its steps were saved as one action (20 steps)
+PASS cooler (contact frame on the bench): nothing else was added or removed
+PASS cooler (contact frame on the bench): the camera did not move
+PASS cooler (contact frame on the bench): the robot confirms it
+PASS cooler (contact frame on the bench): the card shows it installed
+PASS motherboard: the card says it is ready
+PASS motherboard: one click installed it completely
+PASS motherboard: its steps were saved as one action (11 steps)
+PASS motherboard: nothing else was added or removed
+PASS motherboard: the camera did not move
+PASS motherboard: the robot confirms it
+PASS motherboard: the card shows it installed
+PASS power supply: the card says it is ready
+PASS power supply: one click installed it completely
+PASS power supply: its steps were saved as one action (6 steps)
+PASS power supply: nothing else was added or removed
+PASS power supply: the camera did not move
+PASS power supply: the robot confirms it
+PASS power supply: the card shows it installed
+PASS SATA drive: the card says it is ready
+PASS SATA drive: one click installed it completely
+PASS SATA drive: its steps were saved as one action (5 steps)
+PASS SATA drive: nothing else was added or removed
+PASS SATA drive: the camera did not move
+PASS SATA drive: the robot confirms it
+PASS SATA drive: the card shows it installed
+PASS graphics card: the card says it is ready
+PASS graphics card: one click installed it completely
+PASS graphics card: its steps were saved as one action (6 steps)
+PASS graphics card: nothing else was added or removed
+PASS graphics card: the camera did not move
+PASS graphics card: the robot confirms it
+PASS graphics card: the card shows it installed
+PASS case fan: the card says it is ready
+PASS case fan: one click installed it completely
+PASS case fan: its steps were saved as one action (6 steps)
+PASS case fan: nothing else was added or removed
+PASS case fan: the camera did not move
+PASS case fan: the robot confirms it
+PASS case fan: the card shows it installed
+PASS every part is in and no lead was connected by installing
+PASS RGB toggles without changing progress
+PASS reload keeps every step and every grouped action
+PASS after reload, one Undo takes the last installation (the fan) back whole
+PASS case fan after reload: the card says it is ready
+PASS case fan after reload: one click installed it completely
+PASS case fan after reload: its steps were saved as one action (6 steps)
+PASS case fan after reload: nothing else was added or removed
+PASS case fan after reload: the camera did not move
+PASS case fan after reload: the robot confirms it
+PASS case fan after reload: the card shows it installed
+PASS an older save without groups loads unchanged
+PASS …and its Undo takes back exactly one step
+PASS the step-by-step control puts the last screw back
+FAIL run completed without an exception: TimeoutError: locator.scrollIntoViewIfNeeded: Timeout 25000ms exceeded.
+Call log:
+  - waiting for locator('section[aria-labelledby=\'simple-pc-title\']').locator('details[class*=partOptions]').getByRole('button', { name: 'Lift the fan out', exact: true })
+
+DIAGNOSTIC {"ram":null,"placed":["cpu","ram","ram2","storage","cooler","motherboard","psu","storage2","gpu","fan1"],"connected":[],"history":["mech:cpu-socket-plate:lever:open","mech:cpu-socket-plate:open","lower:cpu:0:0:0","mech:cpu-socket-plate:closed","mech:cpu-socket-plate:lever:closed","mech:dimm-a2-latch:open","lower:ram:0:0:0","seat:ram","mech:dimm-b2-latch:open","lower:ram2:0:0:19","seat:ram2","mech:m2-hs-1:screws:open","mech:m2-hs-1:open","mech:m2-1-qlatch:open","lower:storage:0:0:0:t25:sm2-1","seat:storage","mech:m2-1-qlatch:closed","mech:m2-hs-1:film:open","mech:m2-hs-1:closed","mech:m2-hs-1:screws:closed","prep:motherboard:backplate:padding","mech:cpu-socket-plate:lever:open","mech:cpu-socket-plate:open","hw:motherboard:ilm:removed","hw:motherboard:frame:placed","hw:motherboard:frame_screws:1000","hw:motherboard:frame_screws:1100","hw:motherboard:frame_screws:1110","hw:motherboard:frame_screws:1111","hw:motherboard:frame_screws:2111","hw:motherboard:frame_screws:2121","hw:motherboard:frame_screws:2221","hw:motherboard:frame_screws:2222","prep:cooler:paste:applied","prep:cooler:film:removed","place:cooler","hw:cooler:screws:10","hw:cooler:screws:11","hw:cooler:screws:21","hw:cooler:screws:22","prep:motherboard:standoffs:checked","place:motherboard","screw:motherboard:0","screw:motherboard:1","screw:motherboard:2","screw:motherboard:3","screw:motherboard:4","screw:motherboard:5","screw:motherboard:6","screw:motherboard:7","screw:motherboard:8","prep:psu:psu_fan:down","place:psu","screw:psu:0","screw:psu:1","screw:psu:2","screw:psu:3","place:storage2@drive-25-1","screw:storage2:0","screw:storage2:1","screw:storage2:2","screw:storage2:3","mech:slot-covers:1:open","mech:slot-covers:2:open","mech:pcie-x16-1-latch:open","lower:gpu:0:0:0","screw:gpu:0","screw:gpu:1","prep:fan1:airflow:intake","place:fan1@fan-front-2","screw:fan1:0","screw:fan1:1","screw:fan1:2","screw:fan1:3"],"powered":false,"selection":null,"complete":false,"mood":"happy","lines":["hands.screwsDone"],"guide":{"targets":[{"kind":"port","hostInstanceId":"psu-12","placeId":"out-atx-1"}],"reason":"next","subject":{"cable":"atx"}},"view":{"guide":true,"guideMotion":true,"rgb":true},"mode":"guided","fault":null,"faultSolved":false}
+PASS no uncaught page errors
+106 passed, 1 failed

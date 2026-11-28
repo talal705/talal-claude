@@ -856,7 +856,7 @@
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
     "scene": "PC assembly view. Arrow keys rotate; plus and minus zoom.",
-    "cameraHint": "Tap a part, then tap its place · Drag to turn the view · Scroll to zoom",
+    "cameraHint": "Tap a part to select it · Drag to turn the view · Right-drag or two fingers to move it · Scroll or pinch to zoom",
     "loading": "Loading your PC…",
     "no3d": "The 3D view is unavailable. You can still build using the part buttons.",
     "part": "Part",
@@ -1036,6 +1036,29 @@
       }
     },
     "selectFirst": "Tap a part on the bench or in this list to select it.",
+    "action": {
+      "label": "Selected part",
+      "selected": "Selected part",
+      "none": "No part selected",
+      "status": {
+        "none": "Nothing selected",
+        "ready": "Ready to install",
+        "installing": "Installing…",
+        "installed": "Installed",
+        "blocked": "Not yet"
+      },
+      "install": "Install selected part",
+      "installing": "Installing…",
+      "goesIn": "Goes in: {place}",
+      "isIn": "In: {place}",
+      "place": "Where it goes",
+      "recommended": "recommended",
+      "requiredFirst": "Required first:",
+      "notNow": "Not now:",
+      "tip": "Tip:",
+      "focus": "Focus selected part",
+      "resetView": "Reset view"
+    },
     "toolbar": {
       "label": "Assembly tools",
       "rotate": "Turn the part in hand",
@@ -1160,6 +1183,33 @@
         "cableDone": "The {cable} lead is already connected. You can unplug it from the list if you need to."
       },
       "already": "The {part} is already in place.",
+      "install": {
+        "ready": "{part} is ready. It goes in {place}. Press “Install selected part”.",
+        "doneIn": "Done! The {part} is installed in {place}.",
+        "how": {
+          "cpu": "I opened the socket, matched the CPU's triangle to the socket's mark, lowered it straight in without pressing, then closed the socket again.",
+          "ram": "I opened the slot's clips, lined the notch up with the slot's key and pressed the stick down evenly until the clips closed.",
+          "m2": "I opened the slot (its heatsink and latch or screw), slid the drive into the connector at an angle, pressed it flat and held it down, then put everything back.",
+          "drive": "I slid the drive into its bay and screwed it in.",
+          "cooler": "I prepared the socket's mounting, applied paste or peeled the protective film, placed the cooler and tightened its screws evenly, in turn.",
+          "liquid": "I fitted the pump block on the CPU with its screws, then mounted the radiator in the case and tightened all its screws.",
+          "radiator": "I mounted the radiator in the case and tightened all its screws.",
+          "motherboard": "I checked the standoffs, lined the board up with the I/O opening and screwed it down.",
+          "gpu": "I took out the slot covers, opened the PCIe latch, pushed the card straight in until the latch clicked and screwed its bracket to the case.",
+          "psu": "I set its fan direction, slid it into its bay and screwed it to the case.",
+          "fanIntake": "I turned it to pull air into the case, held it to its place and screwed it in.",
+          "fanExhaust": "I turned it to blow air out of the case, held it to its place and screwed it in."
+        },
+        "tipNotRecommended": "This place works; {rec} is the recommended one.",
+        "turnOff": "Turn the PC off before installing or changing parts.",
+        "placeTaken": "{place} already holds a part. Pick a free place, or take that part out first.",
+        "placeWrong": "The {part} doesn't fit {place}. Pick another place.",
+        "noPlace": "There's no free place for the {part}. Take out the part in the way first.",
+        "fanInTheWay": "The {fan} sits where the radiator goes. Select that fan and take it out first (its screws, then lift it out), then install the cooler.",
+        "useButton": "To fit the {part}, press “Install selected part”. Tapping in the view only chooses its place.",
+        "inPlaceAlready": "The {part} is already in {place}. Take it out first to move it.",
+        "undone": "Undone: the {part} is back where it was. Nothing else changed."
+      },
       "blocked": {
         "cpuFirst": "The cooler sits on top of the processor, so fit the CPU first.",
         "boardFirst": "The {part} goes in after the motherboard is in the case.",

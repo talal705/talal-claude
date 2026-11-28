@@ -1,0 +1,24 @@
+PASS two one-click installations, two groups
+PASS Start again with the plan unchanged keeps the history and both groups
+PASS one Undo takes the whole memory installation back
+PASS after reload one Undo takes the whole CPU installation back
+FAIL run completed without an exception: TimeoutError: locator.tap: Timeout 25000ms exceeded.
+Call log:
+  - waiting for locator('section[aria-labelledby=\'simple-pc-title\']').locator('[class*=actionCard]').locator('[class*=installButton]')
+    - locator resolved to <button disabled type="button" class="KB5saa_installButton">ركّب القطعة المختارة</button>
+  - attempting tap action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not enabled
+    - retrying tap action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not enabled
+    - retrying tap action
+      - waiting 100ms
+    43 × waiting for element to be visible, enabled and stable
+       - element is not enabled
+     - retrying tap action
+       - waiting 500ms
+
+PASS no uncaught page errors
+5 passed, 1 failed

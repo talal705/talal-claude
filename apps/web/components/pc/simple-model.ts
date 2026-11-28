@@ -254,9 +254,14 @@ export interface SimpleHeld {
   /** An M.2 drive: how far it is tilted up from flat (degrees), and the slot the learner chose. */
   tiltDeg?: number; slotId?: string;
 }
+/**
+ * `groups`: [start, end) ranges of `history` saved by one learner action (a one-click installation), so one Undo
+ * takes the whole range back. Absent in older saves, where every step is its own action; older code ignores it.
+ */
+export type SimpleGroup = [number, number];
 export type SimpleSnapshot =
-  | { version: 3; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean; held?: SimpleHeld | null }
-  | { version: 4; plan: unknown; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean; held?: SimpleHeld | null };
+  | { version: 3; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean; held?: SimpleHeld | null; groups?: SimpleGroup[] }
+  | { version: 4; plan: unknown; placed: SimplePartKey[]; connected: SimpleCableKey[]; history: SimpleStep[]; powered: boolean; held?: SimpleHeld | null; groups?: SimpleGroup[] };
 /** A held pose read from a save: a known part, a right-angle turn, an offset within reach. */
 export function parseHeld(value: unknown): SimpleHeld | null {
   if (!value || typeof value !== "object") return null;
@@ -1444,14 +1449,25 @@ const poweredBy = (history: readonly string[], saved: boolean) => {
   const last = history.findLast((step) => step.startsWith("sys:power:"));
   return last ? last === "sys:power:on" : saved;
 };
-const withStep = (snapshot: SimpleSnapshot, step: SimpleStep): SimpleSnapshot => {
-  const history = [...snapshot.history, step];
-  return { ...snapshot, history, powered: poweredBy(history, snapshot.powered), ...deriveSimpleLists(history) };
+/** `groups` only when there are any, so a snapshot without grouped actions keeps its earlier shape. */
+const withGroups = (snapshot: SimpleSnapshot, groups: readonly SimpleGroup[] | undefined): SimpleSnapshot => {
+  const { groups: _old, ...rest } = snapshot;
+  return groups?.length ? { ...rest, groups: [...groups] } : rest;
 };
+const withSteps = (snapshot: SimpleSnapshot, steps: readonly SimpleStep[], groups = snapshot.groups): SimpleSnapshot => {
+  const history = [...snapshot.history, ...steps];
+  return withGroups({ ...snapshot, history, powered: poweredBy(history, snapshot.powered), ...deriveSimpleLists(history) }, groups);
+};
+const withStep = (snapshot: SimpleSnapshot, step: SimpleStep): SimpleSnapshot => withSteps(snapshot, [step]);
 export const withSimpleStep = withStep;
+/** Several steps saved as one learner action (a one-click installation): one Undo takes them all back. */
+export const withSimpleSteps = (snapshot: SimpleSnapshot, steps: readonly SimpleStep[]): SimpleSnapshot =>
+  withSteps(snapshot, steps, steps.length > 1 ? [...(snapshot.groups ?? []), [snapshot.history.length, snapshot.history.length + steps.length]] : snapshot.groups);
 export const withMechanism = (snapshot: SimpleSnapshot, retentionId: string, state: "open" | "closed") => withStep(snapshot, `mech:${retentionId}:${state}`);
-export const withLower = (snapshot: SimpleSnapshot, key: SimplePartKey, pose?: SimpleAlignment) =>
-  withStep(snapshot, pose ? `lower:${key}:${pose.rotationDeg}:${pose.offsetMm[0]}:${pose.offsetMm[1]}${pose.tiltDeg === undefined ? "" : `:t${pose.tiltDeg}`}${pose.slotId ? `:s${pose.slotId}` : ""}` : `lower:${key}`);
+/** The saved step of lowering a part held in `pose` (an M.2 drive also records its tilt and slot); see `loweredPose`. */
+export const lowerStep = (key: SimplePartKey, pose?: SimpleAlignment): SimpleStep =>
+  pose ? `lower:${key}:${pose.rotationDeg}:${pose.offsetMm[0]}:${pose.offsetMm[1]}${pose.tiltDeg === undefined ? "" : `:t${pose.tiltDeg}`}${pose.slotId ? `:s${pose.slotId}` : ""}` : `lower:${key}`;
+export const withLower = (snapshot: SimpleSnapshot, key: SimplePartKey, pose?: SimpleAlignment) => withStep(snapshot, lowerStep(key, pose));
 /** The pose a lowered part was held in just before (from its `lower:` step), or null when not recorded. */
 export function loweredPose(step: string): SimpleHeld | null {
   // An M.2 drive's step also says its tilt and the slot chosen: `…:t25:sm2-3`.
@@ -1477,12 +1493,31 @@ export const withPart = (snapshot: SimpleSnapshot, key: SimplePartKey): SimpleSn
 export const withCable = (snapshot: SimpleSnapshot, key: SimpleCableKey): SimpleSnapshot =>
   snapshot.connected.includes(key) ? snapshot : withStep(snapshot, `cable:${key}`);
 
+/** The same number of steps, rewritten one for one (a swapped CPU): grouped actions keep their ranges. */
 const withHistory = (snapshot: SimpleSnapshot, history: SimpleStep[]): SimpleSnapshot => ({ ...snapshot, history, ...deriveSimpleLists(history) });
+/**
+ * The grouped actions of a history that is filtered (`kept[i]`: step i stays), at their new places: only an action
+ * that keeps every one of its steps is still one action; one that lost a step is no longer a whole installation.
+ * `groups` may come straight from storage: it is read like a save's (`parseGroups`), so bad metadata is dropped.
+ */
+export function survivingGroups(groups: unknown, kept: readonly boolean[]): SimpleGroup[] {
+  // How many kept steps come before each index (and, at the end, in all).
+  const before = [0];
+  for (const k of kept) before.push(before.at(-1)! + (k ? 1 : 0));
+  return parseGroups(groups, kept.length)
+    .filter(([a, b]) => kept.slice(a, b).every(Boolean))
+    .map(([a, b]): SimpleGroup => [before[a]!, before[b]!]);
+}
+/** Leaves out the steps `keep` rejects, with the grouped actions that keep all their steps. */
+function keepSteps(snapshot: SimpleSnapshot, keep: (step: SimpleStep) => boolean): SimpleSnapshot {
+  const kept = snapshot.history.map(keep);
+  return withGroups(withHistory(snapshot, snapshot.history.filter((_, i) => kept[i])), survivingGroups(snapshot.groups, kept));
+}
 
 /** Whole-lead removal for older flows and tests: every step of that lead leaves the history. */
 export const withoutCable = (snapshot: SimpleSnapshot, key: SimpleCableKey): SimpleSnapshot => {
   const ofLead = (step: string) => step === `cable:${key}` || (/^(un)?plug:/.test(step) && parseEndStep(step.slice(step.indexOf(":") + 1))?.key === key);
-  return withHistory(snapshot, snapshot.history.filter((step) => !ofLead(step)));
+  return keepSteps(snapshot, (step) => !ofLead(step));
 };
 /** One end plugged into the socket it actually went in, or taken out again. */
 export const withPlug = (snapshot: SimpleSnapshot, key: SimpleCableKey, endIndex: number, portId?: string) => withStep(snapshot, endStep("plug", key, endIndex, portId));
@@ -1490,7 +1525,7 @@ export const withUnplug = (snapshot: SimpleSnapshot, key: SimpleCableKey, endInd
 
 /** Takes a cooler back out (`simpleRemoveBlock` must allow it): its step leaves the history. */
 export const withoutPart = (snapshot: SimpleSnapshot, key: SimplePartKey): SimpleSnapshot =>
-  withHistory(snapshot, snapshot.history.filter((step) => step !== `part:${key}`));
+  keepSteps(snapshot, (step) => step !== `part:${key}`);
 
 /**
  * Puts `to` in place of `from`, the part of the same slot (`simpleSwapBlock` must allow it). A CPU
@@ -1508,16 +1543,27 @@ export function lastSimpleStep(snapshot: SimpleSnapshot): SimpleStep | null {
   return snapshot.powered ? null : (snapshot.history.at(-1) ?? null);
 }
 
+/** The grouped action that ends with the latest step (a one-click installation), or null when that step stands alone. */
+const lastGroup = (snapshot: SimpleSnapshot): SimpleGroup | null => {
+  const group = snapshot.groups?.at(-1);
+  return group && group[1] === snapshot.history.length ? group : null;
+};
+/** Every step the next Undo takes back (one, or a whole grouped action), oldest first; empty when there is none. */
+export function lastSimpleAction(snapshot: SimpleSnapshot): SimpleStep[] {
+  if (!lastSimpleStep(snapshot)) return [];
+  return snapshot.history.slice(lastGroup(snapshot)?.[0] ?? -1);
+}
+
 /**
- * Takes back the latest step. Steps are undone newest first, so nothing still fitted can depend on
- * the one removed: a lead is connected only after its parts, and the board moves into the case only
- * after everything it carries. The PC must be off.
+ * Takes back the latest learner action: one step, or every step of a one-click installation. Steps are
+ * undone newest first, so nothing still fitted can depend on the ones removed: a lead is connected only
+ * after its parts, and the board moves into the case only after everything it carries. The PC must be off.
  */
 export function undoSimpleStep(snapshot: SimpleSnapshot): SimpleSnapshot | null {
-  const last = lastSimpleStep(snapshot);
-  if (!last) return null;
-  const history = snapshot.history.slice(0, -1);
-  return { ...snapshot, history, powered: poweredBy(history, snapshot.powered), ...deriveSimpleLists(history) };
+  if (!lastSimpleStep(snapshot)) return null;
+  const group = lastGroup(snapshot);
+  const history = snapshot.history.slice(0, group ? group[0] : -1);
+  return withGroups({ ...snapshot, history, powered: poweredBy(history, snapshot.powered), ...deriveSimpleLists(history) }, group ? snapshot.groups!.slice(0, -1) : snapshot.groups);
 }
 
 // ---------- Saved progress ----------
@@ -1603,6 +1649,21 @@ export function migrateM2Steps(history: readonly string[]): string[] {
   return out;
 }
 
+/**
+ * Grouped actions read from a save: in order, not overlapping, each at least two steps inside the history. Anything
+ * else is dropped (its steps are then undone one at a time); it never makes an otherwise valid save unreadable.
+ */
+function parseGroups(value: unknown, length: number): SimpleGroup[] {
+  if (!Array.isArray(value)) return [];
+  const groups: SimpleGroup[] = [];
+  for (const item of value) {
+    if (!Array.isArray(item) || item.length !== 2 || !item.every((n) => Number.isSafeInteger(n))) return [];
+    const [a, b] = item as [number, number];
+    if (a < (groups.at(-1)?.[1] ?? 0) || b - a < 2 || b > length) return [];
+    groups.push([a, b]);
+  }
+  return groups;
+}
 export function parseSimpleSnapshot(value: unknown): SimpleSnapshot | null {
   if (!value || typeof value !== "object") return null;
   const data = value as Record<string, unknown>;
@@ -1633,9 +1694,14 @@ export function parseSimpleSnapshot(value: unknown): SimpleSnapshot | null {
   }
   const cables = data.version === 3 || data.version === 4 ? deriveSimpleLists(history).connected : ([...connected] as SimpleCableKey[]);
   const held = parseHeld(data.held);
+  // Grouped actions only describe the history they were saved with: a migrated history keeps none.
+  const original = Array.isArray(data.history) ? (data.history as unknown[]) : null;
+  const unchanged = original !== null && history.length === original.length && history.every((step, i) => step === original[i]);
+  const groups = unchanged ? parseGroups(data.groups, history.length) : [];
+  const extra = { ...(held ? { held } : {}), ...(groups.length ? { groups } : {}) };
   const migrated: SimpleSnapshot = data.version === 4
-    ? { version: 4, plan: active.plan, placed, connected: cables, history, powered: data.powered, ...(held ? { held } : {}) }
-    : { version: 3, placed, connected: cables, history, powered: data.powered, ...(held ? { held } : {}) };
+    ? { version: 4, plan: active.plan, placed, connected: cables, history, powered: data.powered, ...extra }
+    : { version: 3, placed, connected: cables, history, powered: data.powered, ...extra };
   try {
     const state = simpleBuildFromSnapshot(migrated);
     if (migrated.powered && (pc.evaluateStartup(state, pcCatalog).outcome !== "operational" || simpleRuleBlock(state))) return null;

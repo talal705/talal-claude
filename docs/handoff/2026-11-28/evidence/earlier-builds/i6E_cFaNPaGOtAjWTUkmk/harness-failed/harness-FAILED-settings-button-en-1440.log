@@ -1,0 +1,17 @@
+PASS planner: a suggested gaming build
+PASS planner: a SATA drive is added
+PASS planner: its own Remove from my build takes it out, the M.2 stays
+PASS the page keeps its language direction
+PASS desktop: the parts and controls sidebar is physically left of the 3D view
+PASS desktop: the sidebar's own text keeps the page direction
+PASS planned build desktop: the parts list starts beside the 3D view, not below it
+PASS planned build desktop: the last part is reachable while the view and the card stay visible
+PASS no page-wide horizontal overflow
+PASS card before the board is in: blocked, Install disabled
+PASS card says what is required first
+PASS the robot names the mandatory prerequisite
+PASS a refused part changes nothing
+FAIL run completed without an exception: TimeoutError: page.waitForFunction: Timeout 15000ms exceeded.
+DIAGNOSTIC {"ram":null,"placed":[],"connected":[],"history":[],"powered":false,"selection":{"kind":"part","key":"cpu"},"complete":false,"mood":"point","lines":["install.ready"],"guide":{"targets":[{"kind":"mount","hostInstanceId":"motherboard-4","placeId":"cpu-socket"}],"reason":"place","subject":{"part":"cpu"}},"view":{"guide":true,"guideMotion":true,"rgb":false},"mode":"guided","fault":null,"faultSolved":false}
+PASS no uncaught page errors
+14 passed, 1 failed

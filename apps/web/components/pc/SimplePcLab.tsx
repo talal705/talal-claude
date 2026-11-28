@@ -10,15 +10,16 @@ import { CheckIcon, CrossIcon } from "../icons";
 import { BuildCompanion, type CompanionMessage } from "./BuildCompanion";
 import { pcCatalog } from "./catalog";
 import { askCompanionAi, companionAskRequest, fetchTutorStatus, type AiStatus } from "./companion-ai";
-import { buildContext, companionSay, partName, coolerDoneLine, coolerRemovalLine, coolerStepLine, heldLines, intentOf, m2StepLine, mountingRemovalLine, nextLine, pickupLine, topicOf, type CompanionEvent, type CompanionLine, type CompanionSay, type Selection } from "./companion";
+import { blockLine, buildContext, companionSay, partName, coolerDoneLine, coolerRemovalLine, coolerStepLine, heldLines, intentOf, m2StepLine, mountingRemovalLine, nextLine, topicOf, type CompanionEvent, type CompanionLine, type CompanionSay, type Selection } from "./companion";
 import { aimClick, aimTargets, createStepGate, m2LiftPose, nextHandStep, type HandStep } from "./click-assembly";
 import { focusOn, moveCamera, selectPart } from "./scene/scene-store";
+import { autoPlace, installPlaces, installPose, planInstall, type InstallPlan } from "./one-click";
 import { applyCoolerStep, applyMountingStep, boardFrameScrews, coolerStepHistory, mountingDismantling, mountingStepHistory, nextCoolerRemoval, nextCoolerStep, nextMountingRemoval, type CoolerStep, type MountingStep } from "./cooler-assembly";
 import {
-  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, cableSpec, firstAttachment, partSpec, createSimpleBuild, emptySimpleSnapshot, installSimplePart, isM2Key, isRamKey, lastSimpleStep, M2_WHOLE_TILT_DEG, simpleM2Heatsink, simpleM2Slots,
+  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, cableSpec, firstAttachment, partSpec, createSimpleBuild, emptySimpleSnapshot, isM2Key, isRamKey, lastSimpleAction, M2_WHOLE_TILT_DEG, withSimpleSteps, simpleM2Heatsink, simpleM2Slots,
   parseSimpleSnapshot, SIMPLE_PART_LIST, SIMPLE_PARTS, SIMPLE_SAVE_KEY, simpleAllPartsIn, simpleBootPartsIn, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot,
   simpleCableBlock, simpleCableConnected, simpleCableMissingParts, simpleCablesFor, simplePartInstalled, simplePartsProgress, REMOVABLE, simpleRemoveBlock, simpleRuleBlock,
-  simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, unplugSimpleEnd, withUnplug, simpleActiveEnd, nextReadiness, pressSimplePower, setSimpleSystem, simpleChangesBehindPanel, simpleCpuSourceKey, simpleGpuSourceKey, simpleM2OpenFirstKey, simpleM2SourceNote, simpleSystemValue, type SystemControl, actualEndPort, simpleSocketName, withoutPart, withPart, withSwap,
+  simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf, startSimplePC, SWAPPABLE, undoSimpleStep, unplugSimpleEnd, withUnplug, simpleActiveEnd, nextReadiness, pressSimplePower, setSimpleSystem, simpleChangesBehindPanel, simpleCpuSourceKey, simpleGpuSourceKey, simpleM2OpenFirstKey, simpleM2SourceNote, simpleSystemValue, type SystemControl, actualEndPort, simpleSocketName, withoutPart, withSwap,
   hasModelledMounting, withSimpleStep, activateSimpleModel, activeSimpleModel, LEGACY_MODEL, roleOf, simpleRetention, setSimpleMechanism, lowerSimplePart, reseatSimplePart, liftSimplePart,
   withMechanism, withLower, withSeat, withLift, withPrep, withPlace, withScrew, prepSimplePart, placeSimplePart, screwSimplePart, unscrewSimplePart, withUnscrew, isPositionKey, simplePositions, simpleLiftBlock, simpleOrientationAdvice, simpleRequiredScrews, simpleUsesScrews, simpleScrewOrder, simpleIsLiquid, simpleCableEnds, simpleEndPlugged, simplePortChoices, simplePlugKeying, plugSimpleEnd, withPlug, loweredPose, lowerSimpleRam, simpleRamSlots, simpleRamRecommended, simpleRamReference, simpleRamSlotOffsets, simpleRamTargetFor, HELD_REACH_MM, type SimpleHeld, caseCoversClosed, slotCovers, type SimpleAlignment, type SimpleCableKey, type SimpleModel, type SimplePartKey, type SimpleRule, type SimpleSnapshot, type SimpleStep,
 } from "./simple-model";
@@ -37,6 +38,8 @@ const NEEDS_LIQUID_AR = arLabs.simplePc.needsLiquid;
 const entryOf = (catalogId: string | undefined) => pcCatalog.entries.find((e) => e.id === catalogId);
 /** How long one hand step's animation runs: a repeated click within it is ignored. */
 const HAND_STEP_MS = 450;
+/** How long the card says "Installing…" while the part glides into place (none with reduced motion). */
+const INSTALL_MS = 700;
 /** A model name short enough for a tile: before any dash or bracket, at most about 24 characters. */
 const shortModel = (model: string) => {
   const base = model.split(/ — | \(/)[0]!.trim();
@@ -110,7 +113,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   };
   const cableName = (key: SimpleCableKey) => t(`cables.${key}.name`);
   /** A robot line as plain text (a part named in it is written out as this page names it). */
-  const lineWords = (l: CompanionLine) => t(`companion.${l.key}`, Object.fromEntries(Object.entries(l.values ?? {}).map(([k, v]) => [k, typeof v === "object" && "part" in v ? label(v.part, true) : v])) as never);
+  const lineWords = (l: CompanionLine) => t(`companion.${l.key}`, Object.fromEntries(Object.entries(l.values ?? {}).map(([k, v]) => [k, typeof v !== "object" ? v : "part" in v ? label(v.part, true) : "parts" in v ? v.parts.map((x) => label(x, true)).join(locale === "ar" ? "، " : ", ") : "place" in v ? robotPlace(v.place) : v])) as never);
   /** The robot's short name for a planned part: its role only (the model is on the tile). */
   const roleLabel = (key: SimplePartKey) => t(`roles.${roleOf(key)}`);
   /** Where a lead goes: on a planned build, the real header or socket of the chosen board or part. */
@@ -151,8 +154,10 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const built = useMemo(() => simpleBuildFromSnapshot(saved), [saved]);
   /** The lead in hand: which port the learner has picked for its next end, and whether the plug is turned the wrong way. */
   const [plugHold, setPlugHold] = useState<{ key: string; portId: string | null; reversed: boolean; end: number | null } | null>(null);
-  /** The bay or fan place the learner chose for a SATA drive or a case fan, until it is placed (then the build says where it is). */
+  /** Where the selected part goes: the memory or M.2 slot, bay or fan place chosen for it (automatically, or by the learner), until it is in. */
   const [position, setPosition] = useState<{ key: SimplePartKey; id: string } | null>(null);
+  /** The part one click just installed, while it glides into place: the button waits, so a second click cannot repeat it. */
+  const [installing, setInstalling] = useState<SimplePartKey | null>(null);
   /** Physical steps ticked for the part in hand (they reset when another part is picked up). */
   const [ticked, setTicked] = useState(0);
   /** How the learner holds a keyed part (CPU, memory) over its place: turned and off centre until they line it up. */
@@ -169,7 +174,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const retOf = (key: SimplePartKey) => simpleRetention(state, key, hold?.key === key ? hold.slotId : undefined);
   const startup = useMemo(() => pc.evaluateStartup(state, pcCatalog), [state]);
   /** The bay or fan place chosen for the part in hand (the same one in the controls, the scene, the robot and the saved step). */
-  const chosenPosition = selection?.kind === "part" && position?.key === selection.key ? position.id : null;
+  const chosenPosition = selection?.kind === "part" && position?.key === selection.key && isPositionKey(selection.key) ? position.id : null;
   const targets = useMemo(() => simpleSceneTargets(state, selection, chosenPosition, selection?.kind === "cable" && plugHold?.key === selection.key ? plugHold.end : null), [state, selection, chosenPosition, plugHold]);
   const powered = mode === "fault" ? Boolean(fault?.solved) : saved.powered;
   /** The steps the guidance reads: the fault build's own while it is on the page, else the saved progress. */
@@ -203,16 +208,21 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
       restored = raw ? parseSimpleSnapshot(JSON.parse(raw)) : null;
     } catch { /* Storage is optional; assembly still works in memory. */ }
     const snapshot = restored ?? emptySimpleSnapshot();
+    const build = simpleBuildFromSnapshot(snapshot);
+    const held = restored?.held ?? null;
+    // Where a part saved in hand goes: the slot its pose is over, else where one click would put it.
+    const heldPlace = held ? (isRamKey(held.key) ? simpleRamTargetFor(build, held.offsetMm)?.slotId : isM2Key(held.key) ? held.slotId : undefined) ?? autoPlace(build, held.key) : null;
     if (restored) {
       setSaved(restored);
-      // A part left in hand comes back exactly as it was held (turn and offset), still in hand.
-      if (restored.held) { setHold(restored.held); setSelection({ kind: "part", key: restored.held.key }); }
+      // A part left in hand comes back exactly as it was held (turn and offset), still in hand, with its place.
+      if (held) { setHold(held); setSelection({ kind: "part", key: held.key }); if (heldPlace) setPosition({ key: held.key, id: heldPlace }); }
       setVerdict(restored.powered ? "success" : null);
-      if (simpleAllPartsIn(simpleBuildFromSnapshot(restored))) setTab("cables");
+      if (simpleAllPartsIn(build)) setTab("cables");
     }
-    // The welcome back speaks from what was saved: the part in hand and its pose, else the build's progress.
-    const held = restored?.held ?? null;
-    speak(companionSay(snapshot.history.length > 0 || held ? { type: "resume", held } : { type: "start" }, simpleBuildFromSnapshot(snapshot), snapshot.powered, held ? { kind: "part", key: held.key } : null, mountingDismantling(snapshot.history)));
+    // The welcome back speaks from what was saved: the part in hand by its one-click plan, else the build's progress.
+    const resumed = held && !snapshot.powered ? planSay(held.key, build, snapshot.history, heldPlace) : null;
+    if (resumed) speak({ ...resumed, lines: [{ key: "welcomeBack" }, ...resumed.lines], mood: "wave" });
+    else speak(companionSay(snapshot.history.length > 0 || held ? { type: "resume", held } : { type: "start" }, build, snapshot.powered, held ? { kind: "part", key: held.key } : null, mountingDismantling(snapshot.history)));
     try { setView(parseSimpleView(JSON.parse(localStorage.getItem(SIMPLE_VIEW_KEY) ?? "null"))); } catch { /* Defaults. */ }
     setWebgl(supportsWebgl());
     setReady(true);
@@ -261,31 +271,22 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
 
   /** Which hands-on routine a keyed part follows: socket and plate, memory latch, or card latch and bracket. */
   const handKind = (retKind: string): "cpu" | "ram" | "gpu" | "m2" => (retKind === "dimm_latch" ? "ram" : retKind === "pcie_latch" ? "gpu" : retKind === "m2_qlatch" || retKind === "m2_screw" ? "m2" : "cpu");
-  /** How a keyed part comes off the bench: turned and off centre, so lining it up is the learner's job. */
-  const pickup = (key: SimplePartKey, retKind: string) => {
-    const k = handKind(retKind);
-    // A CPU comes up from the bench beside the socket, turned: bringing it over the socket is the learner's job.
-    // A memory module comes up beside the slots (over none of them), the wrong way round.
-    const ramStart: [number, number] = [6, Math.min(...[...simpleRamSlotOffsets(state).values()].map((o) => o[1]), 0) - 7];
-    return { key, rotationDeg: k === "cpu" ? 90 : 180, offsetMm: (k === "cpu" ? [-32, -18] : k === "ram" ? ramStart : k === "m2" ? [4, 0] : [4, 3]) as [number, number] };
-  };
   function choosePart(key: SimplePartKey) {
     setConfirmRestart(false);
     if (selection?.kind === "part" && selection.key === key) { cancel(); return; }
     const next: Selection = { kind: "part", key };
     setSelection(next);
     setTicked(0);
-    setPosition(null);
-    // A keyed part is picked up turned and off centre: lining it up is the learner's job.
-    const inPlace = (state.parts.find((p) => p.instanceId === partSpec(key)?.id)?.attachments.length ?? 0) > 0;
-    const picked = simpleRetention(state, key);
-    setHold(picked && !inPlace ? pickup(key, picked.kind) : null);
+    // Where it goes is chosen for the learner (they may pick another); a keyed part is held turned to its key, over that place.
+    const place = autoPlace(state, key);
+    setPosition(place ? { key, id: place } : null);
+    const inPlace = Boolean(firstAttachment(state, key));
+    setHold(inPlace ? null : installPose(state, key, place));
     setGuided(true);
     setTab("parts");
     if (lockedOn) { speak({ lines: [{ key: "blocked.turnOff" }], mood: "concerned", point: "power" }); return; }
-    // A keyed part: the robot names the first physical step it actually needs now.
-    const first = pickupLine(state, key);
-    if (first) { speak({ lines: [first], mood: "point", point: "scene" }); return; }
+    const say = planSay(key, state, stepsTaken, place);
+    if (say) { speak(say); return; }
     react({ type: "select", selection: next }, state, lockedOn, next);
   }
 
@@ -310,46 +311,30 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     react({ type: "cancel" }, state, saved.powered, null);
   }
 
-  /** A part fitted with its own preparation and screws goes in only through its panel (not one generic install). */
-  function screwedByHand(key: SimplePartKey): boolean {
-    // A cooler with a documented mounting is only ever fitted step by step, even with the other cooler still on.
-    if (hasModelledMounting(key) && !simplePartInstalled(state, key)) {
-      if (!(selection?.kind === "part" && selection.key === key)) choosePart(key);
-      return true;
-    }
-    if (!(simpleUsesScrews(key) || simpleIsLiquid(key)) || simplePartInstalled(state, key)) return false;
-    const rival = simpleSlotPart(state, slotOf(key));
-    if (rival && rival !== key) return false;
-    if (!(selection?.kind === "part" && selection.key === key)) choosePart(key);
-    return true;
-  }
-  function install(key: SimplePartKey) {
-    if (mode === "fault") {
-      if (!fault || fault.solved) return;
-      if (simpleRetention(state, key)) { primaryHand(key); return; }
-      if (screwedByHand(key)) return;
-      if (!takeStep()) return;
-      const step = installSimplePart(state, key);
-      if (step.ok) { setFault({ ...fault, state: step.state }); setSelection(null); react({ type: "installed", key }, step.state, false, null); }
+  /**
+   * Installs the selected part completely with one click (owner decision, 2026-11-28): turned the right way, in its
+   * chosen place, with its latches, clips and screws done, through the engine's own steps (see one-click.ts). The
+   * steps are saved as one action, so one Undo takes them all back. Refused, nothing changes and the robot says why.
+   */
+  function installWhole(key: SimplePartKey) {
+    if (installing === key) return;
+    if (handsOff()) { if (lockedOn) speak({ lines: [{ key: "install.turnOff" }], mood: "concerned", point: "power" }); return; }
+    if (!takeStep()) return;
+    const plan = planInstall(state, key, chosenPlace(key), stepsTaken);
+    if (!plan.ok) {
+      speak({ lines: [installBlockLine(key, plan)], mood: "concerned", point: plan.reason === "turnOff" ? "power" : "parts" });
+      // The other CPU or cooler is in: its swap and removal are in the part controls.
+      if (plan.reason === "required" && (plan.block === "socketTaken" || plan.block === "coolerTaken")) openPartOptions();
       return;
     }
-    if (saved.powered) return;
-    // A keyed part goes in only through its mechanism and alignment; a screwed one through its own steps.
-    if (simpleRetention(state, key)) { primaryHand(key); return; }
-    if (screwedByHand(key)) return;
-    // The physical steps come first (pushing a resting part home has none to repeat).
-    if (!simplePartInstalled(state, key) && ticked < substepsFor(key).length && !simpleSlotPart(state, slotOf(key))) { speak({ lines: [{ key: "blocked.substeps" }], mood: "concerned", point: "parts" }); return; }
-    const rival = simpleSlotPart(state, slotOf(key));
-    if (!takeStep()) return;
-    if (rival && rival !== key) { swap(rival, key); return; }
-    const step = installSimplePart(state, key);
-    if (!step.ok) { react({ type: "select", selection: { kind: "part", key } }); return; }
-    if (simplePartInstalled(state, key)) return;
-    setSaved((previous) => withPart(previous, key));
-    setSelection(null);
+    if (!commit(plan.state, (sn) => withSimpleSteps(sn, plan.steps))) return;
+    setHold(null);
+    setPosition(null);
     setVerdict(null);
-    if (simpleAllPartsIn(step.state)) setTab("cables");
-    react({ type: "installed", key }, step.state, false, null);
+    setInstalling(key);
+    window.setTimeout(() => setInstalling((now) => (now === key ? null : now)), reducedMotion ? 0 : INSTALL_MS);
+    speak({ lines: installedLines(key, plan, plan.state), mood: "happy", point: "scene" });
+    if (simpleAllPartsIn(plan.state)) setTab("cables");
   }
 
   // ---------- Hands-on: mechanisms and alignment (CPU, memory) ----------
@@ -482,7 +467,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (!keepHand(r.state, (sn) => withLower(sn, key, cpu ? { rotationDeg: hold.rotationDeg, offsetMm: hold.offsetMm } : undefined), cpu ? "cpuLowered" : k === "gpu" ? "gpuIn" : k === "m2" ? "m2Lowered" : "ramIn", "happy")) return;
     if (k === "ram") { setSelection(null); if (simpleAllPartsIn(r.state)) setTab("cables"); }
   }
-  /** An M.2 drive: its next line comes from the step the build is now at (the same as the toolbar's). */
+  /** An M.2 drive: its next line comes from the step the build is now at (the same as the step-by-step controls'). */
   function m2Say(next: ReturnType<typeof createSimpleBuild>, key: SimplePartKey, held: SimpleHeld | null, mood: "happy" | "point" = "point") {
     const line = m2StepLine(next, key, held) ?? (simplePartInstalled(next, key) ? { key: "hands.m2Done" } : null);
     if (line) speak({ lines: [line], mood: simplePartInstalled(next, key) ? "happy" : mood, point: "scene" });
@@ -567,7 +552,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     // A module comes straight up out of its slot: held right above it, the way it was in.
     const from = isRamKey(key) ? simpleRamSlotOffsets(state).get(ret?.mountPointId ?? "") : undefined;
     if (from) setHold({ key, rotationDeg: 0, offsetMm: from });
-    else if (ret) setHold(pickup(key, ret.kind));
+    else if (ret) setHold(installPose(state, key, null));
   }
   /** Says an engine refusal as the engine worded it, in the page's language. */
   const sayEngine = (message: { en: string; ar: string } | undefined, fallback: string) =>
@@ -595,15 +580,18 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (!keepHand(r.state, (sn) => withPlace(sn, key, positionId), line)) return;
     setPosition(null);
   }
-  /** Chooses the bay or fan place a part will go in; a taken, too small or covered one is refused with its reason. */
-  function choosePosition(key: SimplePartKey, id: string) {
+  /** Chooses where a part with several places goes (memory or M.2 slot, bay, fan place); a taken or unsuitable one is refused with its reason. */
+  function choosePlace(key: SimplePartKey, id: string) {
     if (handsOff()) return;
-    const place = simplePositions(state, key).find((x) => x.id === id);
+    const place = installPlaces(state, key).find((x) => x.id === id);
     if (!place) return;
-    if (place.occupant) { speak({ lines: [{ key: "hands.positionTaken" }], mood: "concerned", point: "scene" }); return; }
-    if (!place.fits) { speak({ lines: [{ key: place.radiator ? "hands.positionRadiator" : "hands.positionWrong" }], mood: "concerned", point: "scene" }); return; }
+    const name = { place: id };
+    if (firstAttachment(state, key)) { speak({ lines: [{ key: "install.inPlaceAlready", values: { part: partName(key), place: { place: firstAttachment(state, key)!.target.mountPointId } } }], mood: "point", point: "scene" }); return; }
+    if (!place.free) { speak({ lines: [{ key: "install.placeTaken", values: { place: name } }], mood: "concerned", point: "scene" }); return; }
+    if (!place.fits) { speak({ lines: [isM2Key(key) ? { key: "hands.m2NoFit", values: { slot: name } } : { key: simplePositions(state, key).find((x) => x.id === id)?.radiator ? "hands.positionRadiator" : "hands.positionWrong" }], mood: "concerned", point: "scene" }); return; }
     setPosition({ key, id });
-    speak({ lines: [{ key: "hands.positionPicked", values: { place: place.label[lang] } }], mood: "point", point: "scene" });
+    setHold(installPose(state, key, id));
+    speak({ lines: [{ key: "hands.positionPicked", values: { place: name } }], mood: "point", point: "scene" });
   }
   /** Takes one screw of a fitted board, power supply, drive or fan out again. */
   function handUnscrew(key: SimplePartKey) {
@@ -656,8 +644,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   }
 
   /**
-   * One documented step of fitting or taking off a cooler (the toolbar, the panel and the robot all offer the same
-   * `nextCoolerStep` / `nextCoolerRemoval`). A cooler is never fitted in one click.
+   * One documented step of fitting or taking off a cooler, from the step-by-step panel (the panel and the robot offer
+   * the same `nextCoolerStep` / `nextCoolerRemoval`; one click walks `nextCoolerStep` to the end, see one-click.ts).
    */
   function takeCoolerStep(key: SimplePartKey, step: CoolerStep, removal = false) {
     if (handsOff() || !step) return;
@@ -814,24 +802,20 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   function onTarget(id: string) {
     if (!selection) return;
     const [role, place] = [id.slice(0, id.indexOf(":")), id.slice(id.indexOf(":") + 1)];
-    // A keyed part's own place (any memory slot for a module): aim the part in hand at it, or take the next step there.
-    if ((role === "target" || role === "aim") && selection.kind === "part" && simpleRetention(state, selection.key)) {
-      const inPlace = (state.parts.find((p) => p.instanceId === partSpec(selection.key).id)?.attachments.length ?? 0) > 0;
-      if (hold?.key === selection.key && !inPlace) aimAt(selection.key, place);
-      else primaryHand(selection.key);
+    if (selection.kind === "part") {
+      // A tap in the view only chooses: one of the part's places becomes where it goes; installing is the button's.
+      if (installPlaces(state, selection.key).some((p) => p.id === place)) { choosePlace(selection.key, place); return; }
+      if (role === "target" || role === "aim") { speak({ lines: [{ key: "install.useButton", values: { part: partName(selection.key) } }], mood: "point", point: "parts" }); return; }
+      react({ type: "wrongPlace", key: selection.key, place });
       return;
     }
-    // A bay or fan place clicked in the view is chosen exactly like its button in the part controls.
-    if (role === "pick") { if (selection.kind === "part") choosePosition(selection.key, place); return; }
+    // A lit socket is chosen exactly like its button in the cable controls; the plug then goes in with its own button.
     if (role === "target") {
-      if (selection.kind === "part") install(selection.key);
-      // A lit socket is chosen exactly like its button in the cable controls; the plug then goes in with its own button.
-      else if (plugHold?.key === selection.key) setPlugHold({ ...plugHold, portId: place });
+      if (plugHold?.key === selection.key) setPlugHold({ ...plugHold, portId: place });
       else connect(selection.key);
       return;
     }
-    if (selection.kind === "part") react({ type: "wrongPlace", key: selection.key, place });
-    else react({ type: "wrongPort", key: selection.key, portOf: cableOfPort(place, state) });
+    react({ type: "wrongPort", key: selection.key, portOf: cableOfPort(place, state) });
   }
 
   /**
@@ -858,7 +842,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     speak({ lines: heldLines(state, r.held) ?? [{ key: "aim.ready" }], mood: "point", point: "scene" });
   }
 
-  /** What a tap on a keyed part's place (or the action above the view) does now: exactly one checked step. */
+  /** The next checked step of a keyed part, for the step-by-step controls (and Enter in them): exactly one. */
   function primaryHand(key: SimplePartKey) {
     runStep(key, nextHandStep(state, key, hold));
   }
@@ -907,16 +891,29 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
 
   function undo() {
     setConfirmRestart(false);
-    const step = lastSimpleStep(saved);
+    const action = lastSimpleAction(saved);
     const next = undoSimpleStep(saved);
-    if (!step || !next) { react({ type: "nothingToUndo" }); return; }
+    if (!action.length || !next) { react({ type: "nothingToUndo" }); return; }
     const after = simpleBuildFromSnapshot(next);
     setSaved(next);
+    setVerdict(null);
+    if (action.length > 1) {
+      // A one-click installation taken back whole: that part is where it was before, selected again; nothing else changed.
+      const key = ALL_SIMPLE_PARTS.find((p) => JSON.stringify(after.parts.find((x) => x.instanceId === p.id)?.attachments) !== JSON.stringify(state.parts.find((x) => x.instanceId === p.id)?.attachments))?.key;
+      setTab("parts");
+      if (!key) { setSelection(null); setHold(null); react({ type: "undo", step: action.at(-1)! }, after, next.powered, null); return; }
+      const place = autoPlace(after, key);
+      setSelection({ kind: "part", key });
+      setPosition(place ? { key, id: place } : null);
+      setHold(firstAttachment(after, key) ? null : installPose(after, key, place));
+      speak({ lines: [{ key: "install.undone", values: { part: partName(key) } }], mood: "idle", point: "parts" });
+      return;
+    }
+    const step = action[0]!;
     // Undoing a lowering puts the part back in hand, above its place, exactly as it was held before.
     const pose = loweredPose(step);
     if (pose) { setSelection({ kind: "part", key: pose.key }); setHold(pose); }
     else setSelection(null);
-    setVerdict(null);
     if (step.startsWith("part:")) setTab("parts");
     react({ type: "undo", step }, after, next.powered, pose ? { kind: "part", key: pose.key } : null);
   }
@@ -997,8 +994,12 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     if (result.ok) setFault({ ...fault, solved: true });
   }
 
+  /** "What next?" and "Help" for a selected part follow its one-click plan; explanations keep their detail. */
+  const askedPlan = (intent: string | null) => (intent === "next" || intent === "help") && selection?.kind === "part" && !lockedOn ? planSay(selection.key) : null;
   function quick(intent: "next" | "help" | "explain") {
     setGuided(true);
+    const say = askedPlan(intent);
+    if (say) { speak(say); return; }
     react({ type: "ask", intent });
   }
 
@@ -1009,6 +1010,8 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     // A question that names a part or lead ("why does RAM go in A2?") is answered about that part.
     const topic = topicOf(text);
     if (topic && intent !== "next" && (intent || ai !== "available")) { speak({ lines: [{ key: `explain.${topic}` }], mood: "thinking", point: "scene" }, { question: text }); return; }
+    const planned = askedPlan(intent);
+    if (planned) { speak(planned, { question: text }); return; }
     if (intent) { speak(companionSay({ type: "ask", intent }, state, saved.powered, selection), { question: text }); return; }
     if (ai !== "available") { speak(companionSay({ type: "question", text }, state, saved.powered, selection), { question: text }); return; }
     asking.current?.abort();
@@ -1074,6 +1077,63 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     }
     return place;
   };
+  /** Where one click puts `key`: the place chosen for it now, else the automatic one (null for a part with one place). */
+  const chosenPlace = (key: SimplePartKey) => (position?.key === key ? position.id : autoPlace(state, key));
+  /** A place as the page names it: a memory or M.2 slot's printed name, a bay or fan place's label, else the part's one place. */
+  const placeText = (key: SimplePartKey, place: string | null) => {
+    if (place && isRamKey(key)) return ramSlotName(place);
+    if (place && isM2Key(key)) return m2SlotName(place);
+    return (place ? installPlaces(state, key).find((x) => x.id === place)?.label[lang] : null) ?? placeName(key);
+  };
+  /**
+   * A place named in a robot line, in the page's language when the line is drawn (so switching language renames it):
+   * the practice build's own names, else the board's or case's label. Lines carry the place id, never its words.
+   */
+  const robotPlace = (id: string) => (!planned && t.has(`companion.places.${id}`) ? t(`companion.places.${id}`) : placeLabelOf(id));
+  /** The place a robot line names for `key`: the chosen slot or place, else the part's one place. */
+  const placeValue = (key: SimplePartKey, place: string | null) => ({ place: place ?? simpleTarget(state, key).mountPointId });
+  /** Why one click cannot fit the part now: a mandatory step or part first, or a place that cannot take it. */
+  function installBlockLine(key: SimplePartKey, plan: Extract<InstallPlan, { ok: false }>, at: PCBuildState = state): CompanionLine {
+    switch (plan.reason) {
+      case "turnOff": return { key: "install.turnOff" };
+      case "alreadyIn": return { key: "already", values: { part: partName(key) } };
+      case "required": return blockLine(at, key, plan.block);
+      case "placeTaken": return { key: "install.placeTaken", values: { place: placeValue(key, plan.place) } };
+      case "placeWrong": return { key: "install.placeWrong", values: { part: partName(key), place: placeValue(key, plan.place) } };
+      case "noPlace": return { key: "install.noPlace", values: { part: partName(key) } };
+      case "fanInTheWay": return { key: "install.fanInTheWay", values: { fan: partName(plan.fan) } };
+      case "refused": return plan.message ? { key: "hands.engine", values: { text: plan.message[lang] } } : { key: "blocked.cannotFit" };
+    }
+  }
+  /**
+   * The robot's guidance for a selected part, from its actual one-click plan: ready, so press Install; refused, so the
+   * exact prerequisite; already in, null (the usual next part). Mechanical detail stays in the explanations and the
+   * step-by-step controls; it is never given as the next thing to click.
+   */
+  function planSay(key: SimplePartKey, at: PCBuildState = state, history: readonly SimpleStep[] = stepsTaken, place: string | null = chosenPlace(key)): CompanionSay | null {
+    const plan = planInstall(at, key, place, history);
+    if (plan.ok) return { lines: [{ key: "install.ready", values: { part: partName(key), place: placeValue(key, plan.place) } }], mood: "point", point: "parts" };
+    if (plan.reason === "alreadyIn") return null;
+    return { lines: [installBlockLine(key, plan, at)], mood: "concerned", point: plan.reason === "turnOff" ? "power" : "parts" };
+  }
+  /** What the robot says after one click: done and where, how it was done (the educational part), any advice, and what is next. */
+  function installedLines(key: SimplePartKey, plan: Extract<InstallPlan, { ok: true }>, after: PCBuildState): CompanionLine[] {
+    const role = roleOf(key);
+    const radiator = plan.steps.includes(`rad:${key}` as SimpleStep);
+    const exhaust = after.parts.find((p) => p.instanceId === partSpec(key).id)?.prep?.airflow === "exhaust";
+    const how = radiator && !plan.steps.some((st) => st.startsWith(`place:${key}`)) ? "radiator"
+      : role === "aio" || (role === "cooler" && partSpec(key).radiator) ? "liquid" : role === "storage" ? (isM2Key(key) ? "m2" : "drive")
+      : role === "fan" ? (exhaust ? "fanExhaust" : "fanIntake") : role;
+    const place = plan.place ? installPlaces(state, key).find((x) => x.id === plan.place) : undefined;
+    const recommended = installPlaces(state, key).find((x) => x.recommended && x.free && x.fits && x.id !== plan.place);
+    return [
+      { key: "install.doneIn", values: { part: partName(key), place: placeValue(key, plan.place) } },
+      { key: `install.how.${how}` },
+      // Advice, never a rule: the place works, the manual or the usual layout recommends another.
+      ...(place && !place.recommended && recommended ? [{ key: "install.tipNotRecommended", values: { rec: { place: recommended.id } } }] : []),
+      ...(mode === "guided" ? [nextLine(after, false)] : []),
+    ];
+  }
   const summary = complete ? {
     parts: SIMPLE_PARTS.flatMap((p) => simpleSlotPart(state, slotOf(p.key)) ?? []).map((key) => (isRamKey(key) ? `${label(key)} · ${placeName(key)}` : label(key))),
     cables: leads.map((c) => cableName(c.key)),
@@ -1086,7 +1146,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const rival = selectedPart && !partInstalled && SWAPPABLE.includes(selectedPart) ? simpleSlotPart(state, slotOf(selectedPart)) : null;
   const swapBlocked = selectedPart && rival ? simpleSwapBlock(state, selectedPart) : null;
   const blockHint = (reason: string) => t(reason === "turnOffFirst" ? "turnOffToSwap" : reason);
-  const canUndo = Boolean(lastSimpleStep(saved));
+  const canUndo = lastSimpleAction(saved).length > 0;
   const keyed = selectedPart ? retOf(selectedPart) : null;
   // Undoing a lowering puts the CPU back in hand where it was lowered from: over the socket, lined up
   // (it could only have been lowered lined up).
@@ -1097,11 +1157,11 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPart, inPlaceNow]);
   const cpuKind: "lga" | "zif" | null = selectedPart && keyed && handKind(keyed.kind) === "cpu" ? (keyed.leverId ? "lga" : "zif") : null;
-  const cpuStep = cpuKind && selectedPart ? cpuFocus(selectedPart) : null;
-  // The CPU's socket in the view: its lever and plate answer clicks and taps (one checked step each).
+  // The CPU's socket in the view: its lever and plate still answer clicks and taps (one checked step each, a
+  // secondary control); nothing on it glows, since one click does the whole fitting.
   const socketHands = cpuKind && selectedPart && keyed ? {
     hostInstanceId: keyed.hostInstanceId,
-    highlight: cpuStep,
+    highlight: null,
     onLever: () => (keyed.leverId ? handLever(selectedPart, keyed.leverOpen ? "closed" : "open") : handMechanism(selectedPart, keyed.open ? "closed" : "open")),
     onPlate: keyed.leverId ? () => handMechanism(selectedPart, keyed.open ? "closed" : "open") : undefined,
   } : null;
@@ -1109,15 +1169,11 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
   const ramKey = selectedPart && isRamKey(selectedPart) ? selectedPart : null;
   const ramAt = ramKey ? firstAttachment(state, ramKey) : undefined;
   const ramTarget = ramKey && !ramAt && hold?.key === ramKey ? simpleRamTargetFor(state, hold.offsetMm) : null;
-  const ramSlot = ramKey ? simpleRamSlots(state).find((x) => x.id === (ramAt ? ramAt.target.mountPointId : ramTarget?.slotId)) : undefined;
-  const ramGlow = ramSlot && (!ramSlot.occupant || ramSlot.occupant === ramKey) && !(ramAt && ramAt.seating !== "seated")
-    ? (!ramSlot.clipOpen && !(ramAt?.seating === "seated") ? { slotId: ramSlot.id, near: false } : ramSlot.nearId && !ramSlot.nearOpen && !(ramAt?.seating === "seated") ? { slotId: ramSlot.id, near: true } : null) : null;
-  const ramScene = { onClip: handClip, glowClip: ramGlow, targetSlot: ramTarget?.slotId ?? null, targetOk: Boolean(ramTarget && Math.hypot(ramTarget.residual[0], ramTarget.residual[1]) <= 1.5 && hold?.rotationDeg === 0) };
-  // The robot points at the exact piece the next step is about: a socket part, a memory clip, or the slot.
-  const ramGuideTarget = ramKey && ramSlot ? (ramGlow ? { kind: "solid" as const, hostInstanceId: partSpec(ramKey).host, solidId: `${ramGlow.slotId}-latch${ramGlow.near ? "-near" : ""}` } : { kind: "mount" as const, hostInstanceId: partSpec(ramKey).host, placeId: ramSlot.id }) : null;
-  const sceneGuide = guide && cpuKind && cpuStep && keyed ? { ...guide, targets: [{ kind: "socket" as const, hostInstanceId: keyed.hostInstanceId, placeId: keyed.mountPointId, what: cpuStep, socket: cpuKind }] }
-    : guide && ramGuideTarget ? { ...guide, targets: [ramGuideTarget] } : guide;
-  ramDebug.current = ramKey ? { key: ramKey, target: ramTarget?.slotId ?? null, installedIn: ramAt?.target.mountPointId ?? null, seating: ramAt?.seating ?? null, glow: ramGlow, highlight: ramScene.targetSlot, guide: sceneGuide?.targets ?? null, heading: placeName(ramKey) } : null;
+  // The slot the module is held over (its chosen place) is marked; its clips still answer clicks (a secondary control).
+  const ramScene = { onClip: handClip, glowClip: null, targetSlot: ramTarget?.slotId ?? null, targetOk: Boolean(ramTarget && Math.hypot(ramTarget.residual[0], ramTarget.residual[1]) <= 1.5 && hold?.rotationDeg === 0) };
+  // The robot points at where the selected part goes (or what has to come first), not at a lever or a clip.
+  const sceneGuide = guide;
+  ramDebug.current = ramKey ? { key: ramKey, target: ramTarget?.slotId ?? null, installedIn: ramAt?.target.mountPointId ?? null, seating: ramAt?.seating ?? null, glow: null, highlight: ramScene.targetSlot, guide: sceneGuide?.targets ?? null, heading: placeName(ramKey) } : null;
   const heldNow = selectedPart && keyed && hold?.key === selectedPart && !(state.parts.find((p) => p.instanceId === partSpec(selectedPart).id)?.attachments.length)
     ? { instanceId: partSpec(selectedPart).id, target: isRamKey(selectedPart) ? simpleRamReference(state) : simpleTarget(state, selectedPart, hold.slotId), rotationDeg: hold.rotationDeg, offsetMm: hold.offsetMm, liftMm: keyed.kind === "pcie_latch" ? 40 : isRamKey(selectedPart) ? 12 : 22, ...(hold.tiltDeg ? { tiltDeg: hold.tiltDeg } : {}) }
     : null;
@@ -1301,7 +1357,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
           {isPositionKey(key) && <div className={styles.holdRow} role="group" aria-label={t(`hands.positionTitle.${role}`)}>
             {simplePositions(state, key).map((place) => {
               const tag = place.occupant ? t(place.supplied ? "hands.positionTag.supplied" : "hands.positionTag.taken") : place.radiator ? t("hands.positionTag.radiator") : !place.fits ? t("hands.positionTag.wrong") : "";
-              return <button key={place.id} type="button" disabled={disabled} aria-pressed={position?.key === key && position.id === place.id} onClick={() => choosePosition(key, place.id)}><bdi>{place.label[lang]}</bdi>{tag && <small> · {tag}</small>}</button>;
+              return <button key={place.id} type="button" disabled={disabled} aria-pressed={position?.key === key && position.id === place.id} onClick={() => choosePlace(key, place.id)}><bdi>{place.label[lang]}</bdi>{tag && <small> · {tag}</small>}</button>;
             })}
           </div>}
           {liquid
@@ -1339,18 +1395,6 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
         <p className={styles.hint}>{t(`hands.removeWhy.${role}`)}</p>
       </div>
     );
-  }
-
-  /** Which piece of the socket the next CPU step is about (the robot points at it and it glows). */
-  function cpuFocus(key: SimplePartKey): "lever" | "plate" | "mark" | null {
-    const ret = simpleRetention(state, key);
-    if (!ret) return null;
-    const at = firstAttachment(state, key);
-    const lga = Boolean(ret.leverId);
-    if (!ret.open && !(lga ? ret.leverOpen : false)) return at && simplePartInstalled(state, key) ? null : "lever";
-    if (lga && ret.leverOpen && !ret.open) return at ? "lever" : "plate";
-    if (!at) return "mark";
-    return lga ? "plate" : "lever";
   }
 
   /** The CPU and its socket: lever and plate (Intel) or lever (AM4), the CPU held, turned and centred, then lowered. */
@@ -1574,94 +1618,32 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
     );
   }
 
-  // ---------- The toolbar above the view: undo, turn, the one next step, and the view toggles ----------
+  // ---------- The selected part's card: what it is, where it goes, the one Install button, Undo and the view toggles ----------
 
-  /** The label of a keyed part's next step, as the panel below names the same step. */
-  function stepLabel(key: SimplePartKey, step: Exclude<HandStep, null>): string {
-    const ret = retOf(key);
-    const k = handKind(ret?.kind ?? "");
-    const lga = Boolean(ret?.leverId);
-    switch (step.kind) {
-      case "aim": return isRamKey(key) ? t("toolbar.overSlot") : t("toolbar.aimHere");
-      case "slotTaken": return t("hands.ramLower");
-      case "clip": return t(step.near ? "hands.openNearClip" : "hands.openClip", { slot: ramSlotName(step.slotId) });
-      case "lever": return t(step.desired === "open" ? (lga ? "hands.releaseLever" : "hands.liftZif") : "hands.lockLever");
-      case "mechanism": {
-        const open = step.desired === "open";
-        if (k === "gpu") return t(open ? "hands.openPcie" : "hands.releasePcie");
-        if (k === "m2") return ret?.kind === "m2_screw" ? t(open ? "hands.m2ScrewOut" : "hands.m2ScrewIn") : t(open ? "hands.openQLatch" : "hands.closeQLatch");
-        return t(lga ? (open ? "hands.openPlate" : "hands.closePlate") : (open ? "hands.liftZif" : "hands.lowerZif"));
-      }
-      case "covers": return t("hands.removeCover", { n: step.id.slice(step.id.lastIndexOf(":") + 1) });
-      case "lower": return t(k === "ram" ? "hands.ramLower" : k === "gpu" ? "hands.pushCard" : k === "m2" ? "hands.slideIn" : "hands.lowerIn");
-      case "seat": return t("hands.pressIn");
-      case "fasten": return t("hands.nextScrew", { n: (firstAttachment(state, key)?.fastenersSecured ?? 0) + 1, total: simpleRequiredScrews(state, key) });
-      case "heatsink": return t(({ screws: "hands.m2Screws", lift: "hands.m2Lift", film: "hands.m2Film", fit: "hands.m2Fit", tighten: "hands.m2Tighten" } as const)[step.step]);
-      case "stand": return t("hands.m2Stand");
-      case "tilt": return t("hands.m2Tilt");
-    }
+  /** One click's plan for the selected part as the card shows it beforehand (the click itself plans again from the build). */
+  const selectedPlace = selectedPart ? chosenPlace(selectedPart) : null;
+  const selectedPlan = useMemo(
+    () => (selectedPart && ready && !partInstalled && !(mode === "fault" && (!fault || fault.solved)) ? planInstall(state, selectedPart, selectedPlace, stepsTaken) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedPart, ready, partInstalled, mode, fault, state, selectedPlace, stepsTaken],
+  );
+  type CardStatus = "none" | "ready" | "installing" | "installed" | "blocked";
+  const cardStatus: CardStatus = !selectedPart ? "none" : installing === selectedPart ? "installing" : partInstalled ? "installed" : selectedPlan?.ok ? "ready" : "blocked";
+  // The places it could go, to choose another (only before it is in one).
+  const placeChoices = selectedPart && !partInstalled && !firstAttachment(state, selectedPart) ? installPlaces(state, selectedPart) : [];
+  const choiceNow = placeChoices.find((x) => x.id === selectedPlace);
+  const otherRecommended = selectedPart && choiceNow && !choiceNow.recommended ? placeChoices.filter((x) => x.recommended && x.free && x.fits).map((x) => placeText(selectedPart, x.id)) : [];
+  /** "Focus selected part": the camera goes to it only when asked (in its place, held over where it goes, or on the bench). */
+  function focusSelected() {
+    if (!selectedPart) return;
+    const at = firstAttachment(state, selectedPart);
+    if (at) focusOn(partSpec(selectedPart).id);
+    else if (heldNow) focusOn(heldNow.target.hostInstanceId, heldNow.target.mountPointId);
+    else focusOn(partSpec(selectedPart).id);
   }
-  /** The one action the toolbar offers now, or why there is none (shown and read out with the button). */
-  const nextAction: { label: string; run?: () => void; why?: string } = (() => {
-    if (!selection) return { label: t("install"), why: t("selectFirst") };
-    if (!ready || handsOff()) return { label: t("install"), why: t(lockedOn ? "turnOffFirst" : "toolbar.nothing") };
-    if (selection.kind === "cable") return { label: t("toolbar.moreCable"), run: openPartOptions };
-    const key = selection.key;
-    if (lockedOn) return { label: t("install"), why: t("turnOffFirst") };
-    if (keyed) {
-      const rivalIn = handKind(keyed.kind) === "cpu" ? simpleSlotPart(state, "cpu") : null;
-      if (rivalIn && rivalIn !== key) return { label: t("install"), why: t("hands.takeOther") };
-      const step = nextHandStep(state, key, hold);
-      if (!step) return { label: t(partInstalled ? "installed" : "install"), why: t("toolbar.nothing") };
-      if (step.kind === "slotTaken") return { label: t("hands.ramLower"), why: t("hands.slotTakenHint", { slot: ramSlotName(step.slotId) }) };
-      if (step.kind === "aim" && (isRamKey(key) || hold?.key !== key)) return { label: stepLabel(key, step), why: t(isRamKey(key) ? "companion.aim.ramFirst" : "companion.aim.first") };
-      return { label: stepLabel(key, step), run: () => runStep(key, step) };
-    }
-    if (hasModelledMounting(key)) {
-      if (rival) return { label: t("toolbar.more"), run: openPartOptions };
-      // Taking the frame off has been chosen: the next removal step leads, whatever the cooler's own next fitting step is.
-      const removal = mountingDismantling(stepsTaken, mode === "fault" ? fault?.baseScrews : undefined) ? nextMountingRemoval(state) : null;
-      const removalLine = mountingRemovalLine(removal);
-      if (removal && removalLine) return { label: t(`companion.${removalLine.key}`, removalLine.values as never), run: () => takeMountingStep(removal) };
-      const coolerStep = nextCoolerStep(state, key);
-      const line = coolerStep ? coolerStepLine(state, key) : null;
-      if (!coolerStep || !line) return { label: t("installed"), why: t("toolbar.nothing") };
-      const words = lineWords(line);
-      if (coolerStep.kind === "cpuFirst" || coolerStep.kind === "boardFirst") return { label: t("install"), why: words };
-      if (coolerStep.kind === "backplate") return { label: t("toolbar.more"), run: openPartOptions };
-      return { label: words, run: () => takeCoolerStep(key, coolerStep) };
-    }
-    if (partInstalled) return { label: t("installed"), why: t("toolbar.nothing") };
-    if (partBlocked) return { label: t("install"), why: t(partBlocked) };
-    // A board, power supply, drive or fan: the toolbar takes the same one step as the part controls (place, then each screw).
-    if (!rival && simpleUsesScrews(key) && roleOf(key) !== "cooler" && !simpleIsLiquid(key)) {
-      const secured = firstAttachment(state, key)?.fastenersSecured ?? 0;
-      const required = simpleRequiredScrews(state, key);
-      if (placedScrewed) return { label: t("hands.nextScrew", { n: secured + 1, total: required }), run: () => handScrew(key, secured) };
-      if (isPositionKey(key) && !chosenPosition) return { label: t("toolbar.more"), run: openPartOptions, why: t(`hands.positionTitle.${roleOf(key)}`) };
-      return { label: t(`hands.place.${roleOf(key)}`), run: () => handPlace(key, "placedScrews") };
-    }
-    if (rival || simpleUsesScrews(key) || simpleIsLiquid(key)) return { label: t("toolbar.more"), run: openPartOptions };
-    if (mode !== "fault" && ticked < substepsFor(key).length) return { label: t("toolbar.more"), run: openPartOptions };
-    return { label: t("install"), run: () => install(key) };
-  })();
-  /** The part in hand that can be turned now (held, not yet in its place), and how it is turned. */
-  const turnable = heldNow && selectedPart && keyed && !handsOff() ? { cpu: handKind(keyed.kind) === "cpu", key: selectedPart } : null;
-  const heldState = heldNow && hold && keyed ? (() => {
-    const k = handKind(keyed.kind);
-    if (k === "ram") return t(hold.rotationDeg === 0 ? "hands.notchMatched" : "hands.notchReversed");
-    if (k === "gpu") return t(hold.rotationDeg === 0 ? "hands.bracketToCase" : "hands.bracketAway");
-    return t("hands.turned", { deg: hold.rotationDeg });
-  })() : null;
-  // A module in hand: every real slot of the board, to hold it over by a click (a keyboard-reachable twin of clicking the slot).
-  const slotChoices = ramKey && heldNow ? simpleRamSlots(state) : [];
-  // An M.2 drive in hand: every M.2 slot of the board, chosen by a click (a keyboard-reachable twin of clicking the slot).
-  const m2Held = heldNow && selectedPart && isM2Key(selectedPart) ? selectedPart : null;
-  const m2Choices = m2Held ? simpleM2Slots(state, m2Held) : [];
   const optionsKey = selection ? `${selection.kind}:${selection.key}` : "";
-  const optionsOpen = optionsChoice?.key === optionsKey
-    ? optionsChoice.open
-    : Boolean(selectedCable || (selectedPart && (!keyed || rival)));
+  // A lead's ends are plugged in its controls, so they open for a lead; a part's are secondary and stay folded.
+  const optionsOpen = optionsChoice?.key === optionsKey ? optionsChoice.open : Boolean(selectedCable);
   function openPartOptions() {
     if (optionsKey) setOptionsChoice({ key: optionsKey, open: true });
   }
@@ -1674,53 +1656,118 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
         <span className={styles.progress} aria-label={t("progress", { count: progress, total: SIMPLE_PARTS.length })}>{progress}<span> / {SIMPLE_PARTS.length}</span></span>
       </header>
 
+      {/* The parts and the selected part's card sit left of the 3D view in both languages (stacked on phones). */}
       <div className={styles.workspace}>
-        <div className={styles.viewer}>
-          <div className={styles.toolbar} role="group" aria-label={t("toolbar.label")}>
-            <div className={styles.toolGroup}>
+        <div className={styles.side}>
+          <div className={styles.actionCard} role="group" aria-label={t("action.label")} data-status={cardStatus}>
+            <div className={styles.actionHead}>
+              <span className={styles.actionKicker}>{t("action.selected")}</span>
+              <strong>{selectedPart ? label(selectedPart) : selectedCable ? cableName(selectedCable) : t("action.none")}</strong>
+              {selectedPart && <span className={styles.actionStatus} data-status={cardStatus} role="status">{t(`action.status.${cardStatus}`)}</span>}
+            </div>
+            {selectedPart && <p className={styles.actionPlace}>{firstAttachment(state, selectedPart) ? t("action.isIn", { place: placeText(selectedPart, firstAttachment(state, selectedPart)!.target.mountPointId) }) : t("action.goesIn", { place: placeText(selectedPart, selectedPlace) })}</p>}
+            {placeChoices.length > 1 && <div className={styles.placeChoices} role="radiogroup" aria-label={t("action.place")}>
+              {placeChoices.map((x) => <button key={x.id} type="button" role="radio" aria-checked={x.id === selectedPlace} disabled={!ready || !x.free || !x.fits || handsOff()} onClick={() => choosePlace(selectedPart!, x.id)}>
+                <bdi>{placeText(selectedPart!, x.id)}</bdi>{x.recommended && <small> · {t("action.recommended")}</small>}{!x.free ? <small> · {t("hands.positionTag.taken")}</small> : !x.fits && <small> · {t("hands.positionTag.wrong")}</small>}
+              </button>)}
+            </div>}
+            {cardStatus === "blocked" && selectedPlan && !selectedPlan.ok && <p className={styles.actionWhy} id="install-why"><strong>{t(selectedPlan.reason === "required" || selectedPlan.reason === "fanInTheWay" ? "action.requiredFirst" : "action.notNow")}</strong> {lineWords(installBlockLine(selectedPart!, selectedPlan))}</p>}
+            {cardStatus === "ready" && otherRecommended.length > 0 && <p className={styles.actionTip}><strong>{t("action.tip")}</strong> {t("companion.install.tipNotRecommended", { rec: otherRecommended.join(locale === "ar" ? " أو " : " or ") })}</p>}
+            {selectedCable
+              ? <button className={styles.installButton} type="button" onClick={openPartOptions} disabled={!ready}>{t("toolbar.moreCable")}</button>
+              : <button className={styles.installButton} type="button" onClick={() => selectedPart && installWhole(selectedPart)} disabled={cardStatus !== "ready"} aria-describedby={cardStatus === "blocked" ? "install-why" : undefined}>{cardStatus === "installing" ? t("action.installing") : cardStatus === "installed" ? t("installed") : t("action.install")}</button>}
+            {!selection && <p className={styles.hint}>{t("selectFirst")}</p>}
+            <div className={styles.actionRow}>
               {mode !== "fault" && <button type="button" className={styles.tool} onClick={undo} disabled={!ready || !canUndo}>{t("undo")}</button>}
-              <div className={styles.toolGroup} role="group" aria-label={t("toolbar.rotate")}>
-                {turnable ? (turnable.cpu ? <>
-                  <button type="button" className={styles.tool} onClick={() => turn(-90)} aria-label={t("hands.rotateLeft")}>⟲</button>
-                  <button type="button" className={styles.tool} onClick={() => turn(90)} aria-label={t("hands.rotateRight")}>⟳</button>
-                </> : <button type="button" className={styles.tool} onClick={() => turn(180)}>{t("hands.flip")}</button>)
-                  : <button type="button" className={styles.tool} disabled aria-describedby="toolbar-rotate-why">{t("hands.flip")}</button>}
-                {!turnable && <span id="toolbar-rotate-why" className="visually-hidden">{t("toolbar.rotateNone")}</span>}
+              <div className={`${styles.toggles} ${styles.toolGroup}`} role="group" aria-label={t("view.label")}>
+                <button type="button" aria-pressed={view.guide} onClick={() => changeView({ guide: !view.guide })}>{t("view.guide")}</button>
+                <button type="button" aria-pressed={view.guideMotion && !reducedMotion} disabled={!view.guide || reducedMotion} onClick={() => changeView({ guideMotion: !view.guideMotion })} title={reducedMotion ? t("view.reduced") : undefined}>{t("view.motion")}</button>
+                <button type="button" aria-pressed={view.rgb} onClick={() => changeView({ rgb: !view.rgb })}>{t("view.rgb")}</button>
               </div>
-              {m2Held && <div className={styles.toolGroup} role="group" aria-label={t("toolbar.tilt")}>
-                <button type="button" className={styles.tool} aria-pressed={Boolean(hold?.tiltDeg)} onClick={() => tiltHeld(true)}>{t("toolbar.tiltUp")}</button>
-                <button type="button" className={styles.tool} aria-pressed={!hold?.tiltDeg} onClick={() => tiltHeld(false)}>{t("toolbar.layFlat")}</button>
-              </div>}
-              <button type="button" className={styles.toolPrimary} onClick={nextAction.run} disabled={!nextAction.run} aria-describedby={nextAction.run ? undefined : "toolbar-why"}>{nextAction.label}</button>
             </div>
-            {m2Choices.length > 0 && <div className={styles.toolGroup} role="group" aria-label={t("toolbar.m2Slot")}>
-              <span className={styles.toolLabel} aria-hidden="true">{t("toolbar.m2Slot")}</span>
-              {m2Choices.map((slot) => {
-                const taken = Boolean(slot.occupant && slot.occupant !== m2Held);
-                const why = taken ? t("companion.hands.m2SlotTaken", { slot: m2SlotName(slot.id) }) : !slot.fits ? t("companion.hands.m2NoFit", { slot: m2SlotName(slot.id) }) : undefined;
-                return <button key={slot.id} type="button" className={styles.tool} aria-pressed={hold?.slotId === slot.id} disabled={taken || !slot.fits || handsOff()} title={why} onClick={() => aimAt(m2Held!, slot.id)}><bdi>{m2SlotName(slot.id)}</bdi>{why && <span className="visually-hidden"> · {why}</span>}</button>;
-              })}
-            </div>}
-            {slotChoices.length > 0 && <div className={styles.toolGroup} role="group" aria-label={t("toolbar.overSlot")}>
-              <span className={styles.toolLabel} aria-hidden="true">{t("toolbar.overSlot")}</span>
-              {slotChoices.map((slot) => {
-                const taken = Boolean(slot.occupant && slot.occupant !== ramKey);
-                const shortName = slot.label.en.match(/DIMM_[A-Z0-9]+/)?.[0] ?? ramSlotName(slot.id);
-                return <button key={slot.id} type="button" className={styles.tool} aria-label={ramSlotName(slot.id)} aria-pressed={ramTarget?.slotId === slot.id} disabled={taken || handsOff()} title={taken ? t("hands.slotTakenHint", { slot: ramSlotName(slot.id) }) : undefined} onClick={() => aimAt(ramKey!, slot.id)}><bdi>{shortName}</bdi>{taken && <span className="visually-hidden"> · {t("hands.slotTakenHint", { slot: ramSlotName(slot.id) })}</span>}</button>;
-              })}
-            </div>}
-            <div className={`${styles.toggles} ${styles.toolGroup}`} role="group" aria-label={t("view.label")}>
-              <button type="button" aria-pressed={view.guide} onClick={() => changeView({ guide: !view.guide })}>{t("view.guide")}</button>
-              <button type="button" aria-pressed={view.guideMotion && !reducedMotion} disabled={!view.guide || reducedMotion} onClick={() => changeView({ guideMotion: !view.guideMotion })} title={reducedMotion ? t("view.reduced") : undefined}>{t("view.motion")}</button>
-              <button type="button" aria-pressed={view.rgb} onClick={() => changeView({ rgb: !view.rgb })}>{t("view.rgb")}</button>
-            </div>
-            <p className={styles.toolStatus} aria-live="polite">
-              {heldState && <span>{heldState}</span>}
-              {nextAction.why && <span id="toolbar-why">{nextAction.why}</span>}
-            </p>
           </div>
+          {/* The parts (and leads) right under the card, so a part is chosen beside the model. */}
+          <div className={styles.controls}>
+            <div className={styles.tabs} role="group" aria-label={t("assemblySteps")}>
+              <button type="button" aria-pressed={tab === "parts"} onClick={() => setTab("parts")}>{t("partsTab")} <span dir="ltr">{t("progressShort", { count: progress, total: SIMPLE_PARTS.length })}</span></button>
+              <button type="button" aria-pressed={tab === "cables"} onClick={() => setTab("cables")}>{t("cablesTab")} <span dir="ltr">{t("progressShort", { count: cableProgress, total: leads.length })}</span></button>
+            </div>
+
+            <div hidden={tab !== "parts"}>
+              <div ref={partsTarget} className={styles.parts} role="group" aria-label={t("partsLabel")}>
+                {SIMPLE_PART_LIST.map((key) => {
+                  const part = partSpec(key);
+                  const done = simplePartInstalled(state, part.key);
+                  const active = selectedPart === part.key;
+                  // An alternative whose slot the other part fills: still selectable, shown as the other choice.
+                  const other = !done && SWAPPABLE.includes(key) && simpleSlotPart(state, slotOf(key)) !== null;
+                  return <button key={part.key} type="button" className={styles.part} data-selected={active} data-installed={done} data-alternative={other || undefined} aria-pressed={active} onClick={() => choosePart(part.key)}>
+                    <img src={`/assets/pc/thumbnails/${part.catalogId}.svg`} alt="" width={58} height={44} />
+                    <span>{label(part.key, true)}{SWAPPABLE.includes(key) && <small>{t(`partNotes.${key}`)}</small>}</span>
+                    {done && <CheckIcon />}
+                  </button>;
+                })}
+              </div>
+
+            </div>
+
+            <div ref={cablesTarget} hidden={tab !== "cables"}>
+              <p className={styles.cablesIntro}>{t(!planned && simplePartInstalled(state, "aio") ? "cablesIntroLiquid" : "cablesIntro")}</p>
+              <div className={styles.cables} role="group" aria-label={t("cablesLabel")}>
+                {leads.map((item) => {
+                  const done = simpleCableConnected(state, item.key);
+                  const active = selectedCable === item.key;
+                  return <button type="button" key={item.key} className={styles.cable} data-selected={active} data-connected={done} aria-pressed={active} onClick={() => chooseCable(item.key)}>
+                    <span className={styles.wireIcon} aria-hidden="true">↳</span>
+                    <span>{cableName(item.key)}{!item.essential && <small>{t(item.key.startsWith("caseFan") ? "fanOptional" : "leadOptional")}</small>}</span>
+                    {done ? <CheckIcon /> : <span className={styles.unplugged}>{t("loose")}</span>}
+                  </button>;
+                })}
+              </div>
+              {!leads.some((c) => c.key.startsWith("sata")) && <p className={styles.cablesNote}>{t("noStorageCable")}</p>}
+            </div>
+          </div>
+
+          <div className={styles.companionSlot}>
+            <BuildCompanion message={message} ai={ai} thinking={thinking} reducedMotion={reducedMotion} onQuick={quick} onAsk={(text) => void ask(text)} summary={summary} placeLabel={robotPlace} {...(planned ? { partLabel: roleLabel } : {})} />
+          </div>
+
+          <div className={`${styles.controls} ${styles.more}`}>
+            <div className={styles.modes} role="radiogroup" aria-label={t("modes.label")}>
+              {(["guided", "independent", "fault"] as const).map((m) => <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => chooseMode(m)} disabled={!ready}>{t(`modes.${m}`)}</button>)}
+            </div>
+            <p className={styles.hint}>{t(`modes.${mode}Hint`)}</p>
+            {mode === "fault" && !fault && <p className={styles.hint}>{t("fault.none")}</p>}
+            <div className={styles.power}>
+              <div className={styles.result} data-result={verdict ?? "idle"} role="status" aria-live="polite">
+                {verdict === "success" ? <><CheckIcon /><strong>{t("success")}</strong></> : verdict === "failure" ? <><CrossIcon /><div><strong>{t("failure")}</strong><p>{mode === "fault" ? t("fault.readStages") : missingMessage}</p>
+                  {/* The fix for the liquid-cooling rule is also given in Arabic on the English page. */}
+                  {rule && locale !== "ar" && <p lang="ar" dir="rtl" className={styles.ruleArabic}>{planned ? arLabs.simplePc.planner.findingText.exercise_needs_liquid : NEEDS_LIQUID_AR}</p>}
+                  {rule && <p className={styles.ruleNote}>{t("ruleNote")}</p>}
+                </div></> : <span>{t("readyToTry")}</span>}
+              </div>
+              {mode === "fault" && fault?.solved && <p className={styles.hint} role="status">{t("fault.solved", { fault: t(`fault.kinds.${fault.kind}`) })}</p>}
+              {attempt && verdict && <PowerDiagnostics key={`${verdict}-${attempt.startup.outcome}`} state={attempt.state} startup={attempt.startup} />}
+              {mode === "fault" && fault && !fault.solved && attempt?.startup.stages.some((st) => st.diagnostics.some((d) => d.code === "cpu_needs_bios_update")) && (
+                <button className={styles.cancel} type="button" onClick={() => { const next = flashBios(fault.state); if (next) { setFault({ ...fault, state: next }); setAttempt(null); setVerdict(null); } }}>{t("fault.flashBios")}</button>
+              )}
+              {mode === "fault"
+                ? <button className={styles.powerButton} type="button" onClick={fault?.solved ? newFault : power} disabled={!ready || !fault}><span aria-hidden="true">⏻</span>{fault?.solved ? t("fault.newFault") : t("power")}</button>
+                : Readiness()}
+              <div className={styles.steps} hidden={mode === "fault"}>
+                {!confirmRestart ? <button type="button" onClick={() => setConfirmRestart(true)} disabled={!ready}>{t("reset")}</button> : null}
+              </div>
+              {confirmRestart && <div className={styles.confirm} role="alertdialog" aria-label={t("restartAsk")}>
+                <p>{t("restartAsk")}</p>
+                <div><button type="button" onClick={restart}>{t("restartYes")}</button><button type="button" onClick={() => setConfirmRestart(false)}>{t("restartNo")}</button></div>
+              </div>}
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.viewer}>
           {/* Every control for the selected part or lead, above the view: prep, screws, swap, removal, substeps,
-              each end of a lead, and the reverse steps. Open by itself when the toolbar cannot do the step. */}
+              each end of a lead, and the reverse steps. Secondary for a part (one click installs it); open for a lead. */}
           {selection && <details key={optionsKey} className={styles.partOptions} open={optionsOpen} onToggle={(event) => { const open = event.currentTarget.open; if (open !== optionsOpen) setOptionsChoice({ key: optionsKey, open }); }}>
             <summary>
               <span className={styles.partOptionsTitle}>{t(selectedCable ? "toolbar.moreCable" : "toolbar.more")}</span>
@@ -1734,7 +1781,7 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
                   ? <button className={styles.installButton} type="button" onClick={() => remove(selectedPart)} disabled={!ready || Boolean(removeBlocked)}>{t("remove")}</button>
                   : rival
                     ? <button className={styles.installButton} type="button" onClick={() => swap(rival, selectedPart)} disabled={!ready || Boolean(swapBlocked)}>{t("swap", { other: label(rival) })}</button>
-                    : <button className={styles.installButton} type="button" onClick={() => install(selectedPart)} disabled={!ready || partInstalled || Boolean(partBlocked) || lockedOn || (mode !== "fault" && ticked < substepsFor(selectedPart).length)}>{partInstalled ? t("installed") : t("install")}</button>}
+                    : <button className={styles.installButton} type="button" onClick={() => installWhole(selectedPart)} disabled={!ready || partInstalled || Boolean(partBlocked) || lockedOn}>{partInstalled ? t("installed") : t("action.install")}</button>}
                 {mode !== "fault" && !partInstalled && !rival && !partBlocked && !simpleUsesScrews(selectedPart) && !simpleIsLiquid(selectedPart) && substepsFor(selectedPart).length > 0 && <ol className={styles.substeps} aria-label={t("substeps.title")}>
                   {substepsFor(selectedPart).map((step, i) => <li key={step}><button type="button" aria-pressed={i < ticked} disabled={i > ticked} onClick={() => setTicked(i < ticked ? i : i + 1)}><span aria-hidden="true">{i < ticked ? "✓" : i + 1}</span>{t(`substeps.${step}`)}</button></li>)}
                 </ol>}
@@ -1755,12 +1802,13 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
           </details>}
           <div className={styles.stage}>
           <div className={styles.viewControls} role="group" aria-label={t("camera")}>
-            <button type="button" onClick={() => moveCamera("fit")}>{t("center")}</button>
+            <button type="button" onClick={focusSelected} disabled={!selectedPart}>{t("action.focus")}</button>
+            <button type="button" onClick={() => moveCamera("fit")}>{t("action.resetView")}</button>
             <button type="button" aria-label={t("zoomIn")} onClick={() => moveCamera("in")}>+</button>
             <button type="button" aria-label={t("zoomOut")} onClick={() => moveCamera("out")}>−</button>
           </div>
           <div className={styles.canvas} role="group" tabIndex={0} aria-label={t("scene")} onKeyDown={(event) => {
-            if (heldNow && selectedPart) { holdKeys(event, selectedPart); if (event.defaultPrevented) return; }
+            // The view's keys only move the camera (a part's own keys are in its step-by-step controls).
             const commands = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down", "+": "in", "-": "out" } as const;
             const command = commands[event.key as keyof typeof commands];
             if (command && !event.ctrlKey && !event.metaKey && !event.altKey) { event.preventDefault(); moveCamera(command); }
@@ -1798,85 +1846,6 @@ export function SimplePcLab({ embedded = false, aiConfigured = false, onEditBuil
           </div>
           </div>
           <p className={styles.cameraHint}>{t("cameraHint")}</p>
-        </div>
-
-        <div className={styles.side}>
-          <div className={styles.companionSlot}>
-            <BuildCompanion message={message} ai={ai} thinking={thinking} reducedMotion={reducedMotion} onQuick={quick} onAsk={(text) => void ask(text)} summary={summary} {...(planned ? { partLabel: roleLabel, placeLabel: placeLabelOf } : {})} />
-          </div>
-
-          <div className={styles.controls}>
-            <div className={styles.modes} role="radiogroup" aria-label={t("modes.label")}>
-              {(["guided", "independent", "fault"] as const).map((m) => <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => chooseMode(m)} disabled={!ready}>{t(`modes.${m}`)}</button>)}
-            </div>
-            <p className={styles.hint}>{t(`modes.${mode}Hint`)}</p>
-            {mode === "fault" && !fault && <p className={styles.hint}>{t("fault.none")}</p>}
-            <div className={styles.tabs} role="group" aria-label={t("assemblySteps")}>
-              <button type="button" aria-pressed={tab === "parts"} onClick={() => setTab("parts")}>{t("partsTab")} <span dir="ltr">{t("progressShort", { count: progress, total: SIMPLE_PARTS.length })}</span></button>
-              <button type="button" aria-pressed={tab === "cables"} onClick={() => setTab("cables")}>{t("cablesTab")} <span dir="ltr">{t("progressShort", { count: cableProgress, total: leads.length })}</span></button>
-            </div>
-
-            <div hidden={tab !== "parts"}>
-              <div ref={partsTarget} className={styles.parts} role="group" aria-label={t("partsLabel")}>
-                {SIMPLE_PART_LIST.map((key) => {
-                  const part = partSpec(key);
-                  const done = simplePartInstalled(state, part.key);
-                  const active = selectedPart === part.key;
-                  // An alternative whose slot the other part fills: still selectable, shown as the other choice.
-                  const other = !done && SWAPPABLE.includes(key) && simpleSlotPart(state, slotOf(key)) !== null;
-                  return <button key={part.key} type="button" className={styles.part} data-selected={active} data-installed={done} data-alternative={other || undefined} aria-pressed={active} onClick={() => choosePart(part.key)}>
-                    <img src={`/assets/pc/thumbnails/${part.catalogId}.svg`} alt="" width={58} height={44} />
-                    <span>{label(part.key, true)}{SWAPPABLE.includes(key) && <small>{t(`partNotes.${key}`)}</small>}</span>
-                    {done && <CheckIcon />}
-                  </button>;
-                })}
-              </div>
-
-              {/* What to do with the selected part is above the view (toolbar and part controls); here it is chosen. */}
-              {!selectedPart && <p className={styles.hint}>{t("selectFirst")}</p>}
-            </div>
-
-            <div ref={cablesTarget} hidden={tab !== "cables"}>
-              <p className={styles.cablesIntro}>{t(!planned && simplePartInstalled(state, "aio") ? "cablesIntroLiquid" : "cablesIntro")}</p>
-              <div className={styles.cables} role="group" aria-label={t("cablesLabel")}>
-                {leads.map((item) => {
-                  const done = simpleCableConnected(state, item.key);
-                  const active = selectedCable === item.key;
-                  return <button type="button" key={item.key} className={styles.cable} data-selected={active} data-connected={done} aria-pressed={active} onClick={() => chooseCable(item.key)}>
-                    <span className={styles.wireIcon} aria-hidden="true">↳</span>
-                    <span>{cableName(item.key)}{!item.essential && <small>{t(item.key.startsWith("caseFan") ? "fanOptional" : "leadOptional")}</small>}</span>
-                    {done ? <CheckIcon /> : <span className={styles.unplugged}>{t("loose")}</span>}
-                  </button>;
-                })}
-              </div>
-              {!leads.some((c) => c.key.startsWith("sata")) && <p className={styles.cablesNote}>{t("noStorageCable")}</p>}
-            </div>
-
-            <div className={styles.power}>
-              <div className={styles.result} data-result={verdict ?? "idle"} role="status" aria-live="polite">
-                {verdict === "success" ? <><CheckIcon /><strong>{t("success")}</strong></> : verdict === "failure" ? <><CrossIcon /><div><strong>{t("failure")}</strong><p>{mode === "fault" ? t("fault.readStages") : missingMessage}</p>
-                  {/* The fix for the liquid-cooling rule is also given in Arabic on the English page. */}
-                  {rule && locale !== "ar" && <p lang="ar" dir="rtl" className={styles.ruleArabic}>{planned ? arLabs.simplePc.planner.findingText.exercise_needs_liquid : NEEDS_LIQUID_AR}</p>}
-                  {rule && <p className={styles.ruleNote}>{t("ruleNote")}</p>}
-                </div></> : <span>{t("readyToTry")}</span>}
-              </div>
-              {mode === "fault" && fault?.solved && <p className={styles.hint} role="status">{t("fault.solved", { fault: t(`fault.kinds.${fault.kind}`) })}</p>}
-              {attempt && verdict && <PowerDiagnostics key={`${verdict}-${attempt.startup.outcome}`} state={attempt.state} startup={attempt.startup} />}
-              {mode === "fault" && fault && !fault.solved && attempt?.startup.stages.some((st) => st.diagnostics.some((d) => d.code === "cpu_needs_bios_update")) && (
-                <button className={styles.cancel} type="button" onClick={() => { const next = flashBios(fault.state); if (next) { setFault({ ...fault, state: next }); setAttempt(null); setVerdict(null); } }}>{t("fault.flashBios")}</button>
-              )}
-              {mode === "fault"
-                ? <button className={styles.powerButton} type="button" onClick={fault?.solved ? newFault : power} disabled={!ready || !fault}><span aria-hidden="true">⏻</span>{fault?.solved ? t("fault.newFault") : t("power")}</button>
-                : Readiness()}
-              <div className={styles.steps} hidden={mode === "fault"}>
-                {!confirmRestart ? <button type="button" onClick={() => setConfirmRestart(true)} disabled={!ready}>{t("reset")}</button> : null}
-              </div>
-              {confirmRestart && <div className={styles.confirm} role="alertdialog" aria-label={t("restartAsk")}>
-                <p>{t("restartAsk")}</p>
-                <div><button type="button" onClick={restart}>{t("restartYes")}</button><button type="button" onClick={() => setConfirmRestart(false)}>{t("restartNo")}</button></div>
-              </div>}
-            </div>
-          </div>
         </div>
       </div>
     </section>

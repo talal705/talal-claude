@@ -7,7 +7,7 @@
 import type { CatalogEntry, PCAction, PCBuildState, PortSpec } from "@ytl/contracts";
 import { pc } from "@ytl/simulation";
 import { pcCatalog, suppliedPartActions } from "./catalog";
-import { applySimpleStep, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, parseEndStep, suppliedFanSpecs, type SimpleStep, type CableExtraEnd, type CableSpec, type PartSpec, type SimpleModel, type SimplePartKey, type SimpleSnapshot } from "./simple-model";
+import { applySimpleStep, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, parseEndStep, suppliedFanSpecs, survivingGroups, type SimpleStep, type CableExtraEnd, type CableSpec, type PartSpec, type SimpleModel, type SimplePartKey, type SimpleSnapshot } from "./simple-model";
 
 /** What the learner is building for. */
 export type BuildPurpose = "study" | "gaming" | "creator";
@@ -344,7 +344,7 @@ const isPositionSpec = (p: PartSpec) => /^s?fan\d*$/.test(p.key) || (/^storage\d
  * replaced host (all of them when the case changes), and the leads of any of these or whose ends
  * moved. Every other step stays, in its order; a step that can no longer be taken is dropped.
  */
-export function rebaseProgress(snapshot: { placed: string[]; connected: string[]; history: string[]; powered: boolean }, from: SimpleModel, to: SimpleModel) {
+export function rebaseProgress(snapshot: { placed: string[]; connected: string[]; history: string[]; powered: boolean; groups?: unknown }, from: SimpleModel, to: SimpleModel) {
   // The case's own fans (alternatives) count too, so their steps survive a change that does not touch the case.
   const fromPart = new Map([...from.parts, ...from.alternatives].map((p) => [p.key, p]));
   const toPart = new Map([...to.parts, ...to.alternatives].map((p) => [p.key, p]));
@@ -386,7 +386,7 @@ export function rebaseProgress(snapshot: { placed: string[]; connected: string[]
     const b = toCable.get(key);
     return !!a && !!b && norm(a, fromKeys) === norm(b, toKeys) && !b.requires.some((k) => changed.has(k));
   };
-  const history = snapshot.history.filter((step) => {
+  const kept = snapshot.history.map((step) => {
     const kind = step.slice(0, step.indexOf(":"));
     const key = step.slice(step.indexOf(":") + 1);
     if (kind === "cable") return keepCable(key);
@@ -399,21 +399,26 @@ export function rebaseProgress(snapshot: { placed: string[]; connected: string[]
     const part = key.split(/[:@]/)[0]!;
     return toPart.has(part) && !changed.has(part);
   });
-  return { history, changed: [...changed] };
+  // A one-click installation every step of which stays is still one action (one Undo).
+  return { history: snapshot.history.filter((_, i) => kept[i]), groups: survivingGroups(snapshot.groups, kept), changed: [...changed] };
 }
 
-/** The active model's snapshot of these steps, in order, without any step that can no longer be taken. */
-export function snapshotFromHistory(history: readonly string[]): SimpleSnapshot {
+/**
+ * The active model's snapshot of these steps, in order, without any step that can no longer be taken. `groups` (of
+ * `history`) stay grouped when none of their steps is dropped.
+ */
+export function snapshotFromHistory(history: readonly string[], groups?: unknown): SimpleSnapshot {
   const empty = emptySimpleSnapshot();
   let state = createSimpleBuild();
-  const kept: SimpleStep[] = [];
-  for (const step of history as SimpleStep[]) {
+  const kept = (history as SimpleStep[]).map((step) => {
     try {
       state = applySimpleStep(state, step);
-      kept.push(step);
-    } catch { /* Dropped: it depended on something no longer in. */ }
-  }
-  return { ...empty, history: kept, ...deriveSimpleLists(kept) };
+      return true;
+    } catch { return false; /* Dropped: it depended on something no longer in. */ }
+  });
+  const steps = (history as SimpleStep[]).filter((_, i) => kept[i]);
+  const survivors = survivingGroups(groups, kept);
+  return { ...empty, history: steps, ...deriveSimpleLists(steps), ...(survivors.length ? { groups: survivors } : {}) };
 }
 
 /** Parses a saved planned build; null when it is not one. */

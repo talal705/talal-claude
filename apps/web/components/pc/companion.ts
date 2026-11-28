@@ -132,7 +132,8 @@ export function placeOf(state: PCBuildState, key: SimplePartKey): string {
   return simpleTarget(state, key).mountPointId;
 }
 
-function blockLine(state: PCBuildState, key: SimplePartKey, reason: SimpleBlock): CompanionLine {
+/** Why a part cannot go in yet: the mandatory part (or step) that has to come first. */
+export function blockLine(state: PCBuildState, key: SimplePartKey, reason: SimpleBlock): CompanionLine {
   if (reason === "socketTaken" || reason === "coolerTaken") {
     const other = simpleSlotPart(state, slotOf(key));
     return { key: `blocked.${reason}`, values: { part: partName(key), other: partName(other ?? key) } };
@@ -290,7 +291,7 @@ export function pickupLine(state: PCBuildState, key: SimplePartKey): CompanionLi
  * not in hand any more (in its place, or with no mechanism of its own).
  */
 /**
- * The one line for the next step of fitting a cooler (the same step the toolbar offers): it names the screw,
+ * The one line for the next step of fitting a cooler (the same step the step-by-step controls offer): it names the screw,
  * the frame or the position. Null when the cooler is fitted or has no modelled mounting.
  */
 export function coolerStepLine(state: PCBuildState, key: SimplePartKey): CompanionLine | null {
@@ -359,7 +360,7 @@ function m2SlotName(state: PCBuildState, key: SimplePartKey, id: string): string
 }
 
 /**
- * The one next thing to do with an M.2 drive, from the same step the toolbar offers (so the robot,
+ * The one next thing to do with an M.2 drive, from the same step the step-by-step controls offer (so the robot,
  * the button and the welcome back never disagree). Null when the drive and its heatsink are done.
  */
 export function m2StepLine(state: PCBuildState, key: SimplePartKey, held: SimpleHeld | null): CompanionLine | null {
