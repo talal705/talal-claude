@@ -7,7 +7,7 @@
 import type { CatalogEntry, PCAction, PCBuildState, PortSpec } from "@ytl/contracts";
 import { pc } from "@ytl/simulation";
 import { pcCatalog, suppliedPartActions } from "./catalog";
-import { applySimpleStep, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, type SimpleStep, type CableExtraEnd, type CableSpec, type PartSpec, type SimpleModel, type SimplePartKey, type SimpleSnapshot } from "./simple-model";
+import { applySimpleStep, createSimpleBuild, deriveSimpleLists, emptySimpleSnapshot, parseEndStep, suppliedFanSpecs, type SimpleStep, type CableExtraEnd, type CableSpec, type PartSpec, type SimpleModel, type SimplePartKey, type SimpleSnapshot } from "./simple-model";
 
 /** What the learner is building for. */
 export type BuildPurpose = "study" | "gaming" | "creator";
@@ -128,7 +128,9 @@ export function planModel(build: PlannedBuild): SimpleModel {
   });
 
   // Fan places already taken by the case's own fans.
-  const suppliedFans = supplied.instanceIds.map((instanceId) => ({ instanceId, mount: initial.parts.find((p) => p.instanceId === instanceId)!.attachments[0]!.target.mountPointId }));
+  const fanSizeOf = (instanceId: string) => { const e = entry(initial.parts.find((p) => p.instanceId === instanceId)?.catalogId, "fan"); return e?.spec.sizeMm ?? 0; };
+  const suppliedFans = supplied.instanceIds.map((instanceId) => ({ instanceId, mount: initial.parts.find((p) => p.instanceId === instanceId)!.attachments[0]!.target.mountPointId, sizeMm: fanSizeOf(instanceId) }));
+  const caseFans = suppliedFanSpecs(caseE.id, supplied.instanceIds);
   const takenFan = new Set(suppliedFans.map((f) => f.mount));
   let radiator: PartSpec["radiator"];
   if (liquid) {
@@ -166,11 +168,24 @@ export function planModel(build: PlannedBuild): SimpleModel {
   if (gpu) add({ key: "gpu", id: idOf.get("gpu")!, catalogId: gpu.id, host: boardId, mount: "pcie-x16-1", screws: screws(board, "pcie-x16-1") });
   add({ key: "psu", id: psuId, catalogId: psu.id, host: "case-1", mount: "psu-bay", screws: screws(caseE, "psu-bay") });
   const fanKeys: string[] = [];
+  // A fan bank (the front) takes one size at a time, up to its capacity: the sizes already in it, the case's own fans included.
+  const bankSizes = (bankId: string) => [...takenFan].flatMap((id) => {
+    const m = caseE.mountPoints.find((x) => x.id === id);
+    const at = suppliedFans.find((x) => x.mount === id) ?? plannedFans.find((x) => x.mount === id);
+    return m?.kind === "fan_mount" && m.bank?.id === bankId && at ? [at.sizeMm] : [];
+  });
+  const plannedFans: { mount: string; sizeMm: number }[] = [];
+  const bankAllows = (m: (typeof caseE.mountPoints)[number], sizeMm: number) => {
+    if (m.kind !== "fan_mount" || !m.bank) return true;
+    const sizes = bankSizes(m.bank.id);
+    return sizes.every((s) => s === sizeMm) && sizes.length + 1 <= (m.bank.capacityBySizeMm[String(sizeMm)] ?? 0);
+  };
   fanEntries.forEach((f, i) => {
     const key = `fan${i + 1}`;
-    const place = caseE.mountPoints.find((m) => m.kind === "fan_mount" && !takenFan.has(m.id) && m.sizesMm.includes(f.spec.sizeMm));
+    const place = caseE.mountPoints.find((m) => m.kind === "fan_mount" && !takenFan.has(m.id) && m.sizesMm.includes(f.spec.sizeMm) && bankAllows(m, f.spec.sizeMm));
     if (!place) throw new Error("Planned PC: no fan position");
     takenFan.add(place.id);
+    plannedFans.push({ mount: place.id, sizeMm: f.spec.sizeMm });
     fanKeys.push(key);
     add({ key, id: idOf.get(key)!, catalogId: f.id, host: "case-1", mount: place.id, screws: place.fastener?.count ?? 0 });
   });
@@ -273,7 +288,7 @@ export function planModel(build: PlannedBuild): SimpleModel {
     if (!lead || !header) continue;
     usedPorts.add(`${boardId}/${header.id}`);
     caseFan += 1;
-    const ownKey = fanKeys.find((k) => idOf.get(k) === fanId);
+    const ownKey = fanKeys.find((k) => idOf.get(k) === fanId) ?? caseFans.find((f) => f.id === fanId)?.key;
     cables.push({ key: `caseFan${caseFan}`, id: lead.id, endId: specOf(initial, lead.id)!.ends.find((e) => e.function === "fan_motor")!.id, instanceId: boardId, portId: header.id, requires: ownKey ? [ownKey, "motherboard"] : ["motherboard"], essential: false });
   }
 
@@ -302,8 +317,8 @@ export function planModel(build: PlannedBuild): SimpleModel {
   return {
     kind: "plan",
     parts,
-    alternatives: [],
-    partList,
+    alternatives: caseFans,
+    partList: [...partList, ...caseFans.map((f) => f.key)],
     swappable: [],
     removable: [],
     boardPrep,
@@ -320,6 +335,9 @@ export function planModel(build: PlannedBuild): SimpleModel {
   };
 }
 
+/** A SATA drive or a case fan of a plan, read from its own spec (not from whichever model is on the page). */
+const isPositionSpec = (p: PartSpec) => /^s?fan\d*$/.test(p.key) || (/^storage\d*$/.test(p.key) && !/^m2-\d+$/.test(p.mount));
+
 /**
  * Progress of `snapshot` (made under `from`) carried over to the model `to` after parts were
  * replaced. Only what the change affects is undone: the replaced parts, the parts that sat on a
@@ -327,17 +345,19 @@ export function planModel(build: PlannedBuild): SimpleModel {
  * moved. Every other step stays, in its order; a step that can no longer be taken is dropped.
  */
 export function rebaseProgress(snapshot: { placed: string[]; connected: string[]; history: string[]; powered: boolean }, from: SimpleModel, to: SimpleModel) {
-  const fromPart = new Map(from.parts.map((p) => [p.key, p]));
-  const toPart = new Map(to.parts.map((p) => [p.key, p]));
+  // The case's own fans (alternatives) count too, so their steps survive a change that does not touch the case.
+  const fromPart = new Map([...from.parts, ...from.alternatives].map((p) => [p.key, p]));
+  const toPart = new Map([...to.parts, ...to.alternatives].map((p) => [p.key, p]));
   // Instance IDs shift when a part is added or removed earlier in the list; compare by part key instead.
-  const keyOfId = (m: SimpleModel) => new Map(m.parts.map((p) => [p.id, p.key]));
+  const keyOfId = (m: SimpleModel) => new Map([...m.parts, ...m.alternatives].map((p) => [p.id, p.key]));
   const fromKeys = keyOfId(from);
   const toKeys = keyOfId(to);
   const hostKey = (keys: Map<string, string>, id: string) => keys.get(id) ?? id;
   const changed = new Set<string>();
   for (const [key, p] of fromPart) {
     const q = toPart.get(key);
-    if (!q || q.catalogId !== p.catalogId || q.mount !== p.mount || hostKey(toKeys, q.host) !== hostKey(fromKeys, p.host)) changed.add(key);
+    // A bay or fan place is the learner's choice, so the plan's suggested one moving does not undo the part's steps.
+    if (!q || q.catalogId !== p.catalogId || (q.mount !== p.mount && !(isPositionSpec(p) && isPositionSpec(q))) || hostKey(toKeys, q.host) !== hostKey(fromKeys, p.host)) changed.add(key);
   }
   const fromCase = from.createActions().find((a) => a.type === "add_part");
   const toCase = to.createActions().find((a) => a.type === "add_part");
@@ -370,11 +390,13 @@ export function rebaseProgress(snapshot: { placed: string[]; connected: string[]
     const kind = step.slice(0, step.indexOf(":"));
     const key = step.slice(step.indexOf(":") + 1);
     if (kind === "cable") return keepCable(key);
-    if (kind === "plug") return keepCable(key.slice(0, key.lastIndexOf(":")));
+    if (kind === "plug" || kind === "unplug") { const end = parseEndStep(key); return !!end && keepCable(end.key); }
     // Levers and latches belong to the board: they stay unless the board itself changed.
+    // Panel, mains and PSU switch stay; a power-on or -off belonged to the old build.
+    if (kind === "sys") return !key.startsWith("power:");
     if (kind === "mech") return !changed.has("motherboard");
-    // prep:<part>:<what>:<value> and screw:<part>:<corner> belong to their part.
-    const part = key.split(":")[0]!;
+    // prep:<part>:<what>:<value>, screw:<part>:<corner> and place:<part>@<position> belong to their part.
+    const part = key.split(/[:@]/)[0]!;
     return toPart.has(part) && !changed.has(part);
   });
   return { history, changed: [...changed] };

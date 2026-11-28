@@ -1,0 +1,15 @@
+PASS  the page reads in the right direction
+PASS  no sideways page scroll
+PASS  no control in the lab is smaller than 24 by 24
+PASS  the main action is at least 40 px high
+PASS  three taps on the main action are three single steps, with no dragging
+PASS  tapping steps never moved the camera
+PASS  still no sideways scroll with a part in hand
+PASS  a finger drag on the view turns it and acts on no part
+PASS  after a cancelled touch the view still turns and nothing was installed
+PASS  keyboard focus reaches the main action and is drawn
+PASS  reduced motion is on and the robot guide is drawn without animation
+PASS  no page errors
+12 passed, 0 failed
+
+EXIT_CODE=0

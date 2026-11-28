@@ -477,10 +477,10 @@ describe("memory slot recommendations", () => {
     expect(note.class).toBe("optional_improvement");
     expect(note.evidence[0]).toMatchObject({ observed: "DIMM_A1 + DIMM_B2", expected: "DIMM_A2 + DIMM_B2", catalogId: "asus-tuf-gaming-z790-plus-wifi" });
     expect(note.target.id).toBe(`pc:connector:${A.mb}/dimm-a2`);
-    // The DDR4 board's manual was not read, so no layout advice is invented for it.
+    // The DDR4 board's manual (E20581 p. 1-5) gives the same advice; the layout still starts.
     const d4 = start(replay(moved("i5-ddr4-air"), pcCatalog).state);
     expect(d4.outcome).toBe("operational");
-    expect(d4.advisories.map((d) => d.code)).not.toContain("ram_population_not_recommended");
+    expect(d4.advisories.find((d) => d.code === "ram_population_not_recommended")?.evidence[0]).toMatchObject({ observed: "DIMM_A1 + DIMM_B2", expected: "DIMM_A2 + DIMM_B2" });
   });
 
   it("a higher advertised memory speed is a note about profiles, not an incompatibility", () => {

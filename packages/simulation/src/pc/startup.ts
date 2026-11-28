@@ -8,7 +8,6 @@ import type {
   InstalledPart,
   LightingStatus,
   Localized,
-  MotherboardEntry,
   PCBuildState,
   PCCatalog,
   PCDiagnostic,
@@ -27,6 +26,7 @@ import type {
 import { STARTUP_STAGES, pcTarget } from "@ytl/contracts";
 import { cableReachesPsu, feedOf, installedPsu, psuLive, sourceProgress } from "./cabling";
 import { CONNECTOR_NAME, connectorsMate, isMotorHeader, isMotorLead } from "./connectors";
+import { bodyScrewCount } from "./hardware";
 import {
   CATEGORY_NAME,
   DISCLAIMER,
@@ -51,8 +51,6 @@ import {
   makeDiag,
   makeView,
   mountSpec,
-  occupant,
-  partById,
   partsOf,
   socketInfo,
 } from "./view";
@@ -219,7 +217,8 @@ function analyse(v: View, run: boolean): Analysis {
       if (a.seating !== "seated") {
         blocking("post", "part_not_seated", "assembly", cpu.part.instanceId, cpuTarget, { part: displayName(cpu.entry), mount: socket?.label ?? "", symptom: SYMPTOM.noPost });
       } else if ((socket?.fastener?.count ?? 0) > a.fastenersSecured) {
-        blocking("post", "cpu_lever_open", "assembly", cpu.part.instanceId, pcTarget.mount(a.target), {}, [], [cpuTarget]);
+        // With the ILM off, the contact frame is what holds the CPU: say so instead of blaming the lever.
+        blocking("post", board.part.hardware?.ilm === "removed" ? "cpu_frame_loose" : "cpu_lever_open", "assembly", cpu.part.instanceId, pcTarget.mount(a.target), {}, [], [cpuTarget]);
       }
       // Fitting the socket is not support: the board's own list decides, and it names a first BIOS version.
       const row = board.entry.spec.cpuSupport.find((s) => s.cpuId === cpu.entry.id);
@@ -413,7 +412,7 @@ function analyse(v: View, run: boolean): Analysis {
       const name = displayName(cooler.entry);
       const coolerTarget = pcTarget.part(cooler.part.instanceId);
       const block = cooler.part.attachments.find((a) => mountSpec(v, a.target)?.kind === "cpu_cooler_mount")!;
-      const total = mountSpec(v, block.target)?.fastener?.count ?? 0;
+      const total = bodyScrewCount(v, cooler.part) ?? mountSpec(v, block.target)?.fastener?.count ?? 0;
       if (block.seating !== "seated" || block.fastenersSecured < total) {
         blocking("operating_load", "cooler_not_secured", "assembly", cooler.part.instanceId, coolerTarget, { part: name }, [
           evidence("Seating", "حالة التثبيت", block.seating, "seated"),

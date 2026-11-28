@@ -86,8 +86,19 @@ export function motherboardGeometry(entry: MotherboardEntry, catalogVersion: str
     const z = 0.05 * L;
     const s = b.box(m.id, "dimm_slot", [x, PCB, z], [7, 9, 142], "schematic", { finish: i % 2 ? "black_plastic" : "grey_plastic", label: printedLabel(m.label.en, m.id) });
     b.mount(m.id, s, [x + 3.5, PCB + 9, z + 142], TURN_Y, DOWN, 35);
-    // The latch at the slot's far end (one-latch slots: the near end is fixed).
-    b.box(`${m.id}-latch`, "plate", [x - 0.5, PCB + 9, z + 142 - 6], [8, 3, 6], "schematic", { finish: "grey_plastic" });
+    // The groove a module's edge goes into, and the key (a bridge across it) that meets the module's notch.
+    // A module stands with its x axis running back from the far end (attach at x −4.5): its notch is at
+    // z + 142 − 4.5 − notchX, with notchX by generation as in the RAM geometry.
+    if (m.kind === "dimm_slot") {
+      const notchX = 133.35 * (m.generation === "ddr5" ? 0.51 : m.generation === "ddr3" ? 0.56 : 0.545);
+      b.box(`${m.id}-groove`, "chip", [x + 2.5, PCB + 8.85, z + 4], [2, 0.3, 134], "schematic", { finish: "black_plastic" });
+      b.box(`${m.id}-key`, "chip", [x + 1, PCB + 8.6, z + 142 - 4.5 - notchX - 0.9], [5, 0.9, 1.8], "schematic", { finish: "white_plastic" });
+    }
+    // The moving clip: at the slot's top end (z) when the board's documents put the one clip there, else at
+    // its bottom end (z + 142); slots with a clip at each end have a second one at the top end.
+    const top = m.kind === "dimm_slot" && m.retention?.latches === "one_side" && m.retention.latchEnd === "top";
+    b.box(`${m.id}-latch`, "plate", [x - 0.5, PCB + 9, top ? z : z + 142 - 6], [8, 3, 6], "schematic", { finish: "grey_plastic" });
+    if (m.kind === "dimm_slot" && m.retention?.latches === "both") b.box(`${m.id}-latch-near`, "plate", [x - 0.5, PCB + 9, z], [8, 3, 6], "schematic", { finish: "grey_plastic" });
   });
 
   // First M.2 slot above the expansion slot, the others below it.

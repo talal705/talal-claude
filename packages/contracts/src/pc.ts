@@ -273,12 +273,32 @@ export interface FastenerSpec {
 export interface RetentionSpec {
   id: string;
   /** `slot_covers`: a case's expansion-slot covers, which a graphics card's bracket needs out of the way. */
-  kind: "lga_load_plate" | "zif_lever" | "dimm_latch" | "pcie_latch" | "slot_covers" | "m2_qlatch";
+  /** `m2_screw`: a screw stand at the drive's length hole and one screw through the drive's notch. */
+  kind: "lga_load_plate" | "zif_lever" | "dimm_latch" | "pcie_latch" | "slot_covers" | "m2_qlatch" | "m2_screw";
   /** DIMM latches: which ends move. "unverified" when the board's manual does not show it. */
   latches?: "one_side" | "both" | "unverified";
+  /**
+   * DIMM latches with one moving clip: the end it is at. `top` is the end nearer the board's top edge
+   * (the CPU-power side), `bottom` the end toward the expansion slots. The other end is fixed.
+   */
+  latchEnd?: "top" | "bottom";
+  /**
+   * `slot_covers`: how many covers a graphics card's bracket needs out, counted from the first x16 slot
+   * (schematic: the cards' real bracket widths are not documented in the lab's sources). Default 2.
+   */
+  openings?: number;
   /** Where the procedure is documented, and what is not. */
   note?: string;
 }
+
+/** The mechanism ids of a case's expansion-slot covers a card's bracket needs out, from the first x16 slot (`slot-covers:1`, `:2`...). */
+export const slotCoverIds = (ret: Pick<RetentionSpec, "id" | "openings">) => Array.from({ length: ret.openings ?? 2 }, (_, i) => `${ret.id}:${i + 1}`);
+/**
+ * Whether one expansion-slot cover is out: its own mechanism, else the old single `slot-covers` state that raw builds
+ * saved before covers were separate (the cover's own state, once set, wins over it).
+ */
+export const slotCoverOpen = (mechanisms: Record<string, MechanismState> | undefined, ret: Pick<RetentionSpec, "id">, coverId: string): boolean =>
+  (mechanisms?.[coverId] ?? mechanisms?.[ret.id]) === "open";
 
 /** The documented orientation of a keyed part in this place, and how far off-centre it may be lowered. */
 export interface KeyingSpec {
@@ -289,6 +309,11 @@ export interface KeyingSpec {
   toleranceMm: number;
   /** What the learner matches: "triangle" (CPU corner mark), "notch" (DIMM key). */
   mark: "triangle" | "notch" | "bracket";
+  /**
+   * A part that goes in at an angle (an M.2 drive): the tilt, in degrees from flat, the lab accepts.
+   * The manuals draw an angled insertion without a figure; the range is an educational approximation.
+   */
+  insertTiltDeg?: [number, number];
 }
 
 interface MountPointBase {
@@ -315,7 +340,13 @@ export type MountPointSpec =
       bottomVent?: { present: boolean; source: string } | null;
     })
   | (MountPointBase & { kind: "drive_bay"; sizes: ("2.5_inch" | "3.5_inch")[] })
-  | (MountPointBase & { kind: "fan_mount"; location: CaseLocation; sizesMm: number[] })
+  | (MountPointBase & {
+      kind: "fan_mount";
+      location: CaseLocation;
+      sizesMm: number[];
+      /** Places that share one bank of the case (e.g. the front). The lab models the documented capacities only: one fan size at a time, up to the count for that size (mixed rows are an unmodelled layout, not a stated prohibition). */
+      bank?: { id: string; capacityBySizeMm: Record<string, number> };
+    })
   | (MountPointBase & {
       kind: "radiator_mount";
       location: CaseLocation;
@@ -339,7 +370,24 @@ export type MountPointSpec =
       lengths: StorageFormFactor[];
       interfaces: StorageInterface[];
       pcieGeneration: number | null;
+      /**
+       * The board's M.2 heatsink over this slot, when it has one: removed (screws, then lifted) before a
+       * drive goes in, its thermal pads' plastic film peeled, then refitted. Slots under one heatsink share its id.
+       */
+      heatsink?: M2HeatsinkSpec;
+      /** Shorter drives (2242, 2260) held another way than `retention` (a screw stand and screw). */
+      shortRetention?: "m2_screw";
     });
+
+export interface M2HeatsinkSpec {
+  id: string;
+  /** Screws holding it to the board. */
+  screws: number;
+  /** A plastic film on its thermal pad, peeled before it is refitted. */
+  padFilm: boolean;
+  /** Where this is documented. */
+  note: string;
+}
 
 export type MountKind = MountPointSpec["kind"];
 
@@ -560,6 +608,35 @@ export interface CoolingSpec {
    * cover on the contact plate that must come off. Absent when not recorded (the lab then asks for neither).
    */
   paste?: { supplied: "pre_applied" | "tube"; film: boolean | null; source: string };
+  /**
+   * How the cooler is fixed on each socket family, from the manufacturer's manual. The first entry whose
+   * `sockets` lists the board's socket applies; none means the lab's generic fixing (a bracket and screws).
+   */
+  mounting?: CoolerMountingSpec[];
+  /** The electrical connections the cooler needs, for the wiring stage. Mechanical mounting never depends on them. */
+  connections?: { cableId: string; requirement: "required" | "optional" | "recommended"; note: Localized }[];
+}
+
+/** One mounting method of a cooler on some sockets (see `CoolingSpec.mounting`). */
+export interface CoolerMountingSpec {
+  /**
+   * `contact_frame`: the socket's Independent Loading Mechanism comes off and the cooler's frame holds the CPU;
+   * `retention_ring`: a ring and push pins on the board, no backplate; `generic`: the lab's older fixing.
+   */
+  kind: "contact_frame" | "retention_ring" | "generic";
+  sockets: CpuSocket[];
+  /** `retained`: the board's own socket backplate stays and is supported or taped; `none`: no backplate is used. */
+  backplate: "retained" | "none";
+  /** The kit parts of this method, from the manufacturer's packaging list. */
+  kit: { id: string; count: number; label: Localized }[];
+  /** Contact frame: its screws, engaged 2 turns each, then tightened in a cross pattern. */
+  frame?: { screws: number };
+  /** Retention ring: the pins, and the mounting position that must match the socket. */
+  ring?: { pins: number; positions: { id: string; sockets: CpuSocket[]; label: Localized }[] };
+  /** The cooler body's own screws; `verified: false` when the manual's text does not state the count or order. */
+  bodyScrews?: { count: number; order: "alternate" | "any"; verified: boolean };
+  /** Where the method is documented. */
+  source: string;
 }
 
 /** Kept for saved data from before 2026-10-27 only (decision 11): no monitor is offered or required. */
@@ -702,10 +779,16 @@ export interface InstalledPart {
   mechanisms?: Record<string, MechanismState>;
   /** Detailed builds: preparation done on this part before it is fitted (paste, film, standoffs, orientation). */
   prep?: Partial<Record<PrepKind, string>>;
+  /**
+   * Detailed builds: kit hardware and fixing progress that is not open/closed, by key (a board's ILM and
+   * contact frame; a cooler's screws, ring and pins). Screw progress is one character per screw:
+   * `0` out, `1` engaged (a couple of turns), `2` tight. Absent keys mean the factory state.
+   */
+  hardware?: Record<string, string>;
 }
 
 /** Preparation a learner does before fitting a part, and the values each takes. */
-export type PrepKind = "paste" | "film" | "standoffs" | "io_shield" | "psu_fan" | "airflow";
+export type PrepKind = "paste" | "film" | "standoffs" | "io_shield" | "psu_fan" | "airflow" | "backplate";
 
 export type MechanismState = "open" | "closed";
 
@@ -773,12 +856,14 @@ export type PCAction =
   | { type: "remove_part"; instanceId: InstanceId }
   /** Aligns the part on a mount point (`placed`). Rejected with a reason when it cannot physically go there. */
   /** `alignment`: how the part is held over a keyed place (rotation, offset from centre); required there in detailed builds. */
-  | { type: "mount_part"; instanceId: InstanceId; role?: string; target: MountRef; alignment?: { rotationDeg: number; offsetMm: [number, number] } }
+  | { type: "mount_part"; instanceId: InstanceId; role?: string; target: MountRef; alignment?: { rotationDeg: number; offsetMm: [number, number]; tiltDeg?: number } }
   | { type: "set_mechanics"; mode: "detailed" }
   /** Opens or closes a retention mechanism on a host part. */
   | { type: "set_mechanism"; instanceId: InstanceId; mechanismId: string; state: MechanismState }
   /** paste: "applied"; film: "removed"; standoffs: "checked"; io_shield: "fitted"; psu_fan: "down" | "up"; airflow: "intake" | "exhaust"; "" undoes. */
   | { type: "set_prep"; instanceId: InstanceId; prep: PrepKind; value: string }
+  /** Detailed builds: one step of kit hardware or fixing (see `InstalledPart.hardware`); `""` clears the key. */
+  | { type: "set_hardware"; instanceId: InstanceId; key: string; value: string }
   | { type: "unmount_part"; instanceId: InstanceId; role?: string }
   | { type: "set_seating"; instanceId: InstanceId; role?: string; seating: SeatingState }
   | { type: "set_fasteners"; instanceId: InstanceId; role?: string; secured: number }
@@ -877,8 +962,11 @@ export type PCDiagnosticCode =
   | "retention_blocked"
   | "keying_wrong"
   | "alignment_off"
+  | "insert_angle_wrong"
   | "alignment_required"
   | "prep_missing"
+  | "mounting_missing"
+  | "hardware_order_wrong"
   | "prep_wrong"
   // Build diagnostics
   | "part_missing"
@@ -886,6 +974,8 @@ export type PCDiagnosticCode =
   | "part_not_seated"
   | "ram_partially_seated"
   | "cpu_lever_open"
+  | "cpu_frame_loose"
+  | "radiator_below_pump"
   | "fasteners_missing"
   | "cooler_not_secured"
   | "wall_power_disconnected"

@@ -10,6 +10,8 @@ import * as THREE from "three";
 import type { InstalledPart } from "@ytl/contracts";
 import type { PartGeometry, Vec3 } from "./geometry";
 import { FINISHES } from "./palette";
+import { isTap } from "./tap";
+import type { HardwareDraw } from "./cooler-hardware";
 import { WEDGE } from "./wedge";
 
 export interface SocketLayout {
@@ -95,7 +97,7 @@ function contactTexture(holes: boolean): THREE.Texture {
 }
 
 /** Turns a group about its local x axis towards `target` radians, eased (or at once with reduced motion). */
-function useTurn(target: number, reducedMotion: boolean) {
+export function useTurn(target: number, reducedMotion: boolean) {
   const ref = useRef<THREE.Group>(null);
   const from = useRef<{ angle: number; start: number } | null>(null);
   const invalidate = useThree((three) => three.invalidate);
@@ -119,7 +121,7 @@ function useTurn(target: number, reducedMotion: boolean) {
   return ref;
 }
 
-export function SocketMechanism({ layout, board, retentionId, cpuIn, reducedMotion, onLever, onPlate, highlight }: {
+export function SocketMechanism({ layout, board, retentionId, cpuIn, reducedMotion, onLever, onPlate, highlight, hardware }: {
   layout: SocketLayout;
   board: InstalledPart;
   retentionId: string;
@@ -130,7 +132,10 @@ export function SocketMechanism({ layout, board, retentionId, cpuIn, reducedMoti
   onPlate?: () => void;
   /** The part of the mechanism the current step is about (drawn with a soft glow). */
   highlight?: "lever" | "plate" | "mark" | null;
+  /** The cooler's mounting hardware as the engine holds it (see `coolerHardwareDraw`); absent for a board with none. */
+  hardware?: HardwareDraw;
 }) {
+  const ilmOff = Boolean(hardware?.ilmRemoved);
   const lga = layout.kind === "lga";
   const leverOpen = board.mechanisms?.[lga ? `${retentionId}:lever` : retentionId] === "open";
   const plateOpen = lga && board.mechanisms?.[retentionId] === "open";
@@ -146,7 +151,8 @@ export function SocketMechanism({ layout, board, retentionId, cpuIn, reducedMoti
   const [cx, cy, cz] = layout.centre;
   const [sx, sy, sz] = layout.size;
   const top = cy + sy / 2;
-  const click = (handler?: () => void) => handler ? (event: ThreeEvent<MouseEvent>) => { event.stopPropagation(); handler(); } : undefined;
+  // A drag of the camera that ends on the lever or plate does not move it: only a tap does.
+  const click = (handler?: () => void) => handler ? (event: ThreeEvent<MouseEvent>) => { event.stopPropagation(); if (isTap(event)) handler(); } : undefined;
   const hover = (on: boolean) => (handler?: () => void) => handler ? () => { document.body.style.cursor = on ? "pointer" : ""; } : undefined;
   const plateLength = sz - 4;
 
@@ -154,15 +160,16 @@ export function SocketMechanism({ layout, board, retentionId, cpuIn, reducedMoti
     <group>
       {/* The contacts, whenever the socket is open and empty (an LGA socket's pins, an AM4 socket's holes). The
           protective cover clips into the load plate, so it rises with the plate and does not hide them. */}
-      {(lga ? plateOpen : leverOpen) && !cpuIn && (
+      {((lga ? plateOpen : leverOpen) || ilmOff) && !cpuIn && (
         <mesh position={[cx, top + 0.15, cz]} material={mats.contacts}>
           <boxGeometry args={[sx - 14, 0.3, sz - 14]} />
         </mesh>
       )}
+      {hardware && <CoolerHardwareMeshes draw={hardware} mats={mats} />}
       {/* The socket's orientation mark. */}
       <mesh position={layout.mark} geometry={WEDGE} scale={[7, 0.6, 7]} material={highlight === "mark" ? mats.goldGlow : mats.gold} />
 
-      {lga && (
+      {lga && !ilmOff && (
         <group position={layout.plateHinge}>
           <group ref={plate}>
             {/* A frame of four strips with the tongue the lever's cam holds down; it opens about its hinge. */}
@@ -185,7 +192,7 @@ export function SocketMechanism({ layout, board, retentionId, cpuIn, reducedMoti
         </group>
       )}
 
-      <group position={layout.leverPivot}>
+      {!ilmOff && <group position={layout.leverPivot}>
         <group ref={lever}>
           <mesh position={[0, 0, layout.leverLength / 2]} rotation={[Math.PI / 2, 0, 0]} material={highlight === "lever" ? mats.nickelGlow : mats.nickel}>
             <cylinderGeometry args={[1.1, 1.1, layout.leverLength, 10]} />
@@ -198,9 +205,37 @@ export function SocketMechanism({ layout, board, retentionId, cpuIn, reducedMoti
             </mesh>
           )}
         </group>
-      </group>
+      </group>}
       {/* The retention tab the lever locks under. */}
-      {lga && <mesh position={[layout.leverPivot[0] + 2.5, layout.leverPivot[1] + 1.2, layout.leverPivot[2] + layout.leverLength - 1]} material={mats.black}><boxGeometry args={[4, 1.2, 4]} /></mesh>}
+      {lga && !ilmOff && <mesh position={[layout.leverPivot[0] + 2.5, layout.leverPivot[1] + 1.2, layout.leverPivot[2] + layout.leverLength - 1]} material={mats.black}><boxGeometry args={[4, 1.2, 4]} /></mesh>}
+    </group>
+  );
+}
+
+const FASTENER_MATS = { hole: new THREE.MeshBasicMaterial({ color: "#0b0c0e" }) };
+
+/** The contact frame, the retention ring, the pins and the screws, as the engine's state says (schematic proportions). */
+function CoolerHardwareMeshes({ draw, mats }: { draw: HardwareDraw; mats: { nickel: THREE.Material; black: THREE.Material } }) {
+  // Read-only view for browser checks: what this scene is drawing, by fastener id and state.
+  useEffect(() => {
+    const view = () => ({ ilmRemoved: draw.ilmRemoved, frame: Boolean(draw.frame), ring: Boolean(draw.ring), backplate: draw.backplate?.kind ?? null, screws: Object.fromEntries([...draw.frameScrews, ...draw.pins, ...draw.bodyScrews].map((f) => [f.id, f.state])) });
+    (window as unknown as { __ytlHardware?: () => unknown }).__ytlHardware = view;
+    return () => { delete (window as unknown as { __ytlHardware?: () => unknown }).__ytlHardware; };
+  }, [draw]);
+  const screw = (f: HardwareDraw["frameScrews"][number], r = 1.8) => f.state === "empty"
+    ? <mesh key={f.id} position={[f.at[0], f.at[1] + 0.05, f.at[2]]} rotation={[-Math.PI / 2, 0, 0]} material={FASTENER_MATS.hole} userData={{ fastener: f.id, state: f.state }}><circleGeometry args={[r * 0.7, 14]} /></mesh>
+    : <group key={f.id} position={f.at} userData={{ fastener: f.id, state: f.state }}>
+        <mesh material={mats.nickel}><cylinderGeometry args={[r * 0.35, r * 0.35, f.state === "engaged" ? 7 : 3, 10]} /></mesh>
+        <mesh position={[0, f.state === "engaged" ? 3.8 : 1.8, 0]} material={mats.nickel}><cylinderGeometry args={[r, r, 1.2, 12]} /></mesh>
+      </group>;
+  return (
+    <group>
+      {draw.backplate && <mesh position={draw.backplate.at} material={draw.backplate.kind === "tape" ? mats.black : mats.nickel} userData={{ hardware: `backplate-${draw.backplate.kind}` }}><boxGeometry args={draw.backplate.size as unknown as [number, number, number]} /></mesh>}
+      {draw.frame && <mesh position={draw.frame.at} material={mats.nickel} userData={{ hardware: "contact-frame" }}><boxGeometry args={draw.frame.size as unknown as [number, number, number]} /></mesh>}
+      {draw.ring && <mesh position={draw.ring.at} material={mats.black} userData={{ hardware: "retention-ring" }}><boxGeometry args={draw.ring.size as unknown as [number, number, number]} /></mesh>}
+      {draw.frameScrews.map((f) => screw(f))}
+      {draw.pins.map((f) => screw(f, 1.4))}
+      {draw.bodyScrews.map((f) => screw(f, 2.2))}
     </group>
   );
 }

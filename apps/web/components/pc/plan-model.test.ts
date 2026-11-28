@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { pc } from "@ytl/simulation";
 import { pcCatalog } from "./catalog";
+import { companionSay } from "./companion";
 import { planModel, parsePlannedBuild, rebaseProgress, snapshotFromHistory, type PlannedBuild } from "./plan-model";
 import {
   activateSimpleModel, connectSimpleCable, createSimpleBuild, emptySimpleSnapshot, installSimplePart, LEGACY_MODEL, parseSimpleSnapshot, SIMPLE_PARTS, simplePartOrder,
-  simpleAssemblyComplete, simpleBuildFromSnapshot, simpleCablesFor, simpleRuleBlock, startSimplePC, withCable, withPart, type SimpleSnapshot,
+  simpleAllPartsIn, simpleBootPartsIn, simplePartInstalled, simpleAssemblyComplete, simpleBuildFromSnapshot, simpleCablesFor, simpleRuleBlock, startSimplePC, withCable, withPart, type SimpleSnapshot,
+  actualEndPort, nextReadiness, plugSimpleEnd, pressSimplePower, setSimpleSystem, simpleSystemValue, withSimpleStep, lastSimpleStep, simpleCableEnds, simpleCableConnected, simplePortChoices, unplugSimpleEnd, undoSimpleStep, withPlug, withUnplug, withoutCable,
 } from "./simple-model";
 
 const build = (parts: pc.BuildPlan): PlannedBuild => ({ version: 1, purpose: "gaming", workload: "1080p", parts });
@@ -172,7 +174,7 @@ describe("hands-on cables", () => {
     if (!r1.ok) throw new Error(JSON.stringify(r1));
     state = r1.state;
     const device = ends.at(-1)!;
-    const wrong = simplePortChoices(state, device).find((c) => c.portId !== device.portId);
+    const wrong = simplePortChoices(state, device).find((c) => !c.fits);
     expect(wrong).toBeDefined();
     expect(plugSimpleEnd(state, "cpuPower", ends.length - 1, wrong!.portId, false)).toMatchObject({ ok: false, reason: "wrongPort" });
     const r2 = plugSimpleEnd(state, "cpuPower", ends.length - 1, device.portId, false);
@@ -181,3 +183,407 @@ describe("hands-on cables", () => {
     activateSimpleModel(LEGACY_MODEL);
   });
 });
+
+describe("cable endpoint persistence", () => {
+  function unwired(parts: pc.BuildPlan = gaming) {
+    activateSimpleModel(planModel(build(parts)));
+    return snapshotFromHistory(assembleAll().snapshot.history.filter((step) => !step.startsWith("cable:")));
+  }
+
+  function dataEnd(snapshot: SimpleSnapshot) {
+    const state = simpleBuildFromSnapshot(snapshot);
+    const cable = simpleCablesFor(state).find((c) => c.key.startsWith("sataData"))!;
+    const ends = simpleCableEnds(cable.key);
+    const index = ends.findIndex((e) => e.instanceId === cable.instanceId);
+    const end = ends[index]!;
+    const alternate = simplePortChoices(state, end).find((p) => p.fits && !p.occupied && p.portId !== end.portId)!;
+    expect(alternate).toBeDefined();
+    return { state, key: cable.key, ends, index, end, port: alternate.portId };
+  }
+
+  it("reloads the actual equivalent SATA port instead of silently changing it to the preferred port", () => {
+    const snapshot = unwired();
+    const { state, key, index, end, port } = dataEnd(snapshot);
+    expect(plugSimpleEnd(state, key, index, port, false).ok).toBe(true);
+    const saved = withPlug(snapshot, key, index, port);
+    const restored = parseSimpleSnapshot(JSON.parse(JSON.stringify(saved)))!;
+    expect(restored).not.toBeNull();
+    expect(actualEndPort(simpleBuildFromSnapshot(restored), end)).toBe(port);
+  });
+
+  it("rejects invalid endpoint saves instead of replaying an unknown cable, endpoint or socket", () => {
+    const snapshot = unwired();
+    const { key, index } = dataEnd(snapshot);
+    for (const step of [`plug:missing-lead:0`, `plug:${key}:99`, `plug:${key}:${index}@missing-port`, `unplug:${key}:${index}@sata-1`, `plug:${key}:${index}@`]) {
+      expect(parseSimpleSnapshot({ ...snapshot, history: [...snapshot.history, step] }), step).toBeNull();
+    }
+  });
+
+  it("unplugs only one end and undo restores that end to its actual socket", () => {
+    const snapshot = unwired();
+    const { key, ends, index, end, port } = dataEnd(snapshot);
+    const otherIndex = index === 0 ? 1 : 0;
+    const other = ends[otherIndex]!;
+    const wired = withPlug(withPlug(snapshot, key, otherIndex, other.portId), key, index, port);
+    expect(simpleCableConnected(simpleBuildFromSnapshot(wired), key)).toBe(true);
+    const removed = withUnplug(wired, key, index);
+    const after = simpleBuildFromSnapshot(parseSimpleSnapshot(JSON.parse(JSON.stringify(removed)))!);
+    expect(actualEndPort(after, end)).toBeNull();
+    expect(actualEndPort(after, other)).toBe(other.portId);
+    expect(removed.connected).not.toContain(key);
+    const undone = simpleBuildFromSnapshot(undoSimpleStep(removed)!);
+    expect(actualEndPort(undone, end)).toBe(port);
+    expect(simpleCableConnected(undone, key)).toBe(true);
+  });
+
+  it("takes one end out of a lead saved whole (old cable step), keeping the other end and the lead's history", () => {
+    const snapshot = unwired();
+    const { key, ends, index, end } = dataEnd(snapshot);
+    const whole = withCable(snapshot, key);
+    expect(whole.connected).toContain(key);
+    const removed = withUnplug(whole, key, index);
+    // The lead's whole-lead step stays; only the one end is out, and a reload agrees.
+    expect(removed.history).toEqual([...whole.history, `unplug:${key}:${index}`]);
+    const after = simpleBuildFromSnapshot(parseSimpleSnapshot(JSON.parse(JSON.stringify(removed)))!);
+    expect(actualEndPort(after, end)).toBeNull();
+    expect(ends.filter((e) => e !== end).every((e) => actualEndPort(after, e) !== null)).toBe(true);
+    expect(removed.connected).not.toContain(key);
+    expect(simpleCableConnected(simpleBuildFromSnapshot(undoSimpleStep(removed)!), key)).toBe(true);
+  });
+
+  it("removes an end of a partly connected lead, then the other, without touching unrelated leads", () => {
+    const snapshot = unwired();
+    const { key, ends, index } = dataEnd(snapshot);
+    const otherIndex = index === 0 ? 1 : 0;
+    const atx = snapshot.history.length;
+    const partly = withPlug(withCable(snapshot, "atx"), key, otherIndex, ends[otherIndex]!.portId);
+    const first = withUnplug(partly, key, otherIndex);
+    const state = simpleBuildFromSnapshot(first);
+    expect(actualEndPort(state, ends[otherIndex]!)).toBeNull();
+    expect(simpleCableConnected(state, "atx")).toBe(true);
+    expect(first.history.length).toBe(atx + 3);
+    expect(unplugSimpleEnd(state, key, otherIndex)).toMatchObject({ ok: false, reason: "notPlugged" });
+  });
+
+  it("records a fault build's end removal in its own trail and rejects an unplug of an unplugged end on replay", () => {
+    const snapshot = unwired();
+    const { key, index } = dataEnd(snapshot);
+    const trail = withUnplug({ ...emptySimpleSnapshot(), history: [] }, key, index).history;
+    expect(trail).toEqual([`unplug:${key}:${index}`]);
+    expect(() => simpleBuildFromSnapshot({ ...snapshot, history: [...snapshot.history, `unplug:${key}:${index}`], placed: snapshot.placed, connected: snapshot.connected })).toThrow();
+  });
+
+  it("lights every free equivalent socket for the end being plugged and points the robot at the actual socket", async () => {
+    const { simpleSceneTargets } = await import("./simple-scene");
+    const { simpleEndSocket } = await import("./simple-model");
+    const snapshot = unwired();
+    const { state, key, ends, index, end, port } = dataEnd(snapshot);
+    // The drive side of the data lead goes in first (the board end is active only after it).
+    const first = ends.findIndex((e) => e.instanceId !== end.instanceId);
+    const targets = simpleSceneTargets(state, { kind: "cable", key }).filter((t) => t.role === "target");
+    expect(targets.every((t) => t.hostInstanceId === ends[first]!.instanceId)).toBe(true);
+    const wired = simpleBuildFromSnapshot(withPlug(snapshot, key, first, ends[first]!.portId));
+    const boardTargets = simpleSceneTargets(wired, { kind: "cable", key }).filter((t) => t.role === "target").map((t) => t.placeId);
+    expect(boardTargets).toContain(end.portId);
+    expect(boardTargets).toContain(port);
+    // Once in an alternate socket, the socket to point at is that one, not the planned one.
+    const placed = simpleBuildFromSnapshot(withPlug(withPlug(snapshot, key, first, ends[first]!.portId), key, index, port));
+    expect(simpleSceneTargets(placed, { kind: "cable", key })).toEqual([]);
+    expect(simpleEndSocket(placed, end)).toBe(port);
+  });
+
+  it("points the robot and the lit sockets at the end and socket the learner chose, not a fixed first one", async () => {
+    const { simpleSceneTargets } = await import("./simple-scene");
+    const { guideFocus } = await import("./guide");
+    const snapshot = unwired();
+    const { state, key, ends, end, port } = dataEnd(snapshot);
+    const first = ends.findIndex((e) => e.instanceId !== end.instanceId);
+    const boardIndex = ends.indexOf(end);
+    // Two loose ends: choosing the board end lights the board's sockets, and the picked alternate socket is the robot's target.
+    const lit = simpleSceneTargets(state, { kind: "cable", key }, null, boardIndex).filter((t) => t.role === "target");
+    expect(lit.every((t) => t.hostInstanceId === end.instanceId)).toBe(true);
+    const focus = guideFocus(state, { kind: "cable", key }, false, true, null, { end: boardIndex, portId: port });
+    expect(focus?.targets).toEqual([{ kind: "port", hostInstanceId: end.instanceId, placeId: port }]);
+    // Without a choice it is the first loose end; a wrong (look-alike) pick is ignored.
+    const dflt = guideFocus(state, { kind: "cable", key }, false, true, null, null);
+    expect(dflt?.targets).toEqual([expect.objectContaining({ hostInstanceId: ends[first]!.instanceId })]);
+    const wrong = simplePortChoices(state, end).find((c) => !c.fits);
+    if (wrong) expect(guideFocus(state, { kind: "cable", key }, false, true, null, { end: boardIndex, portId: wrong.portId })?.targets).toEqual([expect.objectContaining({ placeId: end.portId })]);
+  });
+
+  /** Two SATA drives on one modular lead: every part fitted, both leads' ends plugged (the second's source is the same physical end). */
+  function sharedSata() {
+    const plan = { ...gaming, storage: ["samsung-870-evo-1tb", "seagate-barracuda-2tb-st2000dm008"], fans: [] };
+    activateSimpleModel(planModel(build(plan)));
+    let state = createSimpleBuild();
+    let snapshot: SimpleSnapshot = emptySimpleSnapshot();
+    for (const key of simplePartOrder(state)) {
+      if (simplePartInstalled(state, key)) continue;
+      const r = installSimplePart(state, key);
+      if (!r.ok) throw new Error(`${key}: ${r.reason}`);
+      state = r.state; snapshot = withPart(snapshot, key);
+    }
+    const power = simpleCablesFor(state).filter((c) => c.key.startsWith("sataPower"));
+    expect(power).toHaveLength(2);
+    expect(power[0]!.id).toBe(power[1]!.id);
+    for (const cable of power) {
+      for (const [index, end] of simpleCableEnds(cable.key).entries()) {
+        const r = plugSimpleEnd(state, cable.key, index, end.portId, false);
+        if (!r.ok) throw new Error(r.reason);
+        state = r.state; snapshot = withPlug(snapshot, cable.key, index, end.portId);
+      }
+    }
+    const sourceOf = (key: string) => simpleCableEnds(key).findIndex((e) => e.instanceId.startsWith("psu"));
+    return { power, snapshot, sourceOf };
+  }
+
+  it("a shared modular PSU source is one physical end: the saved connected list follows it for every lead that uses it", () => {
+    const { power, snapshot, sourceOf } = sharedSata();
+    const keys = power.map((c) => c.key);
+    expect(keys.every((k) => snapshot.connected.includes(k))).toBe(true);
+    const first = power[0]!, second = power[1]!;
+    const out = withUnplug(snapshot, first.key, sourceOf(first.key));
+    expect(keys.some((k) => out.connected.includes(k))).toBe(false);
+    expect(keys.some((k) => simpleCableConnected(simpleBuildFromSnapshot(out), k))).toBe(false);
+    // Each drive's own plug is independent: taking one out leaves the other lead's source and device end in.
+    const deviceOut = withUnplug(snapshot, first.key, simpleCableEnds(first.key).length - 1);
+    expect(deviceOut.connected).toContain(second.key);
+    expect(deviceOut.connected).not.toContain(first.key);
+    // Putting the shared source back through the OTHER lead reconnects both; reload and undo agree.
+    const back = withPlug(out, second.key, sourceOf(second.key), simpleCableEnds(second.key)[sourceOf(second.key)]!.portId);
+    expect(keys.every((k) => back.connected.includes(k))).toBe(true);
+    expect(parseSimpleSnapshot(JSON.parse(JSON.stringify(back)))).toEqual(back);
+    expect(undoSimpleStep(back)!.connected.some((k) => keys.includes(k))).toBe(false);
+    // An older whole-lead save followed by the source's removal is also consistent.
+    const whole = withUnplug(withCable(withCable(snapshot, first.key), second.key), first.key, sourceOf(first.key));
+    expect(keys.some((k) => whole.connected.includes(k))).toBe(false);
+  });
+
+  it("migrates a save made by the earlier per-lead derivation (second shared source never recorded), rejecting other mismatched lists", () => {
+    const { power, snapshot, sourceOf } = sharedSata();
+    const [first, second] = [power[0]!, power[1]!];
+    const secondSource = sourceOf(second.key);
+    const sourceStep = `plug:${second.key}:${secondSource}@${simpleCableEnds(second.key)[secondSource]!.portId}`;
+    expect(snapshot.history).toContain(sourceStep);
+    // What the earlier UI saved: the second lead's source step is absent (already physically in) and only the first lead is listed.
+    const legacy = { ...snapshot, history: snapshot.history.filter((st) => st !== sourceStep), connected: [first.key] };
+    const migrated = parseSimpleSnapshot(JSON.parse(JSON.stringify(legacy)))!;
+    expect(migrated).not.toBeNull();
+    expect(migrated.history).toEqual(legacy.history);
+    expect(power.every((c) => migrated.connected.includes(c.key))).toBe(true);
+    expect(power.every((c) => simpleCableConnected(simpleBuildFromSnapshot(migrated), c.key))).toBe(true);
+    // Reload of the migrated save is stable; one-end undo takes the last step back and keeps the shared source in.
+    expect(parseSimpleSnapshot(JSON.parse(JSON.stringify(migrated)))).toEqual(migrated);
+    const undone = undoSimpleStep(migrated)!;
+    expect(simpleCableConnected(simpleBuildFromSnapshot(undone), second.key)).toBe(false);
+    expect(actualEndPort(simpleBuildFromSnapshot(undone), simpleCableEnds(first.key)[sourceOf(first.key)]!)).not.toBeNull();
+    // Taking the shared source out and putting it back through EITHER lead reconnects both.
+    for (const via of [first, second]) {
+      const out = withUnplug(migrated, first.key, sourceOf(first.key));
+      expect(power.some((c) => out.connected.includes(c.key))).toBe(false);
+      const end = simpleCableEnds(via.key)[sourceOf(via.key)]!;
+      const back = withPlug(out, via.key, sourceOf(via.key), end.portId);
+      expect(power.every((c) => back.connected.includes(c.key))).toBe(true);
+      expect(parseSimpleSnapshot(JSON.parse(JSON.stringify(back)))).toEqual(back);
+    }
+    // Anything else that does not match the history is still refused.
+    for (const connected of [[second.key], [first.key, second.key, "atx"], ["bogus"], []]) {
+      expect(parseSimpleSnapshot(JSON.parse(JSON.stringify({ ...legacy, connected })))).toBeNull();
+    }
+    expect(parseSimpleSnapshot(JSON.parse(JSON.stringify({ ...snapshot, connected: [first.key] })))).toBeNull();
+  });
+
+  it("keeps old endpoint saves readable and preserves actual ports when an unrelated fan is added", () => {
+    const snapshot = unwired();
+    const { key, index, end, port } = dataEnd(snapshot);
+    const old = withPlug(snapshot, key, index);
+    expect(actualEndPort(simpleBuildFromSnapshot(parseSimpleSnapshot(JSON.parse(JSON.stringify(old)))!), end)).toBe(end.portId);
+    const from = planModel(build(gaming));
+    const next = planModel(build({ ...gaming, fans: [...gaming.fans!, "arctic-p12-pwm-pst"] }));
+    const rebased = rebaseProgress(withPlug(snapshot, key, index, port), from, next);
+    activateSimpleModel(next);
+    expect(actualEndPort(simpleBuildFromSnapshot(snapshotFromHistory(rebased.history)), end)).toBe(port);
+  });
+
+  it("still refuses an equivalent socket already used by another drive and a reversed plug", () => {
+    const snapshot = unwired({ ...gaming, storage: ["seagate-barracuda-2tb-st2000dm008", "samsung-870-evo-1tb"] });
+    const { state, key, index, end, port } = dataEnd(snapshot);
+    expect(plugSimpleEnd(state, key, index, port, true)).toMatchObject({ ok: false, reason: "reversed" });
+    const first = plugSimpleEnd(state, key, index, port, false);
+    if (!first.ok) throw new Error(first.reason);
+    const second = simpleCablesFor(first.state).find((c) => c.key.startsWith("sataData") && c.key !== key)!;
+    const secondIndex = simpleCableEnds(second.key).findIndex((e) => e.instanceId === end.instanceId);
+    expect(plugSimpleEnd(first.state, second.key, secondIndex, port, false)).toMatchObject({ ok: false, reason: "wrongPort" });
+  });
+
+  it("requires power off before taking an endpoint out", () => {
+    const snapshot = unwired();
+    const { key, index, port } = dataEnd(snapshot);
+    let state = simpleBuildFromSnapshot(withPlug(snapshot, key, index, port));
+    for (const action of [{ type: "set_wall_power", connected: true }, { type: "set_psu_switch", on: true }, { type: "press_power" }] as const) {
+      const result = pc.applyAction(state, action, pcCatalog);
+      if (!result.ok) throw new Error(result.rejection.message.en);
+      state = result.state;
+    }
+    expect(unplugSimpleEnd(state, key, index)).toMatchObject({ ok: false, reason: "turnOffFirst" });
+  });
+
+  it("explains endpoint undo steps in both languages, including the new actual-port format", async () => {
+    const snapshot = unwired();
+    const { key, index, port } = dataEnd(snapshot);
+    const { undoLine } = await import("./companion");
+    const lines = [undoLine(`plug:${key}:${index}@${port}`), undoLine(`unplug:${key}:${index}`)];
+    expect(lines.map((l) => l.key)).toEqual(["undo.plug", "undo.unplug"]);
+    for (const messages of [(await import("../../messages/en/labs.json")).default, (await import("../../messages/ar/labs.json")).default]) {
+      const undo = messages.simplePc.companion.undo as Record<string, string>;
+      for (const line of lines) expect(undo[line.key.slice(5)]).toBeTruthy();
+    }
+  });
+});
+
+describe("readiness and startup", () => {
+  const steps = ["sys:panel:closed", "sys:wall:in", "sys:psu:on"] as const;
+  const readied = (snapshot: SimpleSnapshot, list: readonly string[] = steps) => list.reduce((sn, step) => withSimpleStep(sn, step as never), snapshot);
+
+  it("offers panel, mains, PSU switch and button one at a time, and never does them for the learner", () => {
+    activateSimpleModel(planModel(build(gaming)));
+    const { state, snapshot } = assembleAll();
+    expect(nextReadiness(state)).toEqual({ control: "panel", value: "closed" });
+    let now = state;
+    for (const [control, value] of [["panel", "closed"], ["wall", "in"], ["psu", "on"]] as const) {
+      expect(nextReadiness(now)).toEqual({ control, value });
+      const r = setSimpleSystem(now, control, value);
+      if (!r.ok) throw new Error(r.reason);
+      now = r.state;
+    }
+    expect(nextReadiness(now)).toEqual({ control: "power", value: "on" });
+    expect(now.power.pressed).toBe(false);
+    expect(setSimpleSystem(now, "psu", "on")).toMatchObject({ ok: false, reason: "unchanged" });
+    // The button itself is the last step and starts the real checks.
+    const pressed = pressSimplePower(now);
+    expect(pressed.ok).toBe(true);
+    expect(nextReadiness(pressed.state)).toBeNull();
+    // A running PC only turns off.
+    expect(setSimpleSystem(pressed.state, "wall", "out")).toMatchObject({ ok: false, reason: "turnOffFirst" });
+    const off = setSimpleSystem(pressed.state, "power", "off");
+    expect(off.ok && simpleSystemValue(off.state, "power")).toBe("off");
+    expect(snapshot.powered).toBe(false);
+  });
+
+  it("saves, reloads, undoes and powers off consistently", () => {
+    activateSimpleModel(planModel(build(gaming)));
+    const on = readied(assembleAll().snapshot, [...steps, "sys:power:on"]);
+    expect(on.powered).toBe(true);
+    const reloaded = parseSimpleSnapshot(JSON.parse(JSON.stringify(on)))!;
+    expect(simpleBuildFromSnapshot(reloaded).power).toMatchObject({ pressed: true, wallConnected: true, psuSwitchOn: true });
+    expect(lastSimpleStep(on)).toBeNull();
+    const off = withSimpleStep(on, "sys:power:off");
+    expect(off.powered).toBe(false);
+    expect(simpleBuildFromSnapshot(parseSimpleSnapshot(JSON.parse(JSON.stringify(off)))!).power.pressed).toBe(false);
+    // Undoing the power-off is the one step back: the PC runs again, as the history says.
+    expect(undoSimpleStep(off)).toEqual(on);
+    // A save whose flag and history disagree is refused.
+    expect(parseSimpleSnapshot({ ...on, powered: false })).toBeNull();
+    expect(parseSimpleSnapshot({ ...off, powered: true })).toBeNull();
+    // After a power-off the switches can be set back, and each is one undoable step.
+    const switchedOff = withSimpleStep(off, "sys:psu:off");
+    expect(simpleBuildFromSnapshot(switchedOff).power.psuSwitchOn).toBe(false);
+    expect(simpleBuildFromSnapshot(undoSimpleStep(switchedOff)!).power.psuSwitchOn).toBe(true);
+  });
+
+  it("reports the real fault of a failed try, changes nothing, and does not need the optional leads", () => {
+    activateSimpleModel(planModel(build(gaming)));
+    const { state } = assembleAll();
+    // PSU switch left off: a real engine fault, no state change.
+    const wall = setSimpleSystem(state, "wall", "in");
+    if (!wall.ok) throw new Error(wall.reason);
+    const noSwitch = { state: wall.state };
+    const failed = pressSimplePower(noSwitch.state);
+    expect(failed.ok).toBe(false);
+    expect(failed.state).toBe(noSwitch.state);
+    expect(JSON.stringify(failed.startup)).toContain("psu_switch_off");
+    // A missing essential lead is reported, not connected for the learner.
+    const loose = simpleBuildFromSnapshot(withUnplugAtx(readied(assembleAll().snapshot)));
+    const noAtx = pressSimplePower(loose);
+    expect(noAtx.ok).toBe(false);
+    expect(simpleCableConnected(noAtx.state, "atx")).toBe(false);
+    // Optional case-fan and lighting leads are not needed for a boot.
+    const optional = simpleCablesFor(state).filter((c) => !c.essential);
+    expect(optional.length).toBeGreaterThan(0);
+    let bare = readied(assembleAll().snapshot);
+    for (const c of optional) bare = withoutCable(bare, c.key);
+    const without = simpleBuildFromSnapshot(bare);
+    expect(simpleAssemblyComplete(without)).toBe(false);
+    expect(pressSimplePower(without).ok).toBe(true);
+  });
+
+  it("keeps the readiness steps, not the power press, when the plan changes", () => {
+    const from = planModel(build(gaming));
+    activateSimpleModel(from);
+    const on = readied(assembleAll().snapshot, [...steps, "sys:power:on"]);
+    const next = planModel(build({ ...gaming, fans: [...gaming.fans!, "arctic-p12-pwm-pst"] }));
+    const rebased = rebaseProgress(on, from, next).history;
+    expect(rebased).toEqual(expect.arrayContaining(steps as unknown as string[]));
+    expect(rebased).not.toContain("sys:power:on");
+  });
+
+  it("boots a sound build with an optional additional fan not fitted: the engine decides, not a part count", () => {
+    const plan = { ...gaming, storage: ["samsung-990-pro-1tb"] };
+    activateSimpleModel(planModel(build(plan)));
+    let state = createSimpleBuild();
+    for (const key of simplePartOrder(state)) {
+      if (SIMPLE_PARTS.find((p) => p.key === key)?.catalogId === "arctic-p12-pwm-pst" || simplePartInstalled(state, key)) continue;
+      const r = installSimplePart(state, key);
+      if (!r.ok) throw new Error(`${key}: ${r.reason}`);
+      state = r.state;
+    }
+    for (const c of simpleCablesFor(state).filter((x) => x.essential)) {
+      const r = connectSimpleCable(state, c.key);
+      if (!r.ok) throw new Error(`${c.key}: ${r.reason}`);
+      state = r.state;
+    }
+    for (const [control, value] of [["panel", "closed"], ["wall", "in"], ["psu", "on"]] as const) {
+      const r = setSimpleSystem(state, control, value);
+      if (!r.ok) throw new Error(r.reason);
+      state = r.state;
+    }
+    expect(simpleAllPartsIn(state)).toBe(false);
+    expect(simpleBootPartsIn(state)).toBe(true);
+    const result = pressSimplePower(state);
+    expect(result.ok).toBe(true);
+    // Booting is not finishing: the optional fan and its lead are still to do.
+    expect(simpleAssemblyComplete(result.state)).toBe(false);
+  });
+
+  it("asking whether a liquid cooler is fitted is safe on a plan that has none (a complete air-cooled build powering on)", () => {
+    activateSimpleModel(planModel(build(gaming)));
+    const { state } = assembleAll();
+    expect(simplePartInstalled(state, "aio")).toBe(false);
+    expect(() => companionSay({ type: "powerOn" }, state, true, null)).not.toThrow();
+  });
+
+  it("a missing boot part is reported by the engine and by the boot-part check, not by the optional fan", () => {
+    activateSimpleModel(planModel(build(gaming)));
+    const empty = createSimpleBuild();
+    expect(simpleBootPartsIn(empty)).toBe(false);
+    expect(pressSimplePower(empty).ok).toBe(false);
+  });
+
+  it("refuses malformed or impossible readiness steps in a save", () => {
+    activateSimpleModel(planModel(build(gaming)));
+    const base = assembleAll().snapshot;
+    for (const bad of ["sys:panel:sideways", "sys:fan:on", "sys:power", "sys:power:on:extra", "sys:wall:in:", "sys:"]) {
+      expect(parseSimpleSnapshot({ ...base, history: [...base.history, bad] })).toBeNull();
+    }
+    // A step the engine cannot take (a second "panel closed") is refused too, as is changing a switch while running.
+    const closed = withSimpleStep(base, "sys:panel:closed");
+    expect(parseSimpleSnapshot({ ...closed, history: [...closed.history, "sys:panel:closed"] })).toBeNull();
+    const on = readied(base, [...steps, "sys:power:on"]);
+    expect(parseSimpleSnapshot({ ...on, history: [...on.history, "sys:wall:out"], powered: true })).toBeNull();
+  });
+});
+
+/** The ATX lead taken out of a fully wired snapshot, as the learner's own unplug steps. */
+function withUnplugAtx(snapshot: SimpleSnapshot): SimpleSnapshot {
+  return simpleCableEnds("atx").reduce((sn, _end, index) => withUnplug(sn, "atx", index), snapshot);
+}

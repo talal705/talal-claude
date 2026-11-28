@@ -160,14 +160,32 @@ function kindRules(
         ]);
       }
       return undefined;
-    case "fan_mount":
-      if (entry.category === "fan" && !mount.sizesMm.includes(entry.spec.sizeMm)) {
+    case "fan_mount": {
+      if (entry.category !== "fan") return undefined;
+      if (!mount.sizesMm.includes(entry.spec.sizeMm)) {
         return reject(v, "fan_size_unsupported", part, target, p, [
           evidence("Fan size", "مقاس المروحة", mm(entry.spec.sizeMm), mount.sizesMm.map(mm).join(" / "), entry.id),
         ]);
       }
+      // The documented capacities of a bank (front: 3 x 120 mm or 2 x 140 mm) are the layouts modelled; a mixed row is not one of them.
+      const bank = mount.bank;
+      if (bank) {
+        const sizes = hostEntry.mountPoints.flatMap((m) => {
+          if (m.kind !== "fan_mount" || m.id === mount.id || m.bank?.id !== bank.id) return [];
+          const other = occupant(v, { hostInstanceId: host.instanceId, mountPointId: m.id });
+          const fan = other && entryOf(v, other.part);
+          return fan?.category === "fan" ? [fan.spec.sizeMm] : [];
+        });
+        const size = entry.spec.sizeMm;
+        if (sizes.some((s) => s !== size) || sizes.length + 1 > (bank.capacityBySizeMm[String(size)] ?? 0)) return reject(v, "mount_blocked", part, target, p);
+      }
       return undefined;
+    }
     case "radiator_mount":
+      // ARCTIC's Liquid Freezer III manual: a radiator below the pump risks bubbling noise.
+      if (entry.category === "cooling" && entry.spec.type === "aio_liquid" && mount.location === "bottom") {
+        return reject(v, "radiator_below_pump", part, target, p);
+      }
       if (entry.category === "cooling" && (entry.spec.radiatorSizeMm === null || !mount.radiatorSizesMm.includes(entry.spec.radiatorSizeMm))) {
         return reject(v, "radiator_size_unsupported", part, target, p, [
           evidence("Radiator size", "مقاس الرادياتير", entry.spec.radiatorSizeMm === null ? "-" : mm(entry.spec.radiatorSizeMm), mount.radiatorSizesMm.map(mm).join(" / "), entry.id),

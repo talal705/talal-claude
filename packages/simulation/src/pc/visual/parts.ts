@@ -109,7 +109,9 @@ export function caseGeometry(entry: CaseEntry, v: string): PartGeometry {
     const zc = trayZ + (W - trayZ) / 2;
     if (location === "front") return (i) => ({ at: [L - 22, feet + 70 + i * 122, zc], quat: TURN_Y, axis: "x", insert: [1, 0, 0] });
     if (location === "top") return (i) => ({ at: [L * 0.35 + i * 124, H - 16, zc], quat: FACE_UP, axis: "y", insert: [0, 1, 0] });
-    if (location === "rear") return () => ({ at: [14, H - 0.2 * H, zc], quat: TURN_Y, axis: "x", insert: [-1, 0, 0] });
+    // The board's rear I/O stack reaches about 48 mm off the tray (standoffs, board, 34 mm of connectors in the
+    // schematic), so the rear fan's frame starts beyond it, beside the I/O opening, not in front of its ports.
+    if (location === "rear") return () => ({ at: [14, H - 0.2 * H, Math.max(zc, trayZ + 48 + 60)], quat: TURN_Y, axis: "x", insert: [-1, 0, 0] });
     if (location === "side") return (i) => ({ at: [L * 0.5 + i * 122, H * 0.6, trayZ + 16], quat: IDENTITY, axis: "z", insert: [0, 0, -1] });
     return undefined;
   };
@@ -196,8 +198,16 @@ export function ramGeometry(entry: RamEntry, v: string): PartGeometry {
   const b = new Builder();
   b.fins("contacts-left", "edge_connector", [3, 0, 2.7], [notchX - 5, 4, 1.6], 40, "x", "schematic", { finish: "gold" });
   b.fins("contacts-right", "edge_connector", [notchX + 2, 0, 2.7], [X - notchX - 5, 4, 1.6], 40, "x", "schematic", { finish: "gold" });
-  b.box("notch", "chip", [notchX - 1, 0, 2.5], [2, 3, 2], "schematic", { label: entry.spec.generation.toUpperCase() });
-  b.box("pcb", "pcb", [0, 4, 2.7], [X, Y - 12, 1.6], "standard", { finish: "pcb_green" });
+  // The key notch is a real gap in the edge (between the two rows of contacts), not a painted mark; the solid
+  // only names the gap for tutor targets and is not drawn (shape "gap").
+  b.box("notch", "chip", [notchX - 1, 0, 2.5], [2, 4, 2], "schematic", { label: entry.spec.generation.toUpperCase(), shape: "gap" });
+  // The board: full width above the end cut-outs where the slot's clips hook in, narrower below them.
+  b.box("pcb", "pcb", [0, 14, 2.7], [X, Y - 22, 1.6], "standard", { finish: "pcb_green" });
+  b.box("pcb-lower", "pcb", [3, 4, 2.7], [X - 6, 10, 1.6], "standard", { finish: "pcb_green" });
+  // The contact edge itself: board on either side of the key notch, so the notch reads as a real gap in
+  // the edge (slightly thinner than the contacts, which cover both faces).
+  b.box("pcb-edge-left", "pcb", [1.5, 0, 2.9], [notchX - 2.5, 4, 1.2], "standard", { finish: "pcb_green" });
+  b.box("pcb-edge-right", "pcb", [notchX + 1, 0, 2.9], [X - notchX - 2.5, 4, 1.2], "standard", { finish: "pcb_green" });
   // Memory chips in a row on each face, under the spreader (seen at its open lower edge).
   const chips = entry.spec.generation === "ddr5" ? 10 : 8;
   for (const [side, z] of [["front", 4.3], ["back", 1.7]] as const) {
@@ -207,8 +217,9 @@ export function ramGeometry(entry: RamEntry, v: string): PartGeometry {
   const spreaderH = Y - (entry.rgb ? 16 : 8);
   b.box("heat-spreader", "heatsink", [2, 9, 0], [X - 4, spreaderH - 2, Z], "schematic", { finish: "black_metal" });
   b.fins("spreader-ridges", "heatsink", [8, 7 + spreaderH - 6, 0.2], [X - 16, 4, Z - 0.4], 12, "x", "schematic", { finish: "aluminium" });
-  b.box("latch-end-left", "plate", [0, 4, 2], [2.5, 10, 3], "schematic", { finish: "black_plastic" });
-  b.box("latch-end-right", "plate", [X - 2.5, 4, 2], [2.5, 10, 3], "schematic", { finish: "black_plastic" });
+  // The cut-outs at each end (gaps) where a closed clip hooks into the module.
+  b.box("latch-end-left", "plate", [0, 4, 2], [3, 10, 3], "schematic", { shape: "gap" });
+  b.box("latch-end-right", "plate", [X - 3, 4, 2], [3, 10, 3], "schematic", { shape: "gap" });
   const lights = (entry.rgb?.zones ?? []).map((zone) => {
     b.box(`light-${zone}`, "light", [4, Y - 8, 0.5], [X - 8, 8, Z - 1], "schematic", { finish: "white_plastic" });
     return { zone, solids: [`light-${zone}`] };

@@ -5,7 +5,7 @@
 // version "unrecorded": the engine then treats the CPU as supported, and the planner reports the BIOS
 // question as unknown (conditional) instead of guessing a version.
 import type { CaseEntry, CoolingEntry, CpuEntry, FanEntry, GpuEntry, MotherboardEntry, MountPointSpec, RamEntry, StorageEntry } from "@ytl/contracts";
-import { FASTENER_NOTE, L, NO_ASSET, SLOT_COVERS, boardPorts, dimmSlots, lgaSocketDetail, m2QLatch, pcieSlotDetail, fanLead, fanMounts, frontPanelLeads, port, sataDataCables, source, zone } from "./helpers";
+import { FASTENER_NOTE, L, NO_ASSET, SLOT_COVERS, boardPorts, dimmSlots, lgaSocketDetail, m2Heatsink, m2ScrewStand, pcieSlotDetail, retentionRingMounting, fanLead, fanMounts, frontPanelLeads, port, sataDataCables, source, zone } from "./helpers";
 
 const ON = "2026-11-18";
 /** BIOS history not read for this board; see the file comment. */
@@ -75,9 +75,11 @@ export const legacyBoard: MotherboardEntry = {
   sources: [
     source("ASUS", "H81M-K — Tech Specs", "https://www.asus.com/Motherboards-Components/Motherboards/Business/H81MK/techspec", ON),
     source("ASUS", "H81M-K User's Manual E8601 (ASUS PDF, copy hosted by Newegg) — layout, connectors, memory configurations", "https://images10.newegg.com/UploadFilesForNewegg/itemintelligence/ASUS/E8601_H81M_K1401382880151.pdf", ON),
+    source("ASUS", "H81M-K User's Manual E8601 (ASUS download) — pp. 1-7–1-9 (system memory, installing and removing a DIMM)", "https://dlcdnets.asus.com/pub/ASUS/mb/LGA1150/H81M-K/E8601_H81M-K.pdf", "2026-11-20"),
   ],
   verification: "partially_verified",
   unverifiedFields: [
+    "spec.memory.recommendedPopulation (manual E8601 pp. 1-7–1-8 gives none for one or two modules; none is modelled)",
     "spec.biosVersions, spec.cpuSupport.sinceBios (not read)",
     "mountPoints.pcie-x16-1.pcieGeneration (the manual does not state it; modelled as 3.0)",
     "ports display outputs (the board has DVI-D and D-Sub, which this lab does not model)",
@@ -86,7 +88,7 @@ export const legacyBoard: MotherboardEntry = {
   teachingNotes: [FASTENER_NOTE, BIOS_NOTE, "The manual lists 1, 2, 4 and 8 GB modules, so maxPerModuleGb is 8.", "The two SATA 3 Gb/s ports are modelled as ordinary SATA ports."],
   dimensions: { lengthMm: 226, widthMm: 175, heightMm: null },
   formFactor: "micro-ATX",
-  mountPoints: [...socket("lga1150", "LGA1150"), ...dimmSlots("ddr3", ["a1", "b1"]), x16(3, "PCIe")],
+  mountPoints: [...socket("lga1150", "LGA1150"), ...dimmSlots("ddr3", ["a1", "b1"], { latches: "both", note: "ASUS H81M-K manual E8601 (First Edition Aug 2013) pp. 1-8–1-9: 'Press the retaining clips outward to unlock a DIMM socket', align the notch with the slot key, insert 'until the retaining clips snap back in place'; to remove, 'Simultaneously press the retaining clips outward'. The p. 1-9 drawing shows an unlocked retaining clip at each end." }), x16(3, "PCIe")],
   mounting: [{ role: "main", kind: "motherboard_tray", label: L("Motherboard tray of the case", "صينية اللوحة الأم في الهيكل") }],
   zones: boardZones("Two DDR3 slots, one per channel (DIMM_A1, DIMM_B1). DDR4 and DDR5 modules have the notch elsewhere and do not go in.", "فتحتين DDR3، وحدة لكل قناة (DIMM_A1 و DIMM_B1). رام DDR4 و DDR5 شقّها في مكان ثاني وما تدخل."),
   ports: boardPorts({ eps8: 0, eps4: 1, epsRecommended: 0, chassisFans: 1, argb: 0, rgb: 0, sata: 4, usb2: 2, usbC: false, hdmi: 0, displayPort: 0, cpuOpt: false, pumpHeader: false, usb3: false }),
@@ -95,7 +97,7 @@ export const legacyBoard: MotherboardEntry = {
   asset: NO_ASSET,
   spec: {
     vendorPlatform: "intel", socket: "lga1150", chipset: "Intel H81", formFactor: "micro_atx",
-    memory: { generation: "ddr3", moduleType: "udimm", slots: 2, maxTotalGb: 16, maxPerModuleGb: 8, recommendedPopulation: [{ modules: 1, slotIds: ["dimm-a1"] }, { modules: 2, slotIds: ["dimm-a1", "dimm-b1"] }] },
+    memory: { generation: "ddr3", moduleType: "udimm", slots: 2, maxTotalGb: 16, maxPerModuleGb: 8, recommendedPopulation: [] },
     cpuSupport: [{ cpuId: "intel-core-i5-4590", sinceBios: UNRECORDED_BIOS }],
     biosVersions: [{ version: UNRECORDED_BIOS, releasedOn: null }],
     factoryBiosVersion: UNRECORDED_BIOS,
@@ -145,12 +147,16 @@ export const entryBoard: MotherboardEntry = {
     "A micro-ATX DDR5 board for the LGA1700 socket with two M.2 slots and four memory slots. It has no AIO_PUMP header: a liquid cooler's pump goes to CPU_OPT. Smaller than ATX, so it fits small cases; size says nothing about speed.",
     "لوحة micro-ATX لرام DDR5 ومقبس LGA1700، فيها فتحتين M.2 وأربع فتحات رام. ما فيها مدخل AIO_PUMP: مضخة التبريد المائي تروح لـ CPU_OPT. أصغر من ATX فتركب في الكيسات الصغيرة؛ والحجم ما له علاقة بالسرعة.",
   ),
-  sources: [source("ASUS", "PRIME B760M-A WIFI — Tech Specs", "https://www.asus.com/motherboards-components/motherboards/prime/prime-b760m-a-wifi/techspec/", ON)],
+  sources: [
+    source("ASUS", "PRIME B760M-A WIFI — Tech Specs", "https://www.asus.com/motherboards-components/motherboards/prime/prime-b760m-a-wifi/techspec/", ON),
+    source("ASUS", "PRIME B760M-A WIFI User's Manual E21693 — p. viii (Q-DIMM), p. 1-12 (system memory, recommended configurations), p. 1-13 (installing and removing a DIMM)", "https://dlcdnets.asus.com/pub/ASUS/mb/LGA1700/PRIME_B760M-A_WIFI/E21693_PRIME_B760M-A_WIFI_UM_WEB.pdf", "2026-11-20"),
+    source("ASUS", "PRIME B760M-A WIFI — official top-view product photo (memory slot clips at the top end)", "https://dlcdnwebimgs.asus.com/gain/63f59141-7212-4e98-ade8-f0dd1cd4a349", "2026-11-20"),
+    source("ASUS", "PRIME B760M-A WIFI User's Manual E21693 — p. 1-2 (layout), p. 1-14 (M.2 installation)", "https://dlcdnets.asus.com/pub/ASUS/mb/LGA1700/PRIME_B760M-A_WIFI/E21693_PRIME_B760M-A_WIFI_UM_WEB.pdf", "2026-11-21"),
+  ],
   verification: "partially_verified",
   unverifiedFields: [
     "spec.biosVersions, spec.cpuSupport.sinceBios (not read)",
     "spec.memory.maxPerModuleGb (not stated on the spec page)",
-    "spec.memory.recommendedPopulation (manual not read; A2/B2 assumed as on other ASUS boards)",
     "ports: the spec page lists 2 x HDMI and 1 x DisplayPort on the back; one HDMI and the DisplayPort are modelled",
     "ports: the spec page lists 2 x USB 3.2 Gen 1 headers; one is modelled",
   ],
@@ -159,10 +165,10 @@ export const entryBoard: MotherboardEntry = {
   formFactor: "micro-ATX",
   mountPoints: [
     ...socket("lga1700", "LGA1700"),
-    ...dimmSlots("ddr5"),
+    ...dimmSlots("ddr5", undefined, { latches: "one_side", latchEnd: "top", note: "ASUS manual E21693 (English, First Edition Feb 2023): Q-DIMM in the ASUS Q-Design list (p. viii); p. 1-12 slots DIMM_A1–DIMM_B2 and the recommended configurations; p. 1-13 shows one moving clip, the other end fixed (open the clip, match the notch, press down until it closes; remove: press the clip, lift). ASUS's official top-view photo of this board shows the clip at the top end of each slot." }),
     x16(4, "PCIe 4.0"),
-    { id: "m2-1", kind: "m2_slot", lengths: ["m2_2242", "m2_2260", "m2_2280"], interfaces: ["nvme"], pcieGeneration: 4, label: L("M.2_1 slot (PCIe 4.0 x4, CPU)", "فتحة M.2_1 (PCIe 4.0 x4، من المعالج)"), fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-1", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way.") },
-    { id: "m2-2", kind: "m2_slot", lengths: ["m2_2242", "m2_2260", "m2_2280"], interfaces: ["nvme"], pcieGeneration: 4, label: L("M.2_2 slot (PCIe 4.0 x4, chipset)", "فتحة M.2_2 (PCIe 4.0 x4، من الشيبست)"), fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-2", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way.") },
+    { id: "m2-1", kind: "m2_slot", lengths: ["m2_2242", "m2_2260", "m2_2280"], interfaces: ["nvme"], pcieGeneration: 4, label: L("M.2_1 slot (PCIe 4.0 x4, CPU)", "فتحة M.2_1 (PCIe 4.0 x4، من المعالج)"), ...m2ScrewStand("m2-1", "ASUS manual E21693 p. 1-14 (steps 3-5): fit the screw stand at the drive's length hole (2242, 2260 or 2280, p. 1-2), insert the drive, secure it with one screw. No Q-Latch is shown for this board."), heatsink: m2Heatsink("m2-hs-1", "ASUS manual E21693 p. 1-14 (steps 1-2, 6-8): two screws, lifted off; plastic film on the thermal pad peeled before refitting. It covers M.2_1, above the first x16 slot (layout p. 1-2).") },
+    { id: "m2-2", kind: "m2_slot", lengths: ["m2_2242", "m2_2260", "m2_2280"], interfaces: ["nvme"], pcieGeneration: 4, label: L("M.2_2 slot (PCIe 4.0 x4, chipset)", "فتحة M.2_2 (PCIe 4.0 x4، من الشيبست)"), ...m2ScrewStand("m2-2", "ASUS manual E21693 p. 1-14 (steps 3-5): fit the screw stand at the drive's length hole (2242, 2260 or 2280, p. 1-2), insert the drive, secure it with one screw. No Q-Latch is shown for this board.") },
   ],
   mounting: [{ role: "main", kind: "motherboard_tray", label: L("Motherboard tray of the case", "صينية اللوحة الأم في الهيكل") }],
   zones: boardZones("Four DDR5 slots in two channels.", "أربع فتحات DDR5 على قناتين."),
@@ -396,13 +402,20 @@ export const compactAirCooler: CoolingEntry = {
   partNumber: "ACFRE00077A",
   generic: false,
   description: L(
-    "A small air cooler, 132.5 mm tall, with one 100 mm fan and pre-applied MX-4 thermal paste. Its brackets cover older Intel sockets (115X, which includes LGA1150) as well as LGA1700 and LGA1851.",
-    "مبرّد هوائي صغير، ارتفاعه 132.5 مم، بمروحة 100 مم ومعجون MX-4 محطوط من المصنع. تثبيته يناسب مقابس Intel القديمة (115X ومنها LGA1150) وبعد LGA1700 و LGA1851.",
+    "A small air cooler, 132.5 mm tall, with one 100 mm fan and thermal paste already applied. Its brackets cover older Intel sockets (115X, which includes LGA1150) as well as LGA1700 and LGA1851.",
+    "مبرّد هوائي صغير، ارتفاعه 132.5 مم، بمروحة 100 مم ومعجون حراري محطوط من المصنع. تثبيته يناسب مقابس Intel القديمة (115X ومنها LGA1150) وبعد LGA1700 و LGA1851.",
   ),
-  sources: [source("ARCTIC", "Freezer 7 X — General Specifications", "https://www.arctic.de/en/Freezer-7-X/ACFRE00077A", ON)],
-  verification: "verified",
-  unverifiedFields: [],
-  teachingNotes: [FASTENER_NOTE, "coolingCapacityW is null: ARCTIC publishes no wattage rating for this cooler, so the lab does not judge whether it is enough for a given CPU.", "The page lists the pre-applied paste: do not add more on top of it."],
+  sources: [
+    source("ARCTIC", "Freezer 7 X — General Specifications", "https://www.arctic.de/en/Freezer-7-X/ACFRE00077A", ON),
+    source("ARCTIC", "Freezer 7 X spec sheet (PDF): pre-applied thermal compound, dimensions, supported sockets", "https://www.arctic.de/media/e5/ee/fe/1708069696/Spec_Sheet_Freezer_7X_EN.pdf", "2026-11-22"),
+    source("ARCTIC", "Freezer 7 X Rev 3 user manual — Intel: packaging content (retention ring, retention pins), mounting-clip position per socket, installation", "https://support.arctic.de/freezer7xr3", "2026-11-22"),
+  ],
+  verification: "partially_verified",
+  unverifiedFields: [
+    "retention pin order (the manual's drawings do not give one)",
+    "interference with the board's own components on LGA1150 (ARCTIC's compatibility lists cover socket 1151 v1 and v2 only)",
+  ],
+  teachingNotes: [FASTENER_NOTE, "coolingCapacityW is null: ARCTIC publishes no wattage rating for this cooler, so the lab does not judge whether it is enough for a given CPU.", "The page lists the pre-applied paste: do not add more on top of it.", "ARCTIC's Rev 3 spec sheet and this entry's earlier source name the pre-applied compound differently, so the lab names none. On Intel the manual uses a retention ring and four push pins (no backplate), and the mounting-clip position must match the socket family (LGA1851/1700 or LGA1200/LGA115x)."],
   dimensions: { lengthMm: 74.3, widthMm: 110.5, heightMm: 132.5 },
   formFactor: "Compact tower air cooler",
   mountPoints: [],
@@ -412,7 +425,10 @@ export const compactAirCooler: CoolingEntry = {
   cables: [fanLead("fan", "fan_4pin_pwm", L("Cooler fan lead (4-pin PWM)", "سلك مروحة المبرّد (PWM من 4 سنون)"))],
   rgb: null,
   asset: NO_ASSET,
-  spec: { type: "air", supportedSockets: ["lga1851", "lga1700", "lga1200", "lga1150", "am5", "am4"], heightMm: 132.5, radiatorSizeMm: null, fanCount: 1, fanSizeMm: 100, coolingCapacityW: null, paste: { supplied: "pre_applied", film: true, source: "ARCTIC product page as recorded for this entry: pre-applied MX-4 under a protective cover peeled off before mounting." } },
+  spec: { type: "air", supportedSockets: ["lga1851", "lga1700", "lga1200", "lga1150", "am5", "am4"], heightMm: 132.5, radiatorSizeMm: null, fanCount: 1, fanSizeMm: 100, coolingCapacityW: null, paste: { supplied: "pre_applied", film: true, source: "ARCTIC product page as recorded for this entry, and the Rev 3 spec sheet ('thermal compound pre-applied'): pre-applied under a protective cover peeled off before mounting." },
+    mounting: [retentionRingMounting("https://support.arctic.de/freezer7xr3")],
+    connections: [{ cableId: "fan", requirement: "required", note: L("The fan's 4-pin PWM lead goes to CPU_FAN.", "سلك مروحة المبرّد PWM من 4 سنون يروح لـ CPU_FAN.") }],
+  },
 };
 
 export const expansionEntries = { cpus: [legacyCpu], motherboards: [entryBoard, legacyBoard], ram: [legacyRam], gpus: [rtx5060], storage: [hdd], cases: [smallCase, largeCase], fans: [fan140], cooling: [compactAirCooler] };

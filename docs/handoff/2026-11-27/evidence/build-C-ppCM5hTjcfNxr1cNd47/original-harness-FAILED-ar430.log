@@ -1,0 +1,13 @@
+PASS  z790: the CPU note is the one for this board
+PASS  z790: before a slot is chosen no mechanism or manual is claimed
+FAIL  z790: completed without an exception TimeoutError: locator.evaluate: Timeout 60000ms exceeded.
+PASS  d4: the CPU note is the one for this board
+PASS  d4: before a slot is chosen no mechanism or manual is claimed
+FAIL  d4: completed without an exception TimeoutError: locator.evaluate: Timeout 60000ms exceeded.
+PASS  b760: the CPU note is the one for this board
+PASS  b760: before a slot is chosen no mechanism or manual is claimed
+FAIL  b760: completed without an exception TimeoutError: locator.evaluate: Timeout 60000ms exceeded.
+PASS  h81: the CPU note is the one for this board
+PASS  no page errors
+8 passed, 3 failed
+exit 1

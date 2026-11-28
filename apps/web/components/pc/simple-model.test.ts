@@ -4,7 +4,7 @@ import { pcCatalog } from "./catalog";
 import {
   connectSimpleCable, createSimpleBuild, disconnectSimpleCable, emptySimpleSnapshot, installSimplePart, lastSimpleStep, parseSimpleSnapshot, RAM_SLOTS,
   SIMPLE_CABLES, SIMPLE_PARTS, simpleAssemblyComplete, simpleBlock, simpleBuildFromSnapshot, simpleCableConnected, simpleCablesFor, simplePartInstalled,
-  simpleRemoveBlock, simpleSwapBlock, simpleTarget, startSimplePC, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap, type SimpleCableKey, type SimplePartKey, type SimpleSnapshot,
+  simpleRemoveBlock, simpleSwapBlock, simpleTarget, startSimplePC, pressSimplePower, setSimpleSystem, withSimpleStep, undoSimpleStep, withCable, withoutCable, withoutPart, withPart, withSwap, type SimpleCableKey, type SimplePartKey, type SimpleSnapshot,
 } from "./simple-model";
 
 function fitted() {
@@ -253,7 +253,8 @@ describe("the CPU and cooler alternatives", () => {
       ["block", "motherboard-2", "cooler-mount", "seated"],
       ["radiator", "case-1", "rad-front", "seated"],
     ]);
-    expect(state.parts.filter((p) => p.instanceId === "fan-9" || p.instanceId === "fan-10").map((p) => p.attachments[0]!.target.mountPointId)).toEqual(["fan-top-1", "fan-top-2"]);
+    // The case's own front fan moves up; its rear fan (a supplied fan at the rear, per Corsair) stays where it is.
+    expect(state.parts.filter((p) => p.instanceId === "fan-9" || p.instanceId === "fan-10").map((p) => p.attachments[0]!.target.mountPointId)).toEqual(["fan-top-1", "fan-rear-1"]);
     expect(simpleCablesFor(state).map((c) => c.key)).toEqual(["atx", "cpuPower", "gpuPower", "powerSwitch", "caseFan1", "caseFan2", "aioPump", "aioFan"]);
   });
 
@@ -333,5 +334,34 @@ describe("the CPU and cooler alternatives", () => {
     expect(parseSimpleSnapshot({ ...airI9, powered: false })).toEqual({ ...airI9, powered: false });
     // Two CPUs or two coolers could never have been fitted together.
     expect(parseSimpleSnapshot({ version: 3, placed: ["cpu", "cpu2"], connected: [], history: ["part:cpu", "part:cpu2"], powered: false })).toBeNull();
+  });
+});
+
+describe("saves from before the readiness steps", () => {
+  it("restores a complete running save, and its first power-off needs no step and survives reload", () => {
+    const saved = snapshotOf(ALL_PARTS, ALL_CABLES, true);
+    expect(saved.history.some((s) => s.startsWith("sys:"))).toBe(false);
+    const parsed = parseSimpleSnapshot(JSON.parse(JSON.stringify(saved)))!;
+    expect(simpleBuildFromSnapshot(parsed).power).toMatchObject({ pressed: true, wallConnected: true, psuSwitchOn: true });
+    // The page's first power-off on such a save clears the flag; replay and reload agree it is off.
+    const off = { ...parsed, powered: false };
+    expect(simpleBuildFromSnapshot(parseSimpleSnapshot(JSON.parse(JSON.stringify(off)))!).power.pressed).toBe(false);
+    // Starting again is now the learner's own steps and button, recorded as such.
+    let again = off;
+    for (const step of ["sys:panel:closed", "sys:wall:in", "sys:psu:on", "sys:power:on"] as const) again = withSimpleStep(again, step);
+    expect(again.powered).toBe(true);
+    expect(simpleBuildFromSnapshot(parseSimpleSnapshot(JSON.parse(JSON.stringify(again)))!).power.pressed).toBe(true);
+  });
+
+  it("refuses a running save whose build does not start", () => {
+    expect(parseSimpleSnapshot(snapshotOf(ALL_PARTS, ALL_CABLES.filter((k) => k !== "atx" && k !== "cpuPower"), true))).toBeNull();
+  });
+
+  it("presses power on exactly what is there", () => {
+    const empty = createSimpleBuild();
+    const r = pressSimplePower(empty);
+    expect(r.ok).toBe(false);
+    expect(r.state).toBe(empty);
+    expect(setSimpleSystem(empty, "power", "off")).toMatchObject({ ok: false });
   });
 });

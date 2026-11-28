@@ -1,0 +1,244 @@
+{
+  "source": {
+    "source_commit": "1b15b24",
+    "product_commit": "0619a3b",
+    "build_id": "-f6Q4maBozU16L9dULuXh",
+    "files": {
+      "apps/web/components/pc/SimplePcLab.tsx": "eedd27233e33905265a46a544c78f3420a2c25176d8fbf9a6f891632d24ffab3",
+      "apps/web/components/pc/companion.ts": "ef43dbaf7582010e28652553e79924af5a29e55352873432308affda905e5eee",
+      "apps/web/components/pc/simple-model.ts": "1b97425a251bd9dfb2d5e27f370089729d61e06ed1bb613f60dce9ecc7fc3e3c",
+      "apps/web/messages/ar/labs.json": "92240a61ae06e1fc29e605bd4b13bd18fa296b35b984dc1457145ccd2ee6049f",
+      "apps/web/messages/en/labs.json": "ff6a8fe3dab4871fb915d733971bd60d2768f2e2e507d908448837c9c92d0f93",
+      "content/catalog/motherboards.ts": "b312ea4256bef08638598e325053bb6afb1d71f12ccbdf0de544d28641adc6b8"
+    }
+  },
+  "matrix": [
+    {
+      "name": "gpu-install-en-1440",
+      "command": [
+        "node",
+        "docs/handoff/2026-11-26/acceptance/gpu-install.mjs",
+        "en",
+        "1440",
+        "http://127.0.0.1:3027"
+      ],
+      "exit": 0,
+      "seconds": 177.7,
+      "passed": 42,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "gpu-install-ar-430",
+      "command": [
+        "node",
+        "docs/handoff/2026-11-26/acceptance/gpu-install.mjs",
+        "ar",
+        "430",
+        "http://127.0.0.1:3027"
+      ],
+      "exit": 0,
+      "seconds": 185.2,
+      "passed": 42,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "wiring-startup-en-1440",
+      "command": [
+        "node",
+        "docs/handoff/2026-11-26/acceptance/wiring-startup.mjs",
+        "en",
+        "1440",
+        "http://127.0.0.1:3027"
+      ],
+      "exit": 0,
+      "seconds": 176.1,
+      "passed": 50,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "wiring-startup-ar-430",
+      "command": [
+        "node",
+        "docs/handoff/2026-11-26/acceptance/wiring-startup.mjs",
+        "ar",
+        "430",
+        "http://127.0.0.1:3027"
+      ],
+      "exit": 0,
+      "seconds": 191.8,
+      "passed": 50,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "pointer-en-1440",
+      "command": [
+        "node",
+        "docs/handoff/2026-11-26/acceptance/pointer.mjs",
+        "en",
+        "1440",
+        "http://127.0.0.1:3027"
+      ],
+      "exit": 0,
+      "seconds": 116.8,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "pointer-ar-430",
+      "command": [
+        "node",
+        "docs/handoff/2026-11-26/acceptance/pointer.mjs",
+        "ar",
+        "430",
+        "http://127.0.0.1:3027"
+      ],
+      "exit": 0,
+      "seconds": 78.1,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "legacy-shared-sata-en-1440",
+      "command": [
+        "node",
+        "docs/handoff/2026-11-26/acceptance/legacy-shared-sata.mjs",
+        "en",
+        "1440",
+        "http://127.0.0.1:3027"
+      ],
+      "exit": 0,
+      "seconds": 25.0,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "legacy-shared-sata-ar-430",
+      "command": [
+        "node",
+        "docs/handoff/2026-11-26/acceptance/legacy-shared-sata.mjs",
+        "ar",
+        "430",
+        "http://127.0.0.1:3027"
+      ],
+      "exit": 0,
+      "seconds": 23.3,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "touch-en-1440",
+      "command": [
+        "node",
+        "docs/handoff/2026-11-26/acceptance/touch.mjs",
+        "en",
+        "1440",
+        "http://127.0.0.1:3027"
+      ],
+      "exit": 0,
+      "seconds": 32.3,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "touch-ar-430",
+      "command": [
+        "node",
+        "docs/handoff/2026-11-26/acceptance/touch.mjs",
+        "ar",
+        "430",
+        "http://127.0.0.1:3027"
+      ],
+      "exit": 0,
+      "seconds": 29.1,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "aio-en-1440",
+      "command": [
+        "node",
+        "docs/handoff/2026-11-23/acceptance/aio.mjs",
+        "http://127.0.0.1:3027",
+        "en",
+        "1440"
+      ],
+      "exit": 0,
+      "seconds": 185.5,
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "aio-ar-430",
+      "command": [
+        "node",
+        "docs/handoff/2026-11-23/acceptance/aio.mjs",
+        "http://127.0.0.1:3027",
+        "ar",
+        "430"
+      ],
+      "exit": 0,
+      "seconds": 178.1,
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "cooling-ar-430",
+      "command": [
+        "node",
+        "docs/handoff/2026-11-23/acceptance/cooling.mjs",
+        "http://127.0.0.1:3027",
+        "ar",
+        "430"
+      ],
+      "exit": 0,
+      "seconds": 128.5,
+      "passed": 40,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "screwed-ar-430",
+      "command": [
+        "node",
+        "docs/handoff/2026-11-25/acceptance/screwed.mjs",
+        "http://127.0.0.1:3027",
+        "ar",
+        "430"
+      ],
+      "exit": 0,
+      "seconds": 72.9,
+      "passed": 24,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "journeys": [
+    {
+      "name": "journey-en1440",
+      "passed": 49,
+      "failed": 0
+    },
+    {
+      "name": "journey-ar430",
+      "passed": 49,
+      "failed": 0
+    }
+  ],
+  "browser_passed": 436,
+  "browser_failed": 0,
+  "preview": "blocked_by_vercel_login",
+  "physical_touch": "not_run_no_device_control",
+  "product_edits": false
+}

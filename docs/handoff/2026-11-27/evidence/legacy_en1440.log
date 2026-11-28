@@ -1,0 +1,10 @@
+PASS  the older save loads (not reset to an empty build) 
+PASS  both leads on the shared source count as connected 
+PASS  reload keeps the migrated save (history unchanged, both leads connected) 
+PASS  the stored save still has the same history 
+PASS  undo takes back exactly one step 
+PASS  the second lead is loose and the first stays connected 
+PASS  reload after undo agrees 
+PASS  no page errors 
+8 passed, 0 failed
+exit 0

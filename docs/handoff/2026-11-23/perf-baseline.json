@@ -1,0 +1,6 @@
+{"commit":"b0c0b5a-base-of-isolation (scene hardware commit, before any isolation change)","tool":"docs/handoff/2026-11-23/acceptance/perf.mjs","browser":"Chrome (swiftshader), fresh context per page, production build, localhost",
+"home":{"requests":21,"totalKB":1245,"jsKB":901},
+"planner":{"requests":25,"totalKB":1796,"jsKB":1429,"canvases":0},
+"assemblyStarted":{"requests":49,"totalKB":3037,"jsKB":2451,"pcAssets":23,"pcAssetKB":219},
+"idleRafPer3s":180,
+"enterExitCycles":"3x: 0 canvases in planner, 1 in assembly, 0 new requests"}

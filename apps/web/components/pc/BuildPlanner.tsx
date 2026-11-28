@@ -8,7 +8,7 @@ import { CheckIcon } from "../icons";
 import { pcCatalog } from "./catalog";
 import { PURPOSES, type BuildPurpose, type PlannedBuild } from "./plan-model";
 import {
-  BOARD_TIER, categoryOfSlot, checkBuildPlan, compatibleOptions, explainTopic, PLANNER_CATEGORIES, PLANNER_IDS, plannerEntry, slotOfCategory, suggestBuild, WORKLOADS, withChoice, withoutChoice,
+  BOARD_TIER, categoryOfSlot, checkBuildPlan, compatibleOptions, explainTopic, PLANNER_CATEGORIES, PLANNER_IDS, plannerEntry, slotOfCategory, suggestBuild, WORKLOADS, withChoice, withoutChoice, withoutModel,
   type PlannerCategory,
 } from "./planner-data";
 import styles from "./planner.module.css";
@@ -132,6 +132,7 @@ export function BuildPlanner({ build, onChange, onStart, hasProgress, onContinue
               const inBuild = ids.includes(e.id);
               const multi = category === "storage" || category === "fans";
               const single = !multi && ids.length > 0 && !inBuild;
+              const removed = withoutModel(plan, category, e.id);
               const tier = BOARD_TIER[e.id];
               return (
                 <article key={e.id} className={styles.card} data-in={inBuild || undefined}>
@@ -140,10 +141,12 @@ export function BuildPlanner({ build, onChange, onStart, hasProgress, onContinue
                     <span className={styles.cat}>{catName(category)}{tier && <em> · {t(`tiers.${tier}`)}</em>}</span>
                     <h3>{e.brand} {e.model}</h3>
                     <dl>{specsOf(e, t).slice(0, 4).map(([k, v]) => <div key={k}><dt>{k}</dt><dd dir="ltr">{v}</dd></div>)}</dl>
+                    {inBuild && <span className={styles.inBuildNote}><CheckIcon /> {t("inBuild")}</span>}
                     <div className={styles.cardActions}>
-                      {inBuild && !multi
-                        ? <button type="button" className={styles.inBuild} onClick={() => set(withoutChoice(plan, category))}><CheckIcon /> {t("inBuild")} · {t("remove")}</button>
-                        : <button type="button" className={styles.primary} onClick={() => set(withChoice(plan, category, e.id))}>{single ? t("replace") : t("add")}</button>}
+                      <div className={styles.choice}>
+                        <button type="button" className={styles.primary} disabled={inBuild && !multi} aria-label={`${single ? t("replace") : t("add")} ${nameOf(e.id)}`} onClick={() => set(withChoice(plan, category, e.id))}>{single ? t("replace") : t("add")}</button>
+                        <button type="button" className={styles.remove} disabled={!removed} aria-label={`${t("removeFromBuild")} ${nameOf(e.id)}`} onClick={() => removed && set(removed)}>{t("removeFromBuild")}</button>
+                      </div>
                       <button type="button" className={styles.ghost} aria-expanded={open === e.id} onClick={() => setOpen(open === e.id ? null : e.id)}>{open === e.id ? t("less") : t("more")}</button>
                     </div>
                     {open === e.id && <div className={styles.details}>

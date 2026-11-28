@@ -1,0 +1,52 @@
+PASS  a reversed plug is refused, no step is saved 
+PASS  drive end saved with its actual socket 
+PASS  a partly connected lead is not counted connected 
+PASS  the board end offers several equivalent sockets 
+PASS  the robot points at the socket the learner picked 
+PASS  the alternate socket is accepted and recorded as chosen 
+PASS  the lead is now connected 
+PASS  reload keeps the same actual socket 
+PASS  each connected end has its own take-out button 
+PASS  one take-out saves exactly one unplug step 
+PASS  the other end stays in 
+PASS  reload agrees: one end out 
+PASS  undo puts that end back into its socket 
+PASS  the camera never moved on its own through selecting, plugging, removing and undoing 
+PASS  modular lead: PSU end plugs first 
+PASS  the board end lists its 24-pin socket first and look-alike sockets after 
+PASS  the plug is turned the right way before the wrong socket is tried 
+PASS  the wrong-kind socket is refused: history unchanged, lead not connected 
+PASS  and the robot gives a reason, not the success line 
+PASS  case fan 1 plugged into an alternate header, recorded 
+PASS  the header in use is marked as taken for the next lead 
+PASS  an occupied socket is refused: no step saved, lead not connected 
+PASS  with a reason from the engine 
+PASS  older whole-lead save shows take-out for each end 
+PASS  a double click on take-out is one step 
+PASS  history keeps the whole-lead step and adds one unplug 
+PASS  the lead no longer counts as connected, the other end remains 
+PASS  plug turned for the first end 
+PASS  a second loose end can be chosen by clicking it 
+PASS  choosing an end connects nothing and keeps the camera 
+PASS  the other plug starts turned the wrong way again 
+PASS  the robot now points at the board's sockets 
+PASS  pressing power before the switches reports a failure and changes nothing 
+PASS  the failure says what to do first 
+PASS  each switch is its own saved step 
+PASS  power on: the engine says it works, saved as a step 
+PASS  while running, the other switches are disabled and the hint says so 
+PASS  reload: still running, controls agree 
+PASS  turn off is a saved step 
+PASS  reload: stays off 
+PASS  undo of the power-off runs the PC again, consistently 
+PASS  the camera was stable through the readiness steps 
+PASS  boots without the optional fan 
+PASS  and it is not reported as a finished build 
+PASS  the wrong-header fault was reached by re-rolling 
+PASS  the wrongly plugged end has its take-out button 
+PASS  it comes out and the lead is loose 
+PASS  it goes back into the right header: the lead completes and its panel closes 
+PASS  the fault is then solved by the real engine 
+PASS  no page errors 
+50 passed, 0 failed
+exit=0

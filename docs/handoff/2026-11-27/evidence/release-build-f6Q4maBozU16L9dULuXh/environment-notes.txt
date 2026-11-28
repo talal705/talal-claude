@@ -1,0 +1,4 @@
+The first Vitest invocation inside the filesystem/network sandbox failed when the execution runner could not listen on127.0.0.1 (EPERM). It was rerun with loopback permission:88 files,1127 passed,21 skipped. The production files were unchanged.
+The earlier browser failures were harness assumptions: RM850x instead of the suggested RM650e; an extra added fan left uninstalled; an Arabic numeral2 selector instead of the interface's literal2. Their failed logs are preserved separately. These are not counted as successful runs or product defects.
+Screenshot timeouts in failed runs are not successful visual evidence. Final positive screenshots are selected from successful targeted runs.
+Saved text logs have ANSI display escapes and trailing whitespace removed; assertion text, counts and failure diagnostics are preserved. Raw originals remain under /private/tmp.

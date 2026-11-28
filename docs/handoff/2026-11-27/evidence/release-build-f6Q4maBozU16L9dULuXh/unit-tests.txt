@@ -1,0 +1,21 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.3 /Users/most/Documents/Codex/VTE-completion-2026-11-25
+
+
+SKIPPED: the real AI tutor call did not run because no real provider is configured (AI_PROVIDER anthropic or openai_compatible, with its settings).
+(node:27352) [THREE_CJS_DEPRECATED] DeprecationWarning: `require("three")` is deprecated and will be removed.
+Replace `const THREE = require("three")` with `import * as THREE from "three"`.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+SKIPPED: PostgreSQL integration tests did not run because TEST_DATABASE_URL is not set. Copy .env.example to .env.local in the repository root and set it.
+
+ Test Files  88 passed (88)
+      Tests  1127 passed | 21 skipped (1148)
+   Start at  21:27:39
+   Duration  8.97s (tests 77%, import 11%, transform 11%, worker 1%)
+
+    Isolate  88 workers spawned · ~62ms startup each (spawn + environment, per file)
+             at least ~541ms faster with isolate: false — reuses workers across files instead of one per file

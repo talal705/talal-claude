@@ -165,7 +165,7 @@ const T: Record<PCDiagnosticCode, Entry> = {
     ],
   },
   port_occupied: {
-    m: ["A cable is already plugged in here.", "في كيبل موصّل هنا."],
+    m: ["{port} already has a cable in it. Choose a free socket, or unplug that cable first.", "{port} فيه كيبل موصّل. اختر مدخلًا فاضيًا، أو افصل الكيبل اللي فيه أول."],
     x: ["Unplug the cable that is there first, or choose a free socket.", "افصل الكيبل اللي هنا أول، أو اختر مدخل فاضي."],
   },
   seating_blocked: {
@@ -189,11 +189,27 @@ const T: Record<PCDiagnosticCode, Entry> = {
     m: ["The part is {distance} mm off centre. Centre it over the {place} before lowering it.", "القطعة بعيدة {distance} مم عن الوسط. وسّطها فوق {place} قبل ما تنزّلها."],
     x: ["A part is lowered straight down only when it is centred over its place; sliding it in damages the contacts.", "القطعة تنزل مستقيمة بس وهي في الوسط؛ سحبها على المكان يضرّ نقاط التلامس."],
   },
+  insert_angle_wrong: {
+    m: ["Tilt the drive up about {low}–{high}° and slide it into the slot at that angle; it does not go in flat.", "ميّل الدسك لفوق تقريبًا {low}–{high}° ودخّله في الفتحة بهالزاوية؛ ما يدخل وهو مسطّح."],
+    x: ["An M.2 drive's contacts go into the slot at an angle, then the drive is pressed flat. The manuals draw the angle without a number; this range is the lab's approximation.", "أطراف دسك M.2 تدخل الفتحة وهو مايل، وبعدين ينضغط مسطّح. الأدلة ترسم الزاوية بدون رقم؛ وهالمدى تقريب من المختبر."],
+  },
   alignment_required: {
     m: ["Hold the part over its place first: turn and centre it, then lower it.", "امسك القطعة فوق مكانها أول: لفّها ووسّطها، وبعدين نزّلها."],
     x: ["In this build every keyed part is aligned by the learner before it goes in.", "في هالتجميعة كل قطعة مفتاحية يحاذيها المتعلم قبل ما تدخل."],
   },
 
+  radiator_below_pump: {
+    m: ["The radiator would sit below the pump, which risks bubbling noise. Mount it with its top above the CPU block: the front or the top of the case.", "الرادياتير بيكون تحت المضخة، وهذا يسبب صوت فقاعات. ركّبه وراسه فوق بلوك المعالج: مقدمة الكيس أو أعلاه."],
+    x: ["ARCTIC's manual marks a radiator below the pump as a risk of bubbling noise: air collects at the highest point, and that should be inside the radiator, not the pump.", "دليل ARCTIC يعتبر الرادياتير تحت المضخة خطر صوت فقاعات: الهوا يتجمّع في أعلى نقطة، ولازم تكون داخل الرادياتير مو المضخة."],
+  },
+  mounting_missing: {
+    m: ["{why}", "{why}"],
+    x: ["A cooler's own mounting hardware has to be ready before it goes on: the manufacturer's order protects the CPU and the board.", "عدّة تثبيت المبرّد لازم تكون جاهزة قبل ما يركب: ترتيب الشركة يحمي المعالج واللوحة."],
+  },
+  hardware_order_wrong: {
+    m: ["{why}", "{why}"],
+    x: ["Screws that hold a CPU or a cooler go in a few turns each first, then are tightened evenly, so the pressure is the same on every side.", "البراغي اللي تمسك المعالج أو المبرّد تدخل كم لفّة أول، وبعدين تنربط بالتساوي، عشان الضغط يكون نفسه من كل الجهات."],
+  },
   prep_missing: {
     m: ["{what}", "{what}"],
     x: ["Some parts need a step before they go in: paste on the CPU, the film off the cooler, the standoffs checked, the right way round for air.", "بعض القطع تحتاج خطوة قبل ما تركب: معجون على المعالج، شيل الغلاف عن المبرّد، التأكد من القواعد، والاتجاه الصح للهوا."],
@@ -226,6 +242,11 @@ const T: Record<PCDiagnosticCode, Entry> = {
       "The module is the right type for the slot, but one end was not pushed down until its latch clicked. Some contacts do not touch, so the memory check at startup fails. Press both ends down firmly.",
       "الرام نوعها صح للفتحة، بس طرف منها ما انضغط لين يطقّ المشبك. بعض نقاط التلامس ما توصل، ففحص الرام وقت التشغيل يفشل. اضغط الطرفين بقوة.",
     ],
+  },
+  cpu_frame_loose: {
+    o: ["Fans spin, but a status light on the motherboard stays on and the computer does not finish its self-test.", "المراوح تدور، بس لمبة حالة في اللوحة الأم تبقى شغّالة والكمبيوتر ما يكمّل الفحص الذاتي."],
+    m: ["The CPU's contact frame is not tight on all four screws.", "إطار التلامس حق المعالج مو مربوط على البراغي الأربعة."],
+    x: ["With the ILM off, the contact frame presses the CPU onto the socket's contacts. Until all four screws are tight, the CPU does not make contact.", "لما يكون الـ ILM مشال، إطار التلامس يضغط المعالج على نقاط المقبس. قبل ما تنربط البراغي الأربعة، المعالج ما يوصل."],
   },
   cpu_lever_open: {
     o: ["Fans spin, but a status light on the motherboard stays on and the computer does not finish its self-test.", "المراوح تدور، بس لمبة حالة في اللوحة الأم تبقى شغّالة والكمبيوتر ما يكمّل الفحص الذاتي."],

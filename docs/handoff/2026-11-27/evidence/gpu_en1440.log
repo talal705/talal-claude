@@ -1,0 +1,43 @@
+PASS  one click takes out exactly one slot cover 
+PASS  the second cover is its own step 
+PASS  the PCIe latch is its own step 
+PASS  bringing the card over the slot changes no build state; the robot says to turn it 
+PASS  after turning it, the card goes in as one step 
+PASS  a double click on the screw button is one screw 
+PASS  the second bracket screw is its own step and the card is installed 
+PASS  the camera never moved on its own 
+PASS  reload keeps the installed card 
+PASS  the build powers on 
+PASS  while running, the card's lead cannot be taken out and no step is saved 
+PASS  while running, the robot says to turn the PC off 
+PASS  turn off is one saved step 
+PASS  with the side panel closed the lead is not taken out, and the robot says to open it 
+PASS  with the side panel closed a bracket screw stays in 
+PASS  opening the side panel is its own step 
+PASS  each end of the card's lead has its own take-out 
+PASS  one click takes out only the card's end; the supply end and every other lead stay 
+PASS  while screwed, neither the latch nor lifting is offered 
+PASS  a double click on take-out-screw is one screw 
+PASS  reload with one screw out keeps it; one screw still holds the card 
+PASS  undo puts that one screw back 
+PASS  two screws come out as two separate steps 
+PASS  with the latch still shut, lifting is not offered 
+PASS  panel closed: releasing the latch changes neither the saved steps nor the build, and the robot says why 
+PASS  releasing the PCIe latch is its own step and the card stays in 
+PASS  panel closed: lifting the card changes neither the saved steps nor the build, and the robot says why 
+PASS  lifting the card straight out is one step 
+PASS  nothing else moved: same other parts and leads, covers stay out 
+PASS  reload keeps the card out 
+PASS  loading the same build again frames it the same 
+PASS  undo of the lift removes exactly that one step 
+PASS  and the card is back in its slot as it was: unscrewed, latch released, ready to lift 
+PASS  lifting again is one step 
+PASS  panel closed: putting a bracket screw in changes neither the saved steps nor the build, and the robot says why 
+PASS  reinstalled one step per click: seated, then each screw 
+PASS  the lead is still out until it is plugged by hand 
+PASS  panel closed: plugging the card's lead changes neither the saved steps nor the build, and the robot says why 
+PASS  plugging the card's end is one step and the lead is connected again 
+PASS  the camera stayed put after each of the 12 single actions and every refused one 
+PASS  no page errors 
+41 passed, 0 failed
+exit 0

@@ -7,10 +7,11 @@
 //   nothing in hand   → the next step: the part to pick up, the port of the next lead, the power button
 //   running, complete → celebrate beside the case
 import type { PCBuildState } from "@ytl/contracts";
+import { nextHandStep } from "./click-assembly";
 import { nextAction, type Selection } from "./companion";
 import {
-  ALL_SIMPLE_CABLES, ALL_SIMPLE_PARTS, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleCableMissingParts,
-  simplePartInstalled, simplePrerequisites, simpleRadiatorTarget, simpleSlotFilled, simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf,
+  ALL_SIMPLE_CABLES, isPositionKey, isRamKey, partSpec, simpleAssemblyComplete, simpleBlock, simpleCableBlock, simpleCableConnected, simpleActiveEnd, simpleCableEnds, simpleCableMissingParts, simpleEndSocket, simplePortChoices,
+  roleOf, simplePartInstalled, simplePrerequisites, simpleRetention, slotCovers, simpleRadiatorTarget, simpleSlotFilled, simpleSlotPart, simpleSwapBlock, simpleTarget, slotOf,
   type SimpleCableKey, type SimplePartKey,
 } from "./simple-model";
 
@@ -21,6 +22,8 @@ export type GuideTarget =
   | { kind: "part"; instanceId: string }
   /** A moving piece of a CPU socket: its lever, its load plate, or its orientation mark. */
   | { kind: "socket"; hostInstanceId: string; placeId: string; what: "lever" | "plate" | "mark"; socket: "lga" | "zif" }
+  /** One drawn piece of a part (a memory slot's clip). */
+  | { kind: "solid"; hostInstanceId: string; solidId: string; /** One plate of a stack (a case's expansion-slot cover), counted from the top. */ slice?: { index: number } }
   | { kind: "powerButton" };
 
 export interface GuideFocus {
@@ -35,13 +38,25 @@ export interface GuideFocus {
   subject?: { part: SimplePartKey } | { cable: SimpleCableKey };
 }
 
-const partId = (key: SimplePartKey) => ALL_SIMPLE_PARTS.find((part) => part.key === key)!.id;
-const cableOf = (key: SimpleCableKey) => ALL_SIMPLE_CABLES.find((cable) => cable.key === key)!;
-const portTarget = (key: SimpleCableKey): GuideTarget => ({ kind: "port", hostInstanceId: cableOf(key).instanceId, placeId: cableOf(key).portId });
+const partId = (key: SimplePartKey) => partSpec(key).id;
+/** The socket of the end being plugged now (or, for a lead that is in, the one to unplug first). */
+const portTarget = (state: PCBuildState, key: SimpleCableKey, picked: { end: number | null; portId: string | null } | null = null): GuideTarget => {
+  const ends = simpleCableEnds(key);
+  const end = ends[simpleActiveEnd(state, key, picked?.end ?? null)] ?? ends.at(-1)!;
+  // A free socket the learner has chosen for this end is the one the robot points at, ahead of the planned one.
+  const chosen = picked?.portId && simplePortChoices(state, end).some((c) => c.portId === picked.portId && c.fits && !c.occupied) ? picked.portId : null;
+  return { kind: "port", hostInstanceId: end.instanceId, placeId: chosen ?? simpleEndSocket(state, end) };
+};
 
 /** The places a part goes: its own, and a liquid cooler's radiator place in the case. */
-function placesOf(state: PCBuildState, key: SimplePartKey): GuideTarget[] {
-  const target = simpleTarget(state, key);
+function placesOf(state: PCBuildState, key: SimplePartKey, chosen: string | null): GuideTarget[] {
+  // A memory module goes wherever the learner brings it: until it is in a slot, the place to look at is
+  // the module itself (the page points at the slot it is held over). No default slot is implied.
+  if (isRamKey(key) && !state.parts.find((p) => p.instanceId === partId(key))?.attachments.length) return [{ kind: "part", instanceId: partId(key) }];
+  // A bay or fan place is the learner's choice: nothing is implied until one is chosen, then the chosen place is pointed at.
+  const unplaced = !state.parts.find((p) => p.instanceId === partId(key))?.attachments.length;
+  if (isPositionKey(key) && unplaced && !chosen) return [{ kind: "part", instanceId: partId(key) }];
+  const target = simpleTarget(state, key, isPositionKey(key) && unplaced ? chosen ?? undefined : undefined);
   const radiator = simpleRadiatorTarget(key);
   return [
     { kind: "mount", hostInstanceId: target.hostInstanceId, placeId: target.mountPointId },
@@ -59,7 +74,25 @@ function missingBefore(state: PCBuildState, key: SimplePartKey): SimplePartKey |
   return null;
 }
 
-function forPart(state: PCBuildState, key: SimplePartKey): GuideFocus {
+/**
+ * A graphics card: the robot points at what the next step works on. A rear cover is its own plate in the case's
+ * rear wall, the latch is the slot's own, the screws are at the card's bracket; aligning and seating stay at the slot.
+ */
+function gpuTargets(state: PCBuildState, key: SimplePartKey): GuideTarget[] | null {
+  const step = nextHandStep(state, key, null);
+  const ret = simpleRetention(state, key);
+  if (!step || !ret) return null;
+  if (step.kind === "covers") {
+    const covers = slotCovers(state);
+    const caseId = state.parts.find((p) => p.instanceId === partSpec("motherboard").id)?.attachments[0]?.target.hostInstanceId;
+    return caseId ? [{ kind: "solid", hostInstanceId: caseId, solidId: "slot-covers", slice: { index: covers.findIndex((c) => c.id === step.id) } }] : null;
+  }
+  if (step.kind === "mechanism") return [{ kind: "solid", hostInstanceId: ret.hostInstanceId, solidId: `${ret.mountPointId}-latch` }];
+  if (step.kind === "fasten") return [{ kind: "part", instanceId: partId(key) }];
+  return null;
+}
+
+function forPart(state: PCBuildState, key: SimplePartKey, chosen: string | null = null): GuideFocus {
   if (simplePartInstalled(state, key)) return { targets: [{ kind: "part", instanceId: partId(key) }], reason: "place", subject: { part: key } };
   // The other CPU or cooler is in: point at it, the one to swap (or to unplug first).
   const rival = simpleSlotPart(state, slotOf(key));
@@ -67,7 +100,7 @@ function forPart(state: PCBuildState, key: SimplePartKey): GuideFocus {
     const blocked = simpleSwapBlock(state, key);
     if (blocked === "unplugCoolerFirst") {
       const lead = ALL_SIMPLE_CABLES.find((cable) => cable.requires.some((k) => slotOf(k) === "cooler") && simpleCableConnected(state, cable.key))?.key;
-      if (lead) return { targets: [portTarget(lead)], reason: "prerequisite", subject: { cable: lead } };
+      if (lead) return { targets: [portTarget(state, lead)], reason: "prerequisite", subject: { cable: lead } };
     }
     if (blocked === "removeCoolerFirst") {
       const cooler = simpleSlotPart(state, "cooler")!;
@@ -80,10 +113,11 @@ function forPart(state: PCBuildState, key: SimplePartKey): GuideFocus {
     const first = missingBefore(state, key);
     if (first) return { targets: [{ kind: "part", instanceId: partId(first) }], reason: "prerequisite", subject: { part: first } };
   }
-  return { targets: placesOf(state, key), reason: "place", subject: { part: key } };
+  const card = roleOf(key) === "gpu" ? gpuTargets(state, key) : null;
+  return { targets: card ?? placesOf(state, key, chosen), reason: "place", subject: { part: key } };
 }
 
-function forCable(state: PCBuildState, key: SimpleCableKey): GuideFocus {
+function forCable(state: PCBuildState, key: SimpleCableKey, picked: { end: number | null; portId: string | null } | null = null): GuideFocus {
   if (simpleCableBlock(state, key) === "fitCableParts") {
     const missing = simpleCableMissingParts(state, key)[0];
     if (missing) {
@@ -92,17 +126,18 @@ function forCable(state: PCBuildState, key: SimpleCableKey): GuideFocus {
       return { targets: [{ kind: "part", instanceId: partId(part) }], reason: "prerequisite", subject: { part } };
     }
   }
-  return { targets: [portTarget(key)], reason: "place", subject: { cable: key } };
+  return { targets: [portTarget(state, key, picked)], reason: "place", subject: { cable: key } };
 }
 
 /**
  * Where the robot goes now. `null` keeps it parked out of sight: nothing in hand and the learner
  * has not asked for help (guidance only starts once they select something or ask).
  */
-export function guideFocus(state: PCBuildState, selection: Selection, powered: boolean, asked: boolean): GuideFocus | null {
+/** `chosen`: the bay or fan place the learner picked for the selected part, if any; `picked`: the end and socket the learner chose for the selected lead. */
+export function guideFocus(state: PCBuildState, selection: Selection, powered: boolean, asked: boolean, chosen: string | null = null, picked: { end: number | null; portId: string | null } | null = null): GuideFocus | null {
   if (powered && simpleAssemblyComplete(state)) return { targets: [{ kind: "powerButton" }], reason: "celebrate" };
-  if (selection?.kind === "part" && !powered) return forPart(state, selection.key);
-  if (selection?.kind === "cable" && !powered) return forCable(state, selection.key);
+  if (selection?.kind === "part" && !powered) return forPart(state, selection.key, chosen);
+  if (selection?.kind === "cable" && !powered) return forCable(state, selection.key, picked);
   if (!asked) return null;
   const next = nextAction(state, powered);
   switch (next.kind) {
@@ -115,7 +150,7 @@ export function guideFocus(state: PCBuildState, selection: Selection, powered: b
       return { ...forCable(state, next.key), reason: "next" };
     case "swapCooler": {
       const lead = simpleCableConnected(state, "cpuFan") ? "cpuFan" : null;
-      if (lead) return { targets: [portTarget(lead)], reason: "next", subject: { cable: lead } };
+      if (lead) return { targets: [portTarget(state, lead)], reason: "next", subject: { cable: lead } };
       return { targets: [{ kind: "part", instanceId: partId("cooler") }], reason: "next", subject: { part: "cooler" } };
     }
     case "power":

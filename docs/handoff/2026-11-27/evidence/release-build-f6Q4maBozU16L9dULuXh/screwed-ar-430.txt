@@ -1,0 +1,28 @@
+PASS  the power supply is selectable with no board in the case (no 'board first' block)
+PASS  the filtered-vent advice (fan down) is shown before choosing
+PASS  placing without a fan direction is refused by the engine (nothing placed)
+PASS  fan up also fits over the vent: the supply is placed (advice, not a prohibition), not yet screwed
+PASS  one click = one screw
+PASS  four screws, then the supply is installed
+PASS  a 3.5-inch drive refused in a 2.5-inch-only tray with a spoken reason
+PASS  the chosen bay is recorded with the place step
+PASS  the drive is installed after its four screws, one per click
+PASS  a taken bay is refused with its reason
+PASS  the 2.5-inch drive goes into its own tray
+PASS  after a reload the drive is still half screwed in its tray
+PASS  it finishes with the remaining two screws and is put down
+PASS  four clicks take the four screws out, one each
+PASS  then it lifts out and the other drive stays in
+PASS  undo reverses one step: the lift
+PASS  the usual direction for a top place is advised (exhaust), not imposed
+PASS  placing without an airflow choice is refused by the engine
+PASS  a place holding the case's own fan is refused
+PASS  the fan is installed at the place chosen, turned the way the learner chose (intake at a top place also fits)
+PASS  none of this moved the camera
+PASS  the remove panel offers the screws, not a lift, while screws are in
+PASS  the supply is out again after four unscrews and a lift
+PASS  no uncaught page errors
+
+24 passed, 0 failed, 0 skipped
+
+EXIT_CODE=0

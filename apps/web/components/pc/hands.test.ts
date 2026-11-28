@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  activateSimpleModel, createSimpleBuild, emptySimpleSnapshot, LEGACY_MODEL, liftSimplePart, lowerSimplePart, parseSimpleSnapshot, setSimpleMechanism, simpleBuildFromSnapshot,
+  activateSimpleModel, createSimpleBuild, emptySimpleSnapshot, LEGACY_MODEL, liftSimplePart, lowerSimplePart, parseSimpleSnapshot, reseatSimplePart, setSimpleMechanism, simpleBuildFromSnapshot,
   simplePartInstalled, simpleRetention, undoSimpleStep, withLift, withLower, withMechanism,
   caseCoversClosed, connectSimpleCable, disconnectSimpleCable, fastenSimplePart, installSimplePart, simpleFastened, SLOT_COVERS_ID, unfastenSimplePart, withFasten, withUnfasten,
-  placeSimplePart, prepSimplePart, screwSimplePart, simpleScrewOrder, withPlace, withPrep, withScrew,
+  placeSimplePart, prepSimplePart, withSimpleStep, type SimpleStep, screwSimplePart, slotCovers, unscrewSimplePart, simpleOrientationAdvice, simpleScrewOrder, withPlace, withPrep, withScrew,
 } from "./simple-model";
+import { nextHandStep } from "./click-assembly";
+import { guideFocus } from "./guide";
+import { applyCoolerStep, nextCoolerStep } from "./cooler-assembly";
 
 afterEach(() => activateSimpleModel(LEGACY_MODEL));
 const aligned = { rotationDeg: 0, offsetMm: [0, 0] as [number, number] };
@@ -142,19 +145,138 @@ describe("hands-on graphics card", () => {
   });
 });
 
+describe("graphics card: covers and bracket screws one at a time", () => {
+  const must = <T,>(r: { ok: true; state: T } | { ok: false }) => { if (!r.ok) throw new Error(JSON.stringify(r)); return r.state; };
+  const history = (...steps: string[]) => {
+    let snap = emptySimpleSnapshot();
+    for (const k of ["cpu", "ram", "ram2", "storage", "cooler", "motherboard"]) snap = { ...snap, history: [...snap.history, `part:${k}` as const] };
+    return steps.reduce((sn, step) => withSimpleStep(sn, step as SimpleStep), snap);
+  };
+  const board = () => simpleBuildFromSnapshot(history());
+
+  it("lists the case's covers separately, each out or in on its own", () => {
+    let s = board();
+    expect(slotCovers(s).map((c) => c.open)).toEqual([false, false]);
+    s = must(setSimpleMechanism(s, "slot-covers:2", "open"));
+    expect(slotCovers(s).map((c) => c.open)).toEqual([false, true]);
+    expect(caseCoversClosed(s)).toBe(true);
+    expect(setSimpleMechanism(s, "slot-covers:3", "open").ok).toBe(false);
+  });
+
+  it("offers the next cover, then the latch, one step each, and one screw at a time once seated", () => {
+    let s = board();
+    expect(nextHandStep(s, "gpu", null)).toEqual({ kind: "covers", id: "slot-covers:1" });
+    s = must(setSimpleMechanism(s, "slot-covers:1", "open"));
+    expect(nextHandStep(s, "gpu", null)).toEqual({ kind: "covers", id: "slot-covers:2" });
+    s = must(setSimpleMechanism(s, "slot-covers:2", "open"));
+    expect(nextHandStep(s, "gpu", null)).toEqual({ kind: "mechanism", desired: "open" });
+    s = must(setSimpleMechanism(s, "pcie-x16-1-latch", "open"));
+    s = must(lowerSimplePart(s, "gpu", aligned));
+    expect(nextHandStep(s, "gpu", null)).toEqual({ kind: "fasten" });
+    s = must(screwSimplePart(s, "gpu"));
+    expect(nextHandStep(s, "gpu", null)).toEqual({ kind: "fasten" });
+    s = must(screwSimplePart(s, "gpu"));
+    expect(nextHandStep(s, "gpu", null)).toBeNull();
+  });
+
+  it("reads an old raw build whose case only has the single slot-covers state: open covers stay open, and one can still go back", () => {
+    const raw = (s: ReturnType<typeof board>) => ({ ...s, parts: s.parts.map((p) => (p.instanceId === "case-1" ? { ...p, mechanisms: { ...p.mechanisms, "slot-covers": "open" as const } } : p)) });
+    let s = raw(board());
+    expect(slotCovers(s).map((c) => c.open)).toEqual([true, true]);
+    expect(caseCoversClosed(s)).toBe(false);
+    s = must(setSimpleMechanism(s, "pcie-x16-1-latch", "open"));
+    s = must(lowerSimplePart(s, "gpu", aligned));
+    // With the card in, its covers cannot go back (the engine reads the old state too).
+    expect(setSimpleMechanism(s, "slot-covers:1", "closed").ok).toBe(false);
+    let bare = raw(board());
+    bare = must(setSimpleMechanism(bare, "slot-covers:1", "closed"));
+    expect(slotCovers(bare).map((c) => c.open)).toEqual([false, true]);
+    expect(lowerSimplePart(must(setSimpleMechanism(bare, "pcie-x16-1-latch", "open")), "gpu", aligned)).toMatchObject({ ok: false, reason: "openFirst" });
+  });
+
+  it("the robot points at the actual cover, then the slot's latch, the slot while aligning, and the card for its screws", () => {
+    let s = board();
+    const point = () => guideFocus(s, { kind: "part", key: "gpu" }, false, false)?.targets[0];
+    expect(point()).toEqual({ kind: "solid", hostInstanceId: "case-1", solidId: "slot-covers", slice: { index: 0 } });
+    s = must(setSimpleMechanism(s, "slot-covers:1", "open"));
+    expect(point()).toEqual({ kind: "solid", hostInstanceId: "case-1", solidId: "slot-covers", slice: { index: 1 } });
+    s = must(setSimpleMechanism(s, "slot-covers:2", "open"));
+    expect(point()).toEqual({ kind: "solid", hostInstanceId: "motherboard-2", solidId: "pcie-x16-1-latch" });
+    s = must(setSimpleMechanism(s, "pcie-x16-1-latch", "open"));
+    expect(point()).toEqual({ kind: "mount", hostInstanceId: "motherboard-2", placeId: "pcie-x16-1" });
+    s = must(lowerSimplePart(s, "gpu", aligned));
+    expect(point()).toEqual({ kind: "part", instanceId: "gpu-7" });
+  });
+
+  it("refuses the card until every cover its bracket needs is out, and names none as done by itself", () => {
+    let s = board();
+    s = must(setSimpleMechanism(s, "pcie-x16-1-latch", "open"));
+    s = must(setSimpleMechanism(s, "slot-covers:1", "open"));
+    expect(lowerSimplePart(s, "gpu", aligned)).toMatchObject({ ok: false, reason: "openFirst" });
+    s = must(setSimpleMechanism(s, "slot-covers:2", "open"));
+    s = must(lowerSimplePart(s, "gpu", aligned));
+    // Neither cover can go back over the bracket.
+    expect(setSimpleMechanism(s, "slot-covers:1", "closed").ok).toBe(false);
+    expect(setSimpleMechanism(s, "slot-covers:2", "closed").ok).toBe(false);
+  });
+
+  it("tightens the bracket screws one by one and takes them out one by one", () => {
+    let s = board();
+    for (const m of ["pcie-x16-1-latch", "slot-covers:1", "slot-covers:2"]) s = must(setSimpleMechanism(s, m, "open"));
+    s = must(lowerSimplePart(s, "gpu", aligned));
+    s = must(screwSimplePart(s, "gpu"));
+    expect(simpleFastened(s, "gpu")).toBe(false);
+    expect(simplePartInstalled(s, "gpu")).toBe(false);
+    s = must(screwSimplePart(s, "gpu"));
+    expect(simpleFastened(s, "gpu") && simplePartInstalled(s, "gpu")).toBe(true);
+    expect(screwSimplePart(s, "gpu")).toMatchObject({ ok: false, reason: "alreadyIn" });
+    s = must(unscrewSimplePart(s, "gpu"));
+    expect(simpleFastened(s, "gpu")).toBe(false);
+    // One screw still holds the card: it cannot be lifted yet.
+    expect(liftSimplePart(s, "gpu")).toMatchObject({ ok: false, reason: "unscrewFirst" });
+    s = must(unscrewSimplePart(s, "gpu"));
+    expect(unscrewSimplePart(s, "gpu").ok).toBe(false);
+  });
+
+  it("replays one-cover, one-screw saves after a reload, and old whole-card saves still load", () => {
+    const steps = ["mech:slot-covers:1:open", "mech:slot-covers:2:open", "mech:pcie-x16-1-latch:open", "lower:gpu", "screw:gpu:0", "screw:gpu:1"];
+    const snap = history(...steps);
+    const restored = parseSimpleSnapshot(JSON.parse(JSON.stringify(snap)))!;
+    expect(restored.history).toEqual(snap.history);
+    const built = simpleBuildFromSnapshot(restored);
+    expect(simplePartInstalled(built, "gpu")).toBe(true);
+    expect(slotCovers(built).every((c) => c.open)).toBe(true);
+    // Undo takes back one screw, not both.
+    const undone = simpleBuildFromSnapshot(undoSimpleStep(restored)!);
+    expect(simplePartInstalled(undone, "gpu")).toBe(false);
+    expect(simpleFastened(undone, "gpu")).toBe(false);
+    expect(undone.parts.find((p) => p.instanceId === "gpu-7")?.attachments[0]?.fastenersSecured).toBe(1);
+    const legacy = simpleBuildFromSnapshot(history("mech:slot-covers:open", "mech:pcie-x16-1-latch:open", "lower:gpu", "fasten:gpu"));
+    expect(simplePartInstalled(legacy, "gpu")).toBe(true);
+    expect(slotCovers(legacy).every((c) => c.open)).toBe(true);
+  });
+});
+
 describe("hands-on M.2 drive (Q-Latch)", () => {
   const must = <T,>(r: { ok: true; state: T } | { ok: false }) => { if (!r.ok) throw new Error(JSON.stringify(r)); return r.state; };
-  it("needs the Q-Latch unlocked, the notch matched and the drive in front of the slot; it counts once the latch is locked", () => {
+  it("needs the heatsink off and the Q-Latch unlocked, the notch matched, the drive in front of the slot and tilted; it counts once latched and the heatsink is back", () => {
     let s = createSimpleBuild();
+    const angled = { tiltDeg: 25, slotId: "m2-1" };
     expect(simpleRetention(s, "storage")?.kind).toBe("m2_qlatch");
-    expect(lowerSimplePart(s, "storage", aligned)).toMatchObject({ ok: false, reason: "openFirst" });
+    // M.2_1 is under its heatsink (manual E21279 p. 2-7): nothing there can be reached yet.
+    expect(lowerSimplePart(s, "storage", { ...aligned, ...angled })).toMatchObject({ ok: false, reason: "cannotFit" });
+    s = must(setSimpleMechanism(must(setSimpleMechanism(s, "m2-hs-1:screws", "open")), "m2-hs-1", "open"));
+    expect(lowerSimplePart(s, "storage", { ...aligned, ...angled })).toMatchObject({ ok: false, reason: "openFirst" });
     s = must(setSimpleMechanism(s, "m2-1-qlatch", "open"));
-    expect(lowerSimplePart(s, "storage", { rotationDeg: 180, offsetMm: [0, 0] })).toMatchObject({ ok: false, reason: "turnPart" });
-    expect(lowerSimplePart(s, "storage", { rotationDeg: 0, offsetMm: [3, 0] })).toMatchObject({ ok: false, reason: "centrePart" });
-    s = must(lowerSimplePart(s, "storage", { rotationDeg: 0, offsetMm: [1, 0] }));
+    expect(lowerSimplePart(s, "storage", { rotationDeg: 180, offsetMm: [0, 0], ...angled })).toMatchObject({ ok: false, reason: "turnPart" });
+    expect(lowerSimplePart(s, "storage", { rotationDeg: 0, offsetMm: [3, 0], ...angled })).toMatchObject({ ok: false, reason: "centrePart" });
+    s = must(lowerSimplePart(s, "storage", { rotationDeg: 0, offsetMm: [1, 0], ...angled }));
     expect(simplePartInstalled(s, "storage")).toBe(false);
-    s = must(setSimpleMechanism(s, "m2-1-qlatch", "closed"));
+    s = must(setSimpleMechanism(must(reseatSimplePart(s, "storage")), "m2-1-qlatch", "closed"));
+    expect(simplePartInstalled(s, "storage")).toBe(false); // the heatsink is still off
+    for (const [id, st] of [["m2-hs-1:film", "open"], ["m2-hs-1", "closed"], ["m2-hs-1:screws", "closed"]] as const) s = must(setSimpleMechanism(s, id, st));
     expect(simplePartInstalled(s, "storage")).toBe(true);
+    s = must(setSimpleMechanism(must(setSimpleMechanism(s, "m2-hs-1:screws", "open")), "m2-hs-1", "open"));
     expect(liftSimplePart(s, "storage")).toMatchObject({ ok: false, reason: "openFirst" });
     s = must(setSimpleMechanism(s, "m2-1-qlatch", "open"));
     expect(simplePartInstalled(s, "storage")).toBe(false);
@@ -170,16 +292,22 @@ describe("hands-on preparation, placing and screws", () => {
     for (const k of ["cpu", "ram", "ram2", "storage"]) snap = { ...snap, history: [...snap.history, `part:${k}` as const] };
     return simpleBuildFromSnapshot(snap);
   };
-  it("a cooler needs the paste its catalog entry asks for; the film is refused when not recorded; screws go across the diagonal", () => {
+  it("a cooler needs the paste and the film removal its catalog entry asks for; screws go across the diagonal", () => {
     let s = withBoardReady();
+    // The Freezer 36 is held by its contact frame (ARCTIC's manual): the frame goes on before anything else.
+    expect(placeSimplePart(s, "cooler")).toMatchObject({ ok: false, reason: "mountingMissing" });
+    for (let step = nextCoolerStep(s, "cooler"); step && ["backplate", "lever", "plate", "ilm", "frame", "frameScrew"].includes(step.kind); step = nextCoolerStep(s, "cooler")) s = must(applyCoolerStep(s, "cooler", step));
     expect(placeSimplePart(s, "cooler")).toMatchObject({ ok: false, reason: "prepMissing" });
-    expect(prepSimplePart(s, "cooler", "film", "removed")).toMatchObject({ ok: false, reason: "prepWrong" });
+    s = must(prepSimplePart(s, "cooler", "film", "removed"));
+    expect(placeSimplePart(s, "cooler")).toMatchObject({ ok: false, reason: "prepMissing" }); // paste still missing
     s = must(prepSimplePart(s, "cooler", "paste", "applied"));
     expect(prepSimplePart(s, "cooler", "paste", "applied")).toMatchObject({ ok: false, reason: "prepWrong" });
     s = must(placeSimplePart(s, "cooler"));
     expect(simplePartInstalled(s, "cooler")).toBe(false);
-    for (let i = 0; i < 4; i++) s = must(screwSimplePart(s, "cooler"));
+    expect(screwSimplePart(s, "cooler")).toMatchObject({ ok: false }); // its two screws go in one at a time, not by count
+    for (let step = nextCoolerStep(s, "cooler"); step; step = nextCoolerStep(s, "cooler")) s = must(applyCoolerStep(s, "cooler", step));
     expect(simplePartInstalled(s, "cooler")).toBe(true);
+    // The corner order of the lab's generic fixing (a pure rule on the saved steps).
     const history = ["place:cooler", "screw:cooler:0"] as const;
     expect(simpleScrewOrder([...history], "cooler").next).toBe(2);
     expect(simpleScrewOrder([...history, "screw:cooler:2"], "cooler").next).toBeNull();
@@ -193,12 +321,13 @@ describe("hands-on preparation, placing and screws", () => {
     for (let i = 0; i < 9; i++) s = must(screwSimplePart(s, "motherboard"));
     expect(simplePartInstalled(s, "motherboard")).toBe(true);
   });
-  it("the PSU's fan faces down over the 4000D's filtered vent; the steps replay from a save", () => {
+  it("the PSU's fan direction is the learner's choice (either fits; the vent only makes down the advice); the steps replay from a save", () => {
     let snap = emptySimpleSnapshot();
     for (const k of ["cpu", "ram", "ram2", "storage", "cooler", "motherboard"]) snap = { ...snap, history: [...snap.history, `part:${k}` as const] };
     let s = simpleBuildFromSnapshot(snap);
-    s = must(prepSimplePart(s, "psu", "psu_fan", "up"));
-    expect(placeSimplePart(s, "psu")).toMatchObject({ ok: false, reason: "prepWrong" });
+    expect(placeSimplePart(s, "psu")).toMatchObject({ ok: false, reason: "prepMissing" });
+    expect(simpleOrientationAdvice(s, "psu")).toBe("psuDown");
+    expect(placeSimplePart(must(prepSimplePart(s, "psu", "psu_fan", "up")), "psu").ok).toBe(true);
     snap = withPrep(snap, "psu", "psu_fan", "down");
     snap = withPlace(snap, "psu");
     for (let i = 0; i < 4; i++) snap = withScrew(snap, "psu", i);

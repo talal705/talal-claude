@@ -13,7 +13,7 @@ export default function GlobalError({ error, retry }: { error: Error & { digest?
   return (
     <html lang="en" dir="ltr">
       <body>
-        <title>Your Tech Lab</title>
+        <title>Virtual Training Environment (VTE)</title>
         <main className="page">
           <div className="state-panel state-panel-block" role="alert">
             <h1 className="page-heading">Something went wrong</h1>

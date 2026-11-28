@@ -78,6 +78,11 @@ export interface PlacementInput {
   standsFirst?(part: InstalledPart): boolean;
   /** Width of one workbench row; the next part starts a new row in front of it. */
   benchRowMm?: number;
+  /**
+   * A part that goes in at an angle (an M.2 drive), by its host and place: while only inserted (not yet
+   * pressed flat) it stands up from its connector by this many degrees instead of backing off. 0: none.
+   */
+  placedTiltDeg?(hostCatalogId: string, mountPointId: string): number;
   /** How far behind the main row the aside row stands. */
   asideDepthMm?: number;
   /**
@@ -98,7 +103,7 @@ export interface PlacementInput {
  * have geometry; when that is missing (the host has no model yet) it is drawn beside its host's
  * box rather than left out. The result is deterministic for the same state.
  */
-export function placeParts({ state, geometry, fallbackSize, benchGapMm = 60, isAside, standsFirst, benchRowMm = 1400, asideDepthMm = 700, benchOrder, beside, besideGapMm = 30, slotsOut }: PlacementInput): Map<string, PlacedPart> {
+export function placeParts({ state, geometry, fallbackSize, benchGapMm = 60, isAside, standsFirst, benchRowMm = 1400, asideDepthMm = 700, benchOrder, beside, besideGapMm = 30, slotsOut, placedTiltDeg }: PlacementInput): Map<string, PlacedPart> {
   const placed = new Map<string, PlacedPart>();
   const byId = new Map(state.parts.map((part) => [part.instanceId, part]));
   const sizeOf = (part: InstalledPart): Vec3 => geometry.get(part.catalogId)?.bounds.size ?? fallbackSize(part);
@@ -188,8 +193,10 @@ export function placeParts({ state, geometry, fallbackSize, benchGapMm = 60, isA
       const mount = geometry.get(hostPart.catalogId)?.mounts[attachment.target.mountPointId];
       const attach = own?.attach[attachment.role];
       if (mount && attach) {
-        const backoff = scale(mount.insert, -mount.travelMm * SEATING_BACKOFF[attachment.seating]);
-        const mountFrame: Frame = { at: add(mount.at, backoff), quat: mount.quat };
+        const tilt = attachment.seating === "placed" ? (placedTiltDeg?.(hostPart.catalogId, attachment.target.mountPointId) ?? 0) : 0;
+        const backoff = tilt ? ([0, 0, 0] as Vec3) : scale(mount.insert, -mount.travelMm * SEATING_BACKOFF[attachment.seating]);
+        // In its connector at an angle: turned about the connector's edge, so the far end stands up.
+        const mountFrame: Frame = tilt ? compose({ at: add(mount.at, backoff), quat: mount.quat }, { at: [0, 0, 0], quat: [0, 0, Math.sin((tilt * Math.PI) / 360), Math.cos((tilt * Math.PI) / 360)] }) : { at: add(mount.at, backoff), quat: mount.quat };
         const frame = compose(compose(host.frame, mountFrame), inverse(attach));
         // Each separately mounted body follows its own host; the part's frame is the first one.
         if (grouped) groupFrames[attachment.role] = frame;

@@ -1,11 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import en from "../../messages/en/labs.json";
 import ar from "../../messages/ar/labs.json";
-import { buildContext, companionSay, intentOf, nextAction, topicOf, type CompanionEvent, type CompanionSay, type Selection } from "./companion";
+import { buildContext, companionSay, coolerDoneLine, coolerRemovalLine, coolerStepLine, heldLines, intentOf, m2StepLine, nextAction, pickupLine, topicOf, type CompanionEvent, type CompanionLine, type CompanionSay, type Selection } from "./companion";
 import {
   connectSimpleCable, createSimpleBuild, installSimplePart, SIMPLE_CABLES, simpleBuildFromSnapshot, startSimplePC, undoSimpleStep, withCable, withPart,
   emptySimpleSnapshot, type SimplePartKey,
+  activateSimpleModel, LEGACY_MODEL, lowerSimplePart, lowerSimpleRam, reseatSimplePart, setSimpleMechanism, simpleRamSlotOffsets, simpleRetention, type SimpleHeld,
 } from "./simple-model";
+import { planModel } from "./plan-model";
+import { applyCoolerStep, nextCoolerStep } from "./cooler-assembly";
+import type { PCBuildState } from "@ytl/contracts";
 
 type Tree = Record<string, unknown>;
 const lookup = (tree: Tree, path: string) => path.split(".").reduce<unknown>((node, key) => (node && typeof node === "object" ? (node as Tree)[key] : undefined), tree);
@@ -60,13 +64,16 @@ describe("the build companion", () => {
     expect(done.lines.map((l) => l.key)).toEqual(["complete.title", "complete.summary"]);
   });
 
-  it("says the second stick goes in B2 once A2 is taken, whichever stick came first", () => {
+  it("names no default slot for a module in hand, and counts the sticks that are in", () => {
     let state = createSimpleBuild();
     const first = installSimplePart(state, "ram2");
     if (!first.ok) throw new Error(first.reason);
     state = first.state;
     const say = companionSay({ type: "select", selection: { kind: "part", key: "ram" } }, state, false, { kind: "part", key: "ram" });
-    expect(say.lines[0].key).toBe("selected.ramSecond");
+    // The learner chooses the slot by where they hold the module: the line says how, not "A2"/"B2".
+    expect(say.lines[0].key).toBe("hands.ramPick");
+    const help = companionSay({ type: "ask", intent: "help" }, state, false, { kind: "part", key: "ram" });
+    expect(help.lines[0]).toEqual({ key: "help.ram", values: { rec: "DIMM_A2 + DIMM_B2" } });
     expect(companionSay({ type: "installed", key: "ram2" }, state, false, null).lines[0].key).toBe("installed.ramFirst");
     // The CPU still comes first; once it is in, the next step is the remaining stick.
     expect(companionSay({ type: "start" }, state, false, null).lines[1].key).toBe("next.cpu");
@@ -217,5 +224,226 @@ describe("the build companion", () => {
     expect(topicOf("why does the i9 need liquid cooling?")).toBe("liquidRule");
     expect(topicOf("وش فايدة المضخة")).toBe("aioPump");
     expect(topicOf("what is the radiator for")).toBe("aio");
+  });
+});
+
+describe("the welcome back after a reload", () => {
+  afterEach(() => activateSimpleModel(LEGACY_MODEL));
+  const must = <T,>(r: { ok: true; state: T } | { ok: false }) => { if (!r.ok) throw new Error(JSON.stringify(r)); return r.state; };
+  const keys = (say: CompanionSay) => say.lines.map((l) => l.key);
+  /** The bubble after a reload with this saved part in hand (null: nothing in hand). */
+  const resume = (state: PCBuildState, held: SimpleHeld | null) => {
+    const say = companionSay({ type: "resume", held }, state, false, held ? { kind: "part", key: held.key } : null);
+    expectSpoken(say);
+    expect(say.mood).toBe("wave");
+    return say;
+  };
+  const ram = (offsetMm: [number, number], rotationDeg = 0): SimpleHeld => ({ key: "ram", rotationDeg, offsetMm });
+
+  it("speaks about the module in hand from its saved pose: the slot it is over and what that slot needs next", () => {
+    let s = createSimpleBuild();
+    const b1 = simpleRamSlotOffsets(s).get("dimm-b1")!;
+    // Over no slot: how to bring it over one; no slot is named.
+    const away = resume(s, ram([6, -30], 180));
+    expect(keys(away)).toEqual(["welcomeBack", "hands.ramPick"]);
+    expect(away.point).toBe("scene");
+    // Over B1 with its clip closed: B1 by name, then open the clip.
+    const closed = resume(s, ram(b1, 180));
+    expect(closed.lines.slice(1)).toEqual([{ key: "resume.ramOver", values: { slot: "DIMM_B1" } }, { key: "hands.ramOpenFirst" }]);
+    s = must(setSimpleMechanism(s, "dimm-b1-latch", "open"));
+    expect(keys(resume(s, ram(b1, 180))).slice(2)).toEqual(["hands.ramTurn"]);
+    expect(keys(resume(s, ram([b1[0] + 2, b1[1]]))).slice(2)).toEqual(["hands.ramCentre"]);
+    // Lined up (within the same 1.5 mm the slot accepts): lower it into B1.
+    expect(resume(s, ram([b1[0] + 1, b1[1] - 0.5])).lines.slice(1)).toEqual([{ key: "resume.ramReady", values: { slot: "DIMM_B1" } }]);
+    // Over a slot another module is in: that slot by name, choose a free one.
+    s = must(lowerSimpleRam(s, "ram2", { rotationDeg: 0, offsetMm: b1 }));
+    expect(resume(s, ram(b1)).lines.slice(1)).toEqual([{ key: "hands.ramSlotTaken", values: { slot: "DIMM_B1" } }]);
+  });
+
+  it("names both clips on a board with a clip at each end", () => {
+    activateSimpleModel(planModel({ version: 1, purpose: "study", workload: "", parts: { case: "fractal-pop-mini-air-rgb-black-tg", motherboard: "asus-h81m-k", cpu: "intel-core-i5-4590", cooler: "arctic-freezer-7-x", psu: "corsair-rm650e-2025", gpu: null, ram: { id: "corsair-vengeance-lp-ddr3-1600-16gb-kit", modules: 2 }, storage: ["samsung-870-evo-1tb"], fans: [] } }));
+    let s = createSimpleBuild();
+    const a1 = simpleRamSlotOffsets(s).get("dimm-a1")!;
+    expect(resume(s, ram(a1)).lines.slice(1)).toEqual([{ key: "resume.ramOver", values: { slot: "DIMM_A1" } }, { key: "hands.ramOpenBoth" }]);
+    // One end open is not enough.
+    s = must(setSimpleMechanism(s, "dimm-a1-latch", "open"));
+    expect(keys(resume(s, ram(a1))).slice(2)).toEqual(["hands.ramOpenBoth"]);
+    s = must(setSimpleMechanism(s, "dimm-a1-latch:near", "open"));
+    expect(keys(resume(s, ram(a1)))).toEqual(["welcomeBack", "resume.ramReady"]);
+  });
+
+  it("a module lowered but not pressed home: press it home in its slot, not the build's next step", () => {
+    let s = createSimpleBuild();
+    const b1 = simpleRamSlotOffsets(s).get("dimm-b1")!;
+    s = must(setSimpleMechanism(s, "dimm-b1-latch", "open"));
+    s = must(lowerSimpleRam(s, "ram", { rotationDeg: 0, offsetMm: b1 }));
+    expect(resume(s, null).lines.slice(1)).toEqual([{ key: "hands.ramResting", values: { slot: "DIMM_B1" } }]);
+    // Pressed home: installed; the next step comes from the build (the CPU is still out).
+    s = must(reseatSimplePart(s, "ram"));
+    expect(keys(resume(s, null))).toEqual(["welcomeBack", "next.cpu"]);
+  });
+
+  it("nothing in hand: the next step from the build's progress", () => {
+    let s = createSimpleBuild();
+    expect(keys(resume(s, null))).toEqual(["welcomeBack", "next.cpu"]);
+    s = must(installSimplePart(s, "cpu"));
+    expect(keys(resume(s, null))).toEqual(["welcomeBack", "next.ram"]);
+    s = must(installSimplePart(s, "ram"));
+    expect(keys(resume(s, null))).toEqual(["welcomeBack", "next.ramSecond"]);
+  });
+
+  it("a CPU in hand gets the same first step it got when it was picked up", () => {
+    let s = createSimpleBuild();
+    const cpu: SimpleHeld = { key: "cpu", rotationDeg: 90, offsetMm: [-32, -18] };
+    expect(pickupLine(s, "cpu")).toEqual({ key: "hands.cpuOpenFirst" });
+    expect(resume(s, cpu).lines.slice(1)).toEqual([pickupLine(s, "cpu")]);
+    const lever = simpleRetention(s, "cpu")!.leverId!;
+    s = must(setSimpleMechanism(s, lever, "open"));
+    expect(resume(s, cpu).lines.slice(1)).toEqual([{ key: "hands.cpuPlateNext" }]);
+    s = must(setSimpleMechanism(s, simpleRetention(s, "cpu")!.id, "open"));
+    expect(resume(s, cpu).lines.slice(1)).toEqual([{ key: "hands.cpuOpen" }]);
+  });
+
+  it("a saved hand that no longer matches the build (part already in) is not spoken about", () => {
+    const s = must(installSimplePart(createSimpleBuild(), "cpu"));
+    expect(keys(resume(s, { key: "cpu", rotationDeg: 0, offsetMm: [0, 0] }))).toEqual(["welcomeBack", "next.ram"]);
+  });
+});
+
+describe("what the robot says about the part in hand after a click aims it", () => {
+  afterEach(() => activateSimpleModel(LEGACY_MODEL));
+  const must = <T,>(r: { ok: true; state: T } | { ok: false }) => { if (!r.ok) throw new Error(JSON.stringify(r)); return r.state; };
+  it("a module over a slot: that slot by name and what it needs; the same words as after a reload", () => {
+    const s = createSimpleBuild();
+    const held: SimpleHeld = { key: "ram", rotationDeg: 180, offsetMm: simpleRamSlotOffsets(s).get("dimm-b2")! };
+    expect(heldLines(s, held)).toEqual([{ key: "resume.ramOver", values: { slot: "DIMM_B2" } }, { key: "hands.ramOpenFirst" }]);
+  });
+  it("a CPU over its socket: open the socket first, then turn it if needed, else it is ready to lower", () => {
+    let s = createSimpleBuild();
+    const over: SimpleHeld = { key: "cpu", rotationDeg: 90, offsetMm: [0, 0] };
+    expect(heldLines(s, over)).toEqual([{ key: "hands.cpuOpenFirst" }]);
+    s = must(setSimpleMechanism(s, simpleRetention(s, "cpu")!.leverId!, "open"));
+    s = must(setSimpleMechanism(s, simpleRetention(s, "cpu")!.id, "open"));
+    expect(heldLines(s, over)).toEqual([{ key: "hands.cpuTurn" }]);
+    expect(heldLines(s, { ...over, rotationDeg: 0 })).toEqual([{ key: "aim.ready" }]);
+    for (const messages of [en, ar] as Tree[]) expect(lookup(messages, "simplePc.companion.aim.ready")).toBeTypeOf("string");
+  });
+});
+
+describe("the robot and an M.2 drive", () => {
+  afterEach(() => activateSimpleModel(LEGACY_MODEL));
+  const must = <T,>(r: { ok: true; state: T } | { ok: false }) => { if (!r.ok) throw new Error(JSON.stringify(r)); return r.state; };
+  const mech = (s: PCBuildState, id: string, st: "open" | "closed") => must(setSimpleMechanism(s, id, st));
+  const say = (event: CompanionEvent, s: PCBuildState, held: SimpleHeld | null = null) => {
+    const out = companionSay(event, s, false, held ? { kind: "part", key: held.key } : null);
+    expectSpoken(out);
+    return out.lines;
+  };
+  const hand = (extra: Partial<SimpleHeld> = {}): SimpleHeld => ({ key: "storage", rotationDeg: 0, offsetMm: [0, 0], ...extra });
+
+  it("picked up: the learner chooses the slot (none is named)", () => {
+    expect(pickupLine(createSimpleBuild(), "storage")).toEqual({ key: "hands.m2Pick" });
+  });
+
+  it("each next step is one short line that names the slot the drive is over", () => {
+    let s = createSimpleBuild();
+    expect(m2StepLine(s, "storage", hand({ slotId: "m2-1" }))).toEqual({ key: "hands.m2HsScrewsFirst", values: { slot: "M.2_1" } });
+    s = mech(s, "m2-hs-1:screws", "open");
+    expect(m2StepLine(s, "storage", hand({ slotId: "m2-1" }))).toEqual({ key: "hands.m2HsLiftNext" });
+    s = mech(mech(s, "m2-hs-1", "open"), "m2-1-qlatch", "open");
+    expect(m2StepLine(s, "storage", hand({ slotId: "m2-1" }))).toEqual({ key: "hands.m2TiltFirst" });
+    expect(m2StepLine(s, "storage", hand({ slotId: "m2-1", tiltDeg: 25 }))).toEqual({ key: "hands.m2Ready", values: { slot: "M.2_1" } });
+    s = must(lowerSimplePart(s, "storage", hand({ slotId: "m2-1", tiltDeg: 25 })));
+    expect(m2StepLine(s, "storage", null)).toEqual({ key: "hands.m2PressFlat", values: { slot: "M.2_1" } });
+    s = must(reseatSimplePart(s, "storage"));
+    expect(m2StepLine(s, "storage", null)).toEqual({ key: "hands.m2LatchNow" });
+    s = mech(s, "m2-1-qlatch", "closed");
+    expect(m2StepLine(s, "storage", null)).toEqual({ key: "hands.m2FilmNext" });
+    s = mech(mech(s, "m2-hs-1:film", "open"), "m2-hs-1", "closed");
+    expect(m2StepLine(s, "storage", null)).toEqual({ key: "hands.m2TightenNext" });
+    s = mech(s, "m2-hs-1:screws", "closed");
+    expect(m2StepLine(s, "storage", null)).toBeNull();
+  });
+
+  it("welcome back with a drive in hand over a slot, or resting in one, or held but its heatsink still off", () => {
+    let s = mech(mech(mech(createSimpleBuild(), "m2-hs-1:screws", "open"), "m2-hs-1", "open"), "m2-1-qlatch", "open");
+    expect(say({ type: "resume", held: hand({ slotId: "m2-1" }) }, s, hand({ slotId: "m2-1" }))).toEqual([
+      { key: "welcomeBack" }, { key: "resume.m2Over", values: { slot: "M.2_1" } }, { key: "hands.m2TiltFirst" },
+    ]);
+    expect(say({ type: "resume", held: hand() }, s, hand())).toEqual([{ key: "welcomeBack" }, { key: "hands.m2Pick" }]);
+    s = must(lowerSimplePart(s, "storage", hand({ slotId: "m2-1", tiltDeg: 25 })));
+    expect(say({ type: "resume", held: null }, s)).toEqual([{ key: "welcomeBack" }, { key: "hands.m2PressFlat", values: { slot: "M.2_1" } }]);
+    s = mech(must(reseatSimplePart(s, "storage")), "m2-1-qlatch", "closed");
+    expect(say({ type: "resume", held: null }, s)).toEqual([{ key: "welcomeBack" }, { key: "hands.m2FilmNext" }]);
+  });
+
+  it("on the PRIME B760M-A WIFI it asks for the screw stand and the screw", () => {
+    activateSimpleModel(planModel({ version: 1, purpose: "study", workload: "", parts: { case: "corsair-4000d-airflow-black", motherboard: "asus-prime-b760m-a-wifi", cpu: "intel-core-i5-14600k", cooler: "arctic-freezer-36", psu: "corsair-rm650e-2025", gpu: null, ram: { id: "corsair-vengeance-rgb-ddr5-6000-32gb-kit", modules: 2 }, storage: ["samsung-990-pro-1tb"], fans: [] } }));
+    let s = mech(mech(createSimpleBuild(), "m2-hs-1:screws", "open"), "m2-hs-1", "open");
+    expect(m2StepLine(s, "storage", hand({ slotId: "m2-1" }))).toEqual({ key: "hands.m2StandFirst" });
+    s = must(lowerSimplePart(mech(s, "m2-1-screw:stand", "closed"), "storage", hand({ slotId: "m2-1", tiltDeg: 25 })));
+    s = must(reseatSimplePart(s, "storage"));
+    expect(m2StepLine(s, "storage", null)).toEqual({ key: "hands.m2ScrewNow" });
+  });
+});
+
+describe("the robot and a cooler", () => {
+  afterEach(() => activateSimpleModel(LEGACY_MODEL));
+  const must = <T,>(r: { ok: true; state: T } | { ok: false }) => { if (!r.ok) throw new Error(JSON.stringify(r)); return r.state; };
+  const spoken = (line: CompanionLine) => expectSpoken({ lines: [line], mood: "point" });
+
+  it("every step of a cooler gets one line, in English and Arabic, and none shows a raw key", () => {
+    for (const key of ["cooler", "aio"] as const) {
+      let s = must(installSimplePart(createSimpleBuild(), "cpu"));
+      const seen = new Set<string>();
+      for (let i = 0; i < 60; i += 1) {
+        const step = nextCoolerStep(s, key);
+        const line = coolerStepLine(s, key);
+        if (!step) { expect(line).toBeNull(); break; }
+        expect(line, JSON.stringify(step)).not.toBeNull();
+        spoken(line!);
+        seen.add(line!.key);
+        if (step.kind === "cpuFirst" || step.kind === "boardFirst") break;
+        s = must(applyCoolerStep(s, key, step));
+      }
+      expect([...seen]).toEqual(expect.arrayContaining(["cooler.backplatePadding", "cooler.ilm", "cooler.frame", "cooler.frameScrewEngage", "cooler.frameScrewTight", "cooler.paste", "cooler.film", "cooler.screwEngage", "cooler.screwTight"]));
+    }
+  });
+
+  it("the line names the screw: frame screw 3 of 4, then the next one across", () => {
+    let s = must(installSimplePart(createSimpleBuild(), "cpu"));
+    for (let i = 0; i < 7; i += 1) s = must(applyCoolerStep(s, "cooler", nextCoolerStep(s, "cooler")));
+    expect(nextCoolerStep(s, "cooler")).toMatchObject({ kind: "frameScrew", to: "engaged", index: 2 });
+    expect(coolerStepLine(s, "cooler")).toEqual({ key: "cooler.frameScrewEngage", values: { n: 3, total: 4 } });
+  });
+
+  it("welcome back in the middle of the frame, with the CPU waiting: the next screw, not 'start with the processor'", () => {
+    let s = must(installSimplePart(createSimpleBuild(), "cpu"));
+    for (let i = 0; i < 7; i += 1) s = must(applyCoolerStep(s, "cooler", nextCoolerStep(s, "cooler")));
+    const say = companionSay({ type: "resume", held: null }, s, false, null);
+    expectSpoken(say);
+    expect(say.lines).toEqual([{ key: "welcomeBack" }, { key: "cooler.frameScrewEngage", values: { n: 3, total: 4 } }]);
+    expect(say.point).toBe("scene");
+  });
+
+  it("removal lines: the radiator first, a loosened screw, then the body", () => {
+    expect(coolerRemovalLine({ kind: "radiatorUnscrew", count: 7 }, "aio")).toEqual({ key: "cooler.unscrewRadiator", values: { n: 8, total: 8 } });
+    expect(coolerRemovalLine({ kind: "liftRadiator" }, "aio")).toEqual({ key: "cooler.liftRadiator" });
+    expect(coolerRemovalLine({ kind: "screw", index: 1, to: "loosened", value: "21" }, "cooler")).toEqual({ key: "cooler.looseScrew", values: { n: 2 } });
+    expect(coolerRemovalLine({ kind: "liftBody" }, "cooler")).toEqual({ key: "cooler.liftBody" });
+    for (const line of [coolerRemovalLine({ kind: "liftBody" }, "cooler")!, coolerRemovalLine({ kind: "screw", index: 0, to: "out", value: "01" }, "cooler")!]) spoken(line);
+  });
+
+  it("selecting a cooler names its next documented step, not 'tap its place'", () => {
+    const s = must(installSimplePart(createSimpleBuild(), "cpu"));
+    const say = companionSay({ type: "select", selection: { kind: "part", key: "cooler" } }, s, false, null);
+    expect(say.lines).toEqual([coolerStepLine(s, "cooler")]);
+    expect(say.lines[0]!.key).toBe("cooler.backplatePadding");
+  });
+
+  it("a finished cooler says it is mounted and that wiring comes later", () => {
+    const s = must(installSimplePart(must(installSimplePart(createSimpleBuild(), "cpu")), "cooler"));
+    expect(coolerDoneLine(s, "cooler")).toEqual({ key: "cooler.notWired" });
+    spoken(coolerDoneLine(s, "cooler")!);
   });
 });

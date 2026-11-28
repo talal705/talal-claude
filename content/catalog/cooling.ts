@@ -1,5 +1,5 @@
 import type { CoolingEntry } from "@ytl/contracts";
-import { FASTENER_NOTE, L, NO_ASSET, argbLead, cable, end, fanLead, source, zone } from "./helpers";
+import { FASTENER_NOTE, L, NO_ASSET, argbLead, cable, contactFrameMounting, end, fanLead, source, vrmModule, zone } from "./helpers";
 
 const CAPACITY_NOTE =
   "coolingCapacityW is null: the fetched page publishes no wattage rating, and no figure is invented for a real product. The load stage therefore checks that this cooler is fitted, fastened and running, but does not judge whether it is adequate for a given CPU.";
@@ -28,13 +28,19 @@ export const cooling: CoolingEntry[] = [
     sources: [
       source("ARCTIC", "Freezer 36 (Black) — General Specifications", "https://www.arctic.de/en/Freezer-36-Black/ACFRE00123A"),
       source("ARCTIC", "Freezer 36 spec sheet (PDF, SKU ACFRE00123A listed)", "https://www.arctic.de/media/6b/50/57/1709195123/Spec_Sheet_Freezer_36_EN.pdf", "2026-10-11"),
+      source("ARCTIC", "Freezer 36 user manual — Intel LGA1700: motherboard preparation (backplate, ILM removal, CPU Contact Frame), installation (thermal compound, protective film, airflow direction, fan headers), packaging content", "https://support.arctic.de/freezer-36", "2026-11-22"),
     ],
-    verification: "verified",
-    unverifiedFields: [],
+    verification: "partially_verified",
+    unverifiedFields: [
+      "heatsink screw count and tightening order (the manual's text does not state them; its base drawing shows two captive screws on the mounting bar)",
+      "RAM clearance beside the fans (ARCTIC publishes no figure)",
+      "AMD AM4 / AM5 mounting (clips, spacers and screws are in the kit, but no offered board uses them)",
+    ],
     teachingNotes: [
       FASTENER_NOTE,
       CAPACITY_NOTE,
       "The two fans share one lead ('4-Pin PWM-Connector + 4-Pin Plug' on the page); it is modelled as a single 4-pin plug.",
+      "On Intel LGA1700 the manual replaces the socket's ILM with the cooler's CPU Contact Frame: the board's own backplate stays, the ILM is kept aside (it must be refitted before the board goes back for service or warranty), and the frame's four screws go in a couple of turns each and are then tightened in a cross pattern.",
     ],
     dimensions: { lengthMm: 104, widthMm: 126, heightMm: 159 },
     formFactor: "Tower air cooler",
@@ -63,7 +69,9 @@ export const cooling: CoolingEntry[] = [
       fanCount: 2,
       fanSizeMm: 120,
       coolingCapacityW: null,
-      paste: { supplied: "tube", film: null, source: "Retailer listings (Galaxus, Digitec, ChannelOnline 2026): MX-6 included as a tube, not pre-applied. Whether the plate has a protective film is not recorded." },
+      paste: { supplied: "tube", film: true, source: "ARCTIC Freezer 36 manual (support.arctic.de/freezer-36), Intel installation: the packaging image lists a 0.8 g thermal-compound syringe (applied as an X on the CPU) and the heatsink-base drawing shows a blue protective film being peeled. " + "ARCTIC's own documents name the supplied compound differently (the manual's packaging image and the spec sheet disagree), so the lab names none." },
+      mounting: [contactFrameMounting("https://support.arctic.de/freezer-36", false)],
+      connections: [{ cableId: "fan", requirement: "required", note: L("The two fans share one 4-pin PWM lead: it goes to CPU_FAN, or with its splitter to CPU_FAN and CPU_OPT.", "المروحتين يشتركون في سلك PWM من 4 سنون: يروح لـ CPU_FAN، أو مع المقسّم لـ CPU_FAN و CPU_OPT.") }],
     },
   },
   {
@@ -80,13 +88,18 @@ export const cooling: CoolingEntry[] = [
     sources: [
       source("ARCTIC", "Liquid Freezer III 240 A-RGB (Black) — General Specifications", "https://www.arctic.de/en/Liquid-Freezer-III-240-A-RGB/ACFRE00142A"),
       source("ARCTIC", "Liquid Freezer III 240 A-RGB spec sheet (PDF)", "https://www.arctic.de/media/8e/66/69/1708429821/Spec_Sheet_Liquid_Freezer_III_240_A-RGB_EN.pdf", "2026-10-11"),
+      source("ARCTIC", "Liquid Freezer III 240 A-RGB user manual — Intel: contact frame installation, pump block, radiator, PWM cables, packaging content", "https://support.arctic.de/liquid-freezer-III-240-A-RGB", "2026-11-22"),
     ],
-    verification: "verified",
-    unverifiedFields: [],
+    verification: "partially_verified",
+    unverifiedFields: [
+      "radiator screw and washer assignment (the kit lists two bags of 8 screws and 8 washers; the manual does not say which goes where)",
+      "AMD AM4 / AM5 mounting (no offered board uses it)",
+    ],
     teachingNotes: [
       FASTENER_NOTE,
       CAPACITY_NOTE,
       "The page lists an 'All-In-One Connector: 4-Pin PWM' (and an alternative 3x 4-pin splitter). Only the single all-in-one lead is modelled; it may go on a CPU fan, pump or chassis fan header.",
+      "The manual: the pump block is fixed with two screws ('tighten gently until both engage with the threads, then fully tighten them alternately'); mount the radiator with its top above the pump (a radiator below the pump risks bubbling noise); connect the PWM cable before mounting the cooler; the pump's reported speed is 50 % higher than its real speed. The kit adds an A-RGB VRM fan module that is fitted to the block.",
     ],
     dimensions: { lengthMm: 277, widthMm: 120, heightMm: 38 },
     formFactor: "240 mm AIO",
@@ -123,7 +136,12 @@ export const cooling: CoolingEntry[] = [
       fanCount: 2,
       fanSizeMm: 120,
       coolingCapacityW: null,
-      paste: { supplied: "tube", film: null, source: "Retailer answer for the Liquid Freezer III family (Digitec 2026): MX-6 supplied in the box. Not confirmed for this exact size; film not recorded." },
+      paste: { supplied: "tube", film: true, source: "ARCTIC Liquid Freezer III 240 A-RGB manual (support.arctic.de), Intel installation: the packaging image lists a 0.8 g thermal-compound syringe (applied as an X on the CPU) and the pump-block drawing shows a blue protective film on its plate. " + "ARCTIC's own documents name the supplied compound differently (the manual's packaging image and the spec sheet disagree), so the lab names none." },
+      mounting: [contactFrameMounting("https://support.arctic.de/liquid-freezer-III-240-A-RGB", true, [vrmModule()])],
+      connections: [
+        { cableId: "pump-fan", requirement: "required", note: L("One 4-pin PWM lead runs the pump, the VRM fan and the radiator fans. ARCTIC says to connect the PWM cable before mounting the cooler; the lab leaves the wiring to its own stage.", "سلك PWM واحد من 4 سنون يشغّل المضخة ومروحة VRM ومراوح الرادياتير. ARCTIC تقول وصّل سلك PWM قبل ما تركّب المبرّد؛ المختبر يخلّي التوصيل لمرحلته.") },
+        { cableId: "argb", requirement: "optional", note: L("Lighting only: the cooler cools without it.", "للإضاءة بس: المبرّد يبرّد بدونه.") },
+      ],
     },
   },
   {
@@ -176,14 +194,20 @@ export const cooling: CoolingEntry[] = [
       source("ARCTIC", "Liquid Freezer III 280 — product page", "https://www.arctic.de/en/Liquid-Freezer-III-280", "2026-11-16"),
       source("ARCTIC", "Liquid Freezer III 280 spec sheet (PDF): radiator 317 x 138 x 38 mm; pump, VRM fan and radiator fan cables", "https://cdn.iceshop.nl/objects/mmo_118603186_1708958330_6736_17913.pdf", "2026-11-16"),
       source("Overclockers UK", "ARCTIC Liquid Freezer III 280 (ACFRE00135A): 2 x 140 mm fans, tube length 450 mm", "https://overclockers.co.uk/arctic-liquid-freezer-iii-high-performance-cpu-water-cooler-280mm-coo-arc-01988.html", "2026-11-16"),
+      source("ARCTIC", "Liquid Freezer III 280 user manual — Intel: contact frame installation, pump block, radiator position, PWM cables, packaging content", "https://support.arctic.de/liquid-freezer-III-280", "2026-11-22"),
     ],
     verification: "partially_verified",
-    unverifiedFields: ["dimensions of the pump block (not published; drawn to a teaching size)"],
+    unverifiedFields: [
+      "dimensions of the pump block (not published; drawn to a teaching size)",
+      "radiator screw and washer assignment (the kit lists two bags of 8 screws and 8 washers; the manual does not say which goes where)",
+      "AMD AM4 / AM5 mounting (no offered board uses it)",
+    ],
     teachingNotes: [
       FASTENER_NOTE,
       CAPACITY_NOTE,
       "ARCTIC ships a single all-in-one 4-pin plug and a split option with separate pump, VRM fan and radiator fan cables. The guided lab models the split option as two leads: the pump lead (to AIO_PUMP) and the radiator fan lead (to CPU_FAN). The small VRM fan on the block is not modelled.",
       "On the guided build page, the Core i9-14900K is set to need this liquid cooler. That is an educational rule of the simulation for that one processor, not a statement that every processor of its class needs liquid cooling.",
+      "The manual: the pump block is fixed with two screws ('tighten gently until both engage with the threads, then fully tighten them alternately'); mount the radiator with its top above the pump (a radiator below the pump risks bubbling noise); connect the PWM cable before mounting the cooler. The kit adds a VRM fan module that is fitted to the block.",
     ],
     dimensions: { lengthMm: 317, widthMm: 138, heightMm: 38 },
     formFactor: "280 mm AIO",
@@ -220,7 +244,12 @@ export const cooling: CoolingEntry[] = [
       fanCount: 2,
       fanSizeMm: 140,
       coolingCapacityW: null,
-      paste: { supplied: "tube", film: null, source: "Retailer answer for the Liquid Freezer III family (Digitec 2026): MX-6 supplied in the box. Not confirmed for this exact size; film not recorded." },
+      paste: { supplied: "tube", film: true, source: "ARCTIC Liquid Freezer III 280 manual (support.arctic.de), Intel installation: the packaging image lists a 0.8 g thermal-compound syringe (applied as an X on the CPU) and the pump-block drawing shows a blue protective film on its plate. " + "ARCTIC's own documents name the supplied compound differently (the manual's packaging image and the spec sheet disagree), so the lab names none." },
+      mounting: [contactFrameMounting("https://support.arctic.de/liquid-freezer-III-280", true, [vrmModule()])],
+      connections: [
+        { cableId: "pump", requirement: "required", note: L("The pump lead goes to AIO_PUMP, or to the header the board's manual names for a pump. ARCTIC says to connect the PWM cable before mounting the cooler; the lab leaves the wiring to its own stage.", "سلك المضخة يروح لـ AIO_PUMP، أو للمدخل اللي يذكره دليل اللوحة للمضخة. ARCTIC تقول وصّل سلك PWM قبل ما تركّب المبرّد؛ المختبر يخلّي التوصيل لمرحلته.") },
+        { cableId: "fan", requirement: "required", note: L("The radiator fan lead goes to CPU_FAN.", "سلك مراوح الرادياتير يروح لـ CPU_FAN.") },
+      ],
     },
   },
 ];

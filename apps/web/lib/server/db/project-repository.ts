@@ -2,7 +2,6 @@
 // A repository is bound to one owner and every statement filters on that owner, so one account
 // cannot read, change or snapshot another account's project. Server-only.
 import {
-  ProjectStoreError,
   type CreateProjectInput,
   type LabType,
   type ProjectListResult,
@@ -20,7 +19,11 @@ import {
   checkLabFilter,
   checkSnapshotLabel,
   checkUpdateInput,
+  conflict,
+  invalid,
   isUuid,
+  notFound,
+  toStoreError,
 } from "../../storage/validation";
 import type { Db } from "./client";
 import type { ProjectRow, ProjectSnapshotRow } from "./schema";
@@ -68,38 +71,16 @@ const SUMMARY_COLUMNS = [
 
 const SNAPSHOT_SUMMARY_COLUMNS = ["id", "project_id", "revision", "label", "data_version", "created_at"] as const;
 
-function notFound(what: string, id: string): ProjectStoreError {
-  // Also the answer for another owner's project: its existence is not revealed.
-  return new ProjectStoreError("not_found", `${what} ${id} was not found`);
-}
-
-function conflict(expected: number, actual: number): ProjectStoreError {
-  return new ProjectStoreError(
-    "revision_conflict",
-    `expected revision ${expected} but the project is at revision ${actual}; nothing was written`,
-  );
-}
-
-/** Maps database failures onto the contract's error codes. */
-function toStoreError(error: unknown): ProjectStoreError {
-  if (error instanceof ProjectStoreError) return error;
-  const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
-  const message = error instanceof Error ? error.message : String(error);
-  // Class 22 (data exception, e.g. \u0000 inside jsonb) and class 23 (constraint violation).
-  if (/^2[23]/.test(code)) return new ProjectStoreError("invalid_input", message);
-  return new ProjectStoreError("unavailable", `The project database is unavailable (${message})`);
-}
-
 async function guarded<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (error) {
-    throw toStoreError(error);
+    throw toStoreError(error, "project");
   }
 }
 
 export function createProjectRepository(db: Db, ownerId: string): ProjectStore {
-  if (!isUuid(ownerId)) throw new ProjectStoreError("invalid_input", "ownerId must be a UUID");
+  if (!isUuid(ownerId)) invalid("ownerId must be a UUID");
 
   /** Current revision of the owner's project, or not_found. */
   async function currentRevision(projectId: string): Promise<number> {

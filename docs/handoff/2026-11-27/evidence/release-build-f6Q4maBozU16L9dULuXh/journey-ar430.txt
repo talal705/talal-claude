@@ -1,0 +1,118 @@
+PASS study: a suggested build is available
+PASS creator: a suggested build is available
+PASS gaming: a suggested build is available
+PASS DDR4 on the DDR5 board: the robot's warning names both generations
+NOTE incompatibility: هذي الرام DDR4، ولوحتك تدعم DDR5؛ الشق مختلف وما تركب فيها. اختَر رام DDR5.
+PASS removing one duplicate storage copy preserves the other and M.2
+PASS the catalog's Remove from my build button removes its selected drive
+PASS a suggested case fan can be removed before assembly
+PASS adding a case fan selects exactly one copy
+PASS all planner choices survive reload
+PASS assembly begins with no learner-installed CPU, board or GPU
+STEP cpu: حرّر الذراع وارفعه -> mech:cpu-socket-plate:lever:open
+STEP cpu: افتح الغطا -> mech:cpu-socket-plate:open
+STEP cpu: جيبها فوق مكانها -> mech:cpu-socket-plate:open
+STEP cpu: نزّله بشكل مستقيم -> mech:cpu-socket-plate:open
+STEP cpu: نزّله بشكل مستقيم -> mech:cpu-socket-plate:open
+STEP cpu: نزّله بشكل مستقيم -> lower:cpu:0:0:0
+STEP cpu: سكّر الغطا -> mech:cpu-socket-plate:closed
+STEP cpu: نزّل الذراع وثبّته تحت مشبكه -> mech:cpu-socket-plate:lever:closed
+PASS cpu: fitted through individual clicks
+PASS cpu: camera remains unchanged
+STEP ram: افتح مشبك فتحة الرام DIMM_A2 -> mech:dimm-a2-latch:open
+STEP ram: نزّلها في الفتحة -> mech:dimm-a2-latch:open
+STEP ram: نزّلها في الفتحة -> lower:ram:0:0:0
+STEP ram: اضغطها لين تطق -> seat:ram
+PASS ram: fitted through individual clicks
+PASS ram: camera remains unchanged
+STEP ram2: افتح مشبك فتحة الرام DIMM_B2 -> mech:dimm-b2-latch:open
+STEP ram2: نزّلها في الفتحة -> mech:dimm-b2-latch:open
+STEP ram2: نزّلها في الفتحة -> lower:ram2:0:0:19
+STEP ram2: اضغطها لين تطق -> seat:ram2
+PASS ram2: fitted through individual clicks
+PASS ram2: camera remains unchanged
+STEP storage: فك براغي مشتّت M.2 -> mech:m2-hs-1:screws:open
+STEP storage: شيل المشتّت -> mech:m2-hs-1:open
+STEP storage: لف مشبك Q-Latch لوضع الفتح -> mech:m2-1-qlatch:open
+STEP storage: ميّل الدسك لفوق تقريبًا 25° -> mech:m2-1-qlatch:open
+STEP storage: دخّل الدسك في الفتحة بزاوية مائلة -> lower:storage:0:0:0:t25:sm2-1
+STEP storage: اضغطها لين تطق -> seat:storage
+STEP storage: نزّل الدسك مسطّح ولف مشبك Q-Latch للقفل -> mech:m2-1-qlatch:closed
+STEP storage: شيل الغلاف عن الوسادة الحرارية للمشتّت -> mech:m2-hs-1:film:open
+STEP storage: رجّع المشتّت مكانه -> mech:m2-hs-1:closed
+STEP storage: اربط براغي المشتّت -> mech:m2-hs-1:screws:closed
+PASS storage: fitted through individual clicks
+PASS storage: camera remains unchanged
+STEP cooler: ارفع ذراع المقبس لأعلى. -> mech:cpu-socket-plate:lever:open
+STEP cooler: افتح صفيحة تثبيت المعالج. -> mech:cpu-socket-plate:open
+STEP cooler: انزع إطار المقبس الأصلي: إطار التلامس الخاص بالمبرّد يحلّ محلّه. -> hw:motherboard:ilm:removed
+STEP cooler: ضع إطار التلامس فوق المعالج. -> hw:motherboard:frame:placed
+STEP cooler: ابدأ لولب الإطار 1 من 4 باليد. لا تشدّه بعد. -> hw:motherboard:frame_screws:1000
+STEP cooler: ابدأ لولب الإطار 2 من 4 باليد. لا تشدّه بعد. -> hw:motherboard:frame_screws:1100
+STEP cooler: ابدأ لولب الإطار 3 من 4 باليد. لا تشدّه بعد. -> hw:motherboard:frame_screws:1110
+STEP cooler: ابدأ لولب الإطار 4 من 4 باليد. لا تشدّه بعد. -> hw:motherboard:frame_screws:1111
+STEP cooler: شدّ لولب الإطار 1 من 4، وتنقّل بالتبادل عبر الإطار. -> hw:motherboard:frame_screws:2111
+STEP cooler: شدّ لولب الإطار 3 من 4، وتنقّل بالتبادل عبر الإطار. -> hw:motherboard:frame_screws:2121
+STEP cooler: شدّ لولب الإطار 2 من 4، وتنقّل بالتبادل عبر الإطار. -> hw:motherboard:frame_screws:2221
+STEP cooler: شدّ لولب الإطار 4 من 4، وتنقّل بالتبادل عبر الإطار. -> hw:motherboard:frame_screws:2222
+STEP cooler: ضع المعجون الحراري على المعالج. -> prep:cooler:paste:applied
+STEP cooler: انزع الغشاء الواقي عن قاعدة المبرّد. -> prep:cooler:film:removed
+STEP cooler: أنزل المبرّد على المعالج. -> place:cooler
+STEP cooler: ابدأ لولب المبرّد 1 من 2. لا تشدّه بعد. -> hw:cooler:screws:10
+STEP cooler: ابدأ لولب المبرّد 2 من 2. لا تشدّه بعد. -> hw:cooler:screws:11
+STEP cooler: شدّ لولب المبرّد 1 من 2، بالتبادل. -> hw:cooler:screws:21
+STEP cooler: شدّ لولب المبرّد 2 من 2، بالتبادل. -> hw:cooler:screws:22
+PASS cooler: fitted through individual clicks
+PASS cooler: camera remains unchanged
+PASS CPU, memory, M.2 and cooler are prepared before the board enters the case
+STEP motherboard: نزّل اللوحة على القواعد -> place:motherboard
+STEP motherboard: اربط البرغي 1 من 9 -> screw:motherboard:0
+STEP motherboard: اربط البرغي 2 من 9 -> screw:motherboard:1
+STEP motherboard: اربط البرغي 3 من 9 -> screw:motherboard:2
+STEP motherboard: اربط البرغي 4 من 9 -> screw:motherboard:3
+STEP motherboard: اربط البرغي 5 من 9 -> screw:motherboard:4
+STEP motherboard: اربط البرغي 6 من 9 -> screw:motherboard:5
+STEP motherboard: اربط البرغي 7 من 9 -> screw:motherboard:6
+STEP motherboard: اربط البرغي 8 من 9 -> screw:motherboard:7
+STEP motherboard: اربط البرغي 9 من 9 -> screw:motherboard:8
+PASS motherboard: fitted through individual clicks
+PASS motherboard: camera remains unchanged
+STEP psu: دخّل مزوّد الطاقة في مكانه -> place:psu
+STEP psu: اربط البرغي 1 من 4 -> screw:psu:0
+STEP psu: اربط البرغي 2 من 4 -> screw:psu:1
+STEP psu: اربط البرغي 3 من 4 -> screw:psu:2
+STEP psu: اربط البرغي 4 من 4 -> screw:psu:3
+PASS psu: fitted through individual clicks
+PASS psu: camera remains unchanged
+PASS SATA drive fitted and screwed in its chosen bay
+STEP gpu: شيل غطاء الفتحة 1 -> mech:slot-covers:1:open
+STEP gpu: شيل غطاء الفتحة 2 -> mech:slot-covers:2:open
+STEP gpu: افتح مشبك PCIe -> mech:pcie-x16-1-latch:open
+STEP gpu: جيبها فوق مكانها -> mech:pcie-x16-1-latch:open
+STEP gpu: ادفع الكرت في الفتحة -> lower:gpu
+STEP gpu: اربط البرغي 1 من 2 -> screw:gpu:0
+STEP gpu: اربط البرغي 2 من 2 -> screw:gpu:1
+PASS gpu: fitted through individual clicks
+PASS gpu: camera remains unchanged
+PASS optional case fan fitted and screwed at a selected place
+PASS atx: its cable ends are connected
+PASS cpuPower: its cable ends are connected
+PASS cpuPower2: its cable ends are connected
+PASS gpuPower: its cable ends are connected
+PASS cpuFan: its cable ends are connected
+PASS powerSwitch: its cable ends are connected
+PASS sataData1: its cable ends are connected
+PASS sataPower1: its cable ends are connected
+PASS caseFan1: its cable ends are connected
+PASS caseFan2: its cable ends are connected
+PASS caseFan3: its cable ends are connected
+PASS selecting sockets and connecting leads keeps the camera still
+PASS startup before readiness is refused
+PASS the fully assembled and wired build starts successfully
+PASS reload preserves the running build and every assembly step
+PASS power off keeps all components and leads
+PASS undo reverses only power off
+PASS RGB remains optional and can be enabled
+PASS no page-wide horizontal overflow
+PASS no uncaught page errors
+49 passed, 0 failed

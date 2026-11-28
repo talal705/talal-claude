@@ -162,7 +162,7 @@ function i5Ddr4Air(): Written {
   s.install(gpu, s.at(mb, "pcie-x16-1"), 2);
   s.install(ssd, s.at(pc, "drive-25-1"), 4);
   s.install(psu, s.at(pc, "psu-bay"), 4);
-  s.install(fan, s.at(pc, "fan-rear-1"), 4);
+  s.install(fan, s.at(pc, "fan-top-2"), 4);
 
   s.plug(`${psu}.atx24`, "device", s.on(mb, "atx-24"));
   s.plug(`${psu}.eps`, "device", s.on(mb, "eps-1"));
@@ -219,7 +219,7 @@ function repairI5Ddr5Air(): Written {
   s.install(cooler, s.at(mb, "cooler-mount"), 4);
   s.install(gpu, s.at(mb, "pcie-x16-1"), 2);
   s.install(psu, s.at(pc, "psu-bay"), 4);
-  s.install(fan, s.at(pc, "fan-rear-1"), 4);
+  s.install(fan, s.at(pc, "fan-top-1"), 4);
 
   s.plug(`${psu}.atx24`, "psu", s.on(psu, "out-atx-1"));
   s.plug(`${psu}.atx24`, "device", s.on(mb, "atx-24"));

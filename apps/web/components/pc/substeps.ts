@@ -17,7 +17,8 @@ export function substepsFor(key: SimplePartKey): string[] {
     case "storage":
       // An M.2 drive in a Q-Latch slot is fitted with the latch in the scene; a screw-held slot keeps the list.
       if (entry?.category === "storage" && entry.spec.formFactor.startsWith("m2_")) return spec && pcCatalog.entries.find((e) => e.id === boardOf(spec.host))?.mountPoints.find((m) => m.id === spec.mount)?.retention ? [] : ["m2Latch", "m2Angle", "m2Secure"];
-      return ["driveTray", "driveScrews"];
+      // A SATA drive is placed in a bay the learner chooses and screwed in one screw at a time (see SimplePcLab).
+      return [];
     case "cooler": return ["pasteCheck", "coolerFilm", "coolerBracket", "coolerDiagonal"];
     case "aio": return ["pasteCheck", "coolerFilm", "coolerBracket", "radiatorMount", "fanDirection"];
     case "motherboard": return ["standoffs", "ioShield", "boardAlign", "boardScrews"];

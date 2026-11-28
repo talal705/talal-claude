@@ -1,7 +1,7 @@
 import type { MotherboardEntry, MountPointSpec } from "@ytl/contracts";
-import { FASTENER_NOTE, L, NO_ASSET, boardPorts, dimmSlots, lgaSocketDetail, m2QLatch, pcieSlotDetail, sataDataCables, source, zone } from "./helpers";
+import { FASTENER_NOTE, L, NO_ASSET, boardPorts, dimmSlots, lgaSocketDetail, m2Heatsink, m2QLatch, pcieSlotDetail, sataDataCables, source, zone } from "./helpers";
 
-const socketMounts = (socket: "lga1700" | "am4", name: string): MountPointSpec[] => [
+const socketMounts = (socket: "lga1700" | "am4", name: string, manualRead = true): MountPointSpec[] => [
   {
     id: "cpu-socket",
     kind: "cpu_socket",
@@ -10,7 +10,9 @@ const socketMounts = (socket: "lga1700" | "am4", name: string): MountPointSpec[]
     fastener: { kind: "socket_lever", count: 1 },
     // ASUS manuals: lift the load lever (hold it while releasing), the CPU fits one way only, keep the PnP cap.
     ...(socket === "lga1700"
-      ? lgaSocketDetail("ASUS TUF GAMING Z790-PLUS WIFI manual E21279 pp. 1-4, 2-1, 2-2: hold the lever while releasing it; the CPU fits in one orientation; keep the PnP cap. The board's lever protector is not modelled.")
+      ? lgaSocketDetail(manualRead
+        ? "ASUS TUF GAMING Z790-PLUS WIFI manual E21279 pp. 1-4, 2-1, 2-2: hold the lever while releasing it; the CPU fits in one orientation; keep the PnP cap. The board's lever protector is not modelled."
+        : "LGA1700 load plate and lever (Intel independent loading mechanism); this board's manual was not read for the steps.")
       // ASUS FAQ 1047659 (AM4 example): lift the lever to 90°, match the CPU triangle to the socket corner, lower it straight, lower the lever.
       : { retention: { id: "cpu-socket-lever", kind: "zif_lever" as const, note: "AM4 lever per ASUS FAQ 1047659; the board is archived (not offered in the planner)." }, keying: { rotationDeg: 0, toleranceMm: 3, mark: "triangle" as const } }),
   },
@@ -31,8 +33,9 @@ const gpuSlot = (pcieGeneration: number): MountPointSpec => ({
   pcieGeneration,
   label: L(`PCIe ${pcieGeneration}.0 x16 slot (graphics card)`, `فتحة PCIe ${pcieGeneration}.0 x16 (كرت الشاشة)`),
   fastener: { kind: "case_screw", count: 2 },
-  // TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-19: push the PCIe push-latch fully down before fitting;
-  // to remove, lift the card slightly and press the PCIe Slot Q-Release button. Other boards: not verified.
+  // TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-19: pressing the PCIe Slot Q-Release button before fitting makes
+  // sure the push-latch is fully down; to remove, lift the card slightly while pressing the button. The lab does
+  // not draw the button: the slot latch stands for it. Other boards: not verified.
   ...pcieSlotDetail("Push-latch / Q-Release as in the TUF GAMING Z790-PLUS WIFI manual p. 2-19; on other boards the latch type is not verified."),
 });
 
@@ -94,6 +97,10 @@ export const motherboards: MotherboardEntry[] = [
         "TUF GAMING Z790-PLUS WIFI — CPU support list (JSON endpoint called by the support page; rows for i5-14600K and i9-14900K)",
         "https://www.asus.com/support/api/product.asmx/GetPDQVLCPU?website=global&model=tuf-gaming-z790-plus-wifi&pdhashedid=veuhgnndynlvz7er&pdid=21165&PageSize=20&PageIndex=1&keyword=14600",
       ),
+      source("ASUS", "TUF GAMING Z790-PLUS WIFI User's Manual E21279 — p. viii (Q-DIMM), p. 1-5 (DIMM slots, recommended memory configurations), p. 2-6 (DIMM installation and removal)", "https://dlcdnets.asus.com/pub/ASUS/mb/LGA1700/TUF_GAMING_Z790-PLUS_WIFI/E21279_TUF_GAMING_Z790-PLUS_WIFI_UM_WEB.pdf", "2026-11-20"),
+      source("ASUS", "TUF GAMING Z790-PLUS WIFI — official top-view product photo (memory slot clips at the top end)", "https://dlcdnwebimgs.asus.com/gain/391f8852-89ee-4429-bf08-48b3be125099", "2026-11-20"),
+      source("ASUS", "TUF GAMING Z790-PLUS WIFI User's Manual E21279 — p. 1-11 (M.2 slots), pp. 2-7 to 2-12 (M.2 heatsinks, Q-Latch, screw stand, thermal-pad film)", "https://dlcdnets.asus.com/pub/ASUS/mb/LGA1700/TUF_GAMING_Z790-PLUS_WIFI/E21279_TUF_GAMING_Z790-PLUS_WIFI_UM_WEB.pdf", "2026-11-21"),
+      source("ASUS", "TUF GAMING Z790-PLUS WIFI — official top-view product photo (M.2 heatsinks over M.2_1 and over M.2_3 + M.2_4; M.2_2 bare)", "https://dlcdnwebimgs.asus.com/gain/391f8852-89ee-4429-bf08-48b3be125099", "2026-11-21"),
       source(
         "ASUS",
         "TUF GAMING Z790-PLUS WIFI — CPU support list (JSON endpoint called by the support page; row for i7-14700K, validated since BIOS 1205)",
@@ -136,7 +143,7 @@ export const motherboards: MotherboardEntry[] = [
     formFactor: "ATX",
     mountPoints: [
       ...socketMounts("lga1700", "LGA1700"),
-      ...dimmSlots("ddr5"),
+      ...dimmSlots("ddr5", undefined, { latches: "one_side", latchEnd: "top", note: "ASUS manual E21279 (English, First Edition Nov 2022): Q-DIMM in the ASUS Q-Design list (p. viii); p. 2-6 '2.1.3 DIMM installation' shows one moving clip, the other end fixed: open the clip, match the notch to the key, press the module down until the clip closes; to remove, press the clip open (A) and lift the module (B). ASUS's official top-view product photo shows the clip at each slot's top end and a fixed closed end toward the expansion slots." }),
       gpuSlot(5),
       {
         id: "m2-1",
@@ -144,8 +151,9 @@ export const motherboards: MotherboardEntry[] = [
         lengths: ["m2_2242", "m2_2260", "m2_2280", "m2_22110"],
         interfaces: ["nvme"],
         pcieGeneration: 4,
+        heatsink: m2Heatsink("m2-hs-1", "ASUS manual E21279 pp. 2-7 and 2-12: two screws, lifted off; plastic film on the thermal pad peeled before refitting. It covers M.2_1 (official top-view photo; layout p. 1-11)."),
         label: L("M.2_1 slot (PCIe 4.0 x4)", "فتحة M.2_1 (PCIe 4.0 x4)"),
-        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-1", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way."),
+        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-1", "ASUS manual E21279 pp. 2-8 to 2-9: turn the Q-Latch so its handle points away from the slot, insert the drive, turn the Q-Latch clockwise to secure it. Pre-installed at the 2280 hole."),
       },
       {
         id: "m2-2",
@@ -154,7 +162,7 @@ export const motherboards: MotherboardEntry[] = [
         interfaces: ["nvme"],
         pcieGeneration: 4,
         label: L("M.2_2 slot (PCIe 4.0 x4)", "فتحة M.2_2 (PCIe 4.0 x4)"),
-        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-2", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way."),
+        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-2", "ASUS manual E21279 p. 2-10: turn the Q-Latch so its handle points away from the slot, insert the drive, turn the Q-Latch clockwise to secure it. Pre-installed at the 2280 hole."),
       },
       {
         id: "m2-3",
@@ -162,8 +170,9 @@ export const motherboards: MotherboardEntry[] = [
         lengths: ["m2_2242", "m2_2260", "m2_2280", "m2_22110"],
         interfaces: ["nvme"],
         pcieGeneration: 4,
+        heatsink: m2Heatsink("m2-hs-2", "ASUS manual E21279 pp. 2-7 and 2-12: two screws, lifted off; plastic film on the thermal pad peeled before refitting. It covers M.2_3 and M.2_4 together (official top-view photo; layout p. 1-11)."),
         label: L("M.2_3 slot (PCIe 4.0 x4)", "فتحة M.2_3 (PCIe 4.0 x4)"),
-        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-3", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way."),
+        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-3", "ASUS manual E21279 pp. 2-8 to 2-9: turn the Q-Latch so its handle points away from the slot, insert the drive, turn the Q-Latch clockwise to secure it. Pre-installed at the 2280 hole."),
       },
       {
         id: "m2-4",
@@ -171,8 +180,10 @@ export const motherboards: MotherboardEntry[] = [
         lengths: ["m2_2242", "m2_2260", "m2_2280"],
         interfaces: ["nvme", "sata"],
         pcieGeneration: 4,
+        heatsink: m2Heatsink("m2-hs-2", "ASUS manual E21279 pp. 2-7 and 2-12: two screws, lifted off; plastic film on the thermal pad peeled before refitting. It covers M.2_3 and M.2_4 together (official top-view photo; layout p. 1-11)."),
+        shortRetention: "m2_screw",
         label: L("M.2_4 slot (PCIe 4.0 x4 and SATA)", "فتحة M.2_4 (PCIe 4.0 x4 و SATA)"),
-        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-4", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way."),
+        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-4", "ASUS manual E21279 p. 2-11: turn the Q-Latch so its handle points away from the slot, insert the drive, turn the Q-Latch clockwise to secure it. Pre-installed at the 2280 hole."),
       },
     ],
     mounting: [{ role: "main", kind: "motherboard_tray", label: L("Motherboard tray of the case", "صينية اللوحة الأم في الهيكل") }],
@@ -270,6 +281,10 @@ export const motherboards: MotherboardEntry[] = [
         "https://www.asus.com/motherboards-components/motherboards/tuf-gaming/tuf-gaming-z790-plus-wifi-d4/techspec/",
         "2026-10-27",
       ),
+      source("ASUS", "TUF GAMING Z790-PLUS WIFI D4 User's Manual E20581 — p. 1-5 (DIMM slots, recommended memory configurations), p. 2-6 (DIMM installation and removal)", "https://dlcdnets.asus.com/pub/ASUS/mb/LGA1700/TUF%20GAMING%20Z790-PLUS%20WIFI%20D4/E20581_TUF_GAMING_Z790-PLUS_WIFI_D4_UM_WEB_082622.pdf", "2026-11-20"),
+      source("ASUS", "TUF GAMING Z790-PLUS WIFI D4 — official top-view product photo (memory slot clips at the top end)", "https://dlcdnwebimgs.asus.com/gain/88be6c4e-815d-4341-9c91-731d9dfabdb5", "2026-11-20"),
+      source("ASUS", "TUF GAMING Z790-PLUS WIFI D4 User's Manual E20581 — pp. 2-7 to 2-12 (M.2 heatsinks, Q-Latch, screw stand, thermal-pad film)", "https://dlcdnets.asus.com/pub/ASUS/mb/LGA1700/TUF%20GAMING%20Z790-PLUS%20WIFI%20D4/E20581_TUF_GAMING_Z790-PLUS_WIFI_D4_UM_WEB_082622.pdf", "2026-11-21"),
+      source("ASUS", "TUF GAMING Z790-PLUS WIFI D4 — official top-view product photo (M.2 heatsinks over M.2_1 and over M.2_3 + M.2_4; M.2_2 bare)", "https://dlcdnwebimgs.asus.com/gain/88be6c4e-815d-4341-9c91-731d9dfabdb5", "2026-11-21"),
       source(
         "ASUS",
         "TUF GAMING Z790-PLUS WIFI D4 — CPU support list (rows I5-14600K and I7-14700K, validated since BIOS 1205)",
@@ -290,8 +305,6 @@ export const motherboards: MotherboardEntry[] = [
       "ports.eps4-1 requirement (the manual was not read; modelled as optional)",
       "ports.usb2-*, ports.panel-* (present per the spec page; pin layout not modelled)",
       "spec.memory.maxPerModuleGb (the spec page lists no module sizes)",
-      "spec.memory.recommendedPopulation (the manual was not read; no layout advice is given)",
-      "zones.memory-slots and mountPoints.dimm-* (slot names DIMM_A1 to DIMM_B2 and the two channels follow the DDR5 version; no D4 document was read for them)",
       "spec.biosVersions (the download page offers 'Show all'; the 25 versions it printed are used)",
       "rgb (no on-board lighting is listed on the spec page; modelled as none)",
     ],
@@ -304,8 +317,8 @@ export const motherboards: MotherboardEntry[] = [
     dimensions: { lengthMm: 305, widthMm: 244, heightMm: null },
     formFactor: "ATX",
     mountPoints: [
-      ...socketMounts("lga1700", "LGA1700"),
-      ...dimmSlots("ddr4"),
+      ...socketMounts("lga1700", "LGA1700", false),
+      ...dimmSlots("ddr4", undefined, { latches: "one_side", latchEnd: "top", note: "ASUS manual E20581 (English, First Edition Aug 2022): Q-DIMM in the ASUS Q-Design list; p. 1-5 DIMM_A1, DIMM_A2, DIMM_B1, DIMM_B2 and the recommended configurations; p. 2-6 '2.1.3 DIMM installation' shows one moving clip, the other end fixed (open the clip, match the notch, press down until it closes; remove: press the clip, lift). ASUS's official top-view photo of this board shows the clip at the top end of each slot." }),
       gpuSlot(5),
       {
         id: "m2-1",
@@ -313,8 +326,9 @@ export const motherboards: MotherboardEntry[] = [
         lengths: ["m2_2242", "m2_2260", "m2_2280", "m2_22110"],
         interfaces: ["nvme"],
         pcieGeneration: 4,
+        heatsink: m2Heatsink("m2-hs-1", "ASUS manual E20581 pp. 2-7 and 2-12: two screws, lifted off; plastic film on the thermal pad peeled before refitting. It covers M.2_1 (official top-view photo of this board)."),
         label: L("M.2_1 slot (PCIe 4.0 x4)", "فتحة M.2_1 (PCIe 4.0 x4)"),
-        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-1", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way."),
+        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-1", "ASUS manual E20581 pp. 2-8 to 2-9: turn the Q-Latch so its handle points away from the slot, insert the drive, turn the Q-Latch clockwise to secure it. Pre-installed at the 2280 hole."),
       },
       {
         id: "m2-2",
@@ -323,7 +337,7 @@ export const motherboards: MotherboardEntry[] = [
         interfaces: ["nvme"],
         pcieGeneration: 4,
         label: L("M.2_2 slot (PCIe 4.0 x4)", "فتحة M.2_2 (PCIe 4.0 x4)"),
-        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-2", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way."),
+        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-2", "ASUS manual E20581 p. 2-10: turn the Q-Latch so its handle points away from the slot, insert the drive, turn the Q-Latch clockwise to secure it. Pre-installed at the 2280 hole."),
       },
       {
         id: "m2-3",
@@ -331,8 +345,9 @@ export const motherboards: MotherboardEntry[] = [
         lengths: ["m2_2242", "m2_2260", "m2_2280", "m2_22110"],
         interfaces: ["nvme"],
         pcieGeneration: 4,
+        heatsink: m2Heatsink("m2-hs-2", "ASUS manual E20581 pp. 2-7 and 2-12: two screws, lifted off; plastic film on the thermal pad peeled before refitting. It covers M.2_3 and M.2_4 together (official top-view photo of this board)."),
         label: L("M.2_3 slot (PCIe 4.0 x4)", "فتحة M.2_3 (PCIe 4.0 x4)"),
-        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-3", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way."),
+        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-3", "ASUS manual E20581 pp. 2-8 to 2-9: turn the Q-Latch so its handle points away from the slot, insert the drive, turn the Q-Latch clockwise to secure it. Pre-installed at the 2280 hole."),
       },
       {
         id: "m2-4",
@@ -340,8 +355,10 @@ export const motherboards: MotherboardEntry[] = [
         lengths: ["m2_2242", "m2_2260", "m2_2280"],
         interfaces: ["nvme", "sata"],
         pcieGeneration: 4,
+        heatsink: m2Heatsink("m2-hs-2", "ASUS manual E20581 pp. 2-7 and 2-12: two screws, lifted off; plastic film on the thermal pad peeled before refitting. It covers M.2_3 and M.2_4 together (official top-view photo of this board)."),
+        shortRetention: "m2_screw",
         label: L("M.2_4 slot (PCIe 4.0 x4 and SATA)", "فتحة M.2_4 (PCIe 4.0 x4 و SATA)"),
-        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-4", "Q-Latch as in the TUF GAMING Z790-PLUS WIFI manual E21279 p. 2-8 (turn to unlock, insert, press down, turn to lock); other ASUS Q-Latch boards are assumed to work the same way."),
+        fastener: { kind: "m2_latch", count: 1 }, ...m2QLatch("m2-4", "ASUS manual E20581 p. 2-11: turn the Q-Latch so its handle points away from the slot, insert the drive, turn the Q-Latch clockwise to secure it. Pre-installed at the 2280 hole."),
       },
     ],
     mounting: [{ role: "main", kind: "motherboard_tray", label: L("Motherboard tray of the case", "صينية اللوحة الأم في الهيكل") }],
@@ -361,7 +378,11 @@ export const motherboards: MotherboardEntry[] = [
         slots: 4,
         maxTotalGb: 128,
         maxPerModuleGb: null,
-        recommendedPopulation: [],
+        recommendedPopulation: [
+          { modules: 1, slotIds: ["dimm-a2"] },
+          { modules: 2, slotIds: ["dimm-a2", "dimm-b2"] },
+          { modules: 4, slotIds: ["dimm-a1", "dimm-a2", "dimm-b1", "dimm-b2"] },
+        ],
       },
       cpuSupport: [
         { cpuId: "intel-core-i5-14600k", sinceBios: "1205" },

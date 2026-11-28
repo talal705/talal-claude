@@ -114,6 +114,19 @@ export function withoutChoice(plan: pc.BuildPlan, category: PlannerCategory, ind
   }
 }
 
+/**
+ * The plan without this exact model: one drive/fan copy (by its actual position) or the single
+ * part if it is this model. `null` when that model is not in the build, so nothing else is removed.
+ */
+export function withoutModel(plan: pc.BuildPlan, category: PlannerCategory, id: string): pc.BuildPlan | null {
+  if (category === "storage" || category === "fans") {
+    const index = (plan[category] ?? []).indexOf(id);
+    return index < 0 ? null : withoutChoice(plan, category, index);
+  }
+  const chosen = category === "ram" ? plan.ram?.id : plan[category];
+  return chosen === id ? withoutChoice(plan, category) : null;
+}
+
 /** Options for `category` that clear every incompatible finding the current choice has in that slot. */
 export function compatibleOptions(plan: pc.BuildPlan, category: PlannerCategory): string[] {
   const slot = slotOfCategory[category];

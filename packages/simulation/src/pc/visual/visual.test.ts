@@ -12,6 +12,15 @@ const board = pcCatalog.entries.find((e) => e.id === EXAMPLES[0])!;
 const card = pcCatalog.entries.find((e) => e.id === EXAMPLES[1])!;
 
 describe("generated geometry", () => {
+  it("a case's rear fan sits beside the board's rear I/O stack, which reaches about 48 mm off the tray, not in front of its ports", () => {
+    for (const entry of pcCatalog.entries.filter((e) => e.category === "case" && e.mountPoints.some((m) => m.id === "fan-rear-1"))) {
+      const g = partGeometry(entry, pcCatalog.version)!;
+      const tray = g.solids.find((s) => s.id === "motherboard-tray")!;
+      const fan = g.solids.find((s) => s.id === "fan-rear-1")!;
+      expect(fan.at[2] - 60, entry.id).toBeGreaterThanOrEqual(tray.at[2] + 47);
+    }
+  });
+
   it("a motherboard takes its outline from the catalog and draws every mount point, port and zone", () => {
     const g = partGeometry(board, pcCatalog.version)!;
     expect([g.bounds.size[0], g.bounds.size[2]]).toEqual([244, 305]);

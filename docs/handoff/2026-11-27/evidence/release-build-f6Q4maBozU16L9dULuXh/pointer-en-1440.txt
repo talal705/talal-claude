@@ -1,0 +1,22 @@
+INFO next {"target":[357,347],"centre":[326,473],"radiusPx":42,"pointing":false,"occluded":true,"marks":false,"size":[998,640],"guide":{"kind":"port","hostInstanceId":"psu-12","placeId":"out-atx-1"}}
+PASS  next step: ring and line show exactly when the socket can be seen, without covering it
+INFO next-hidden {"target":[389,583],"centre":[617,695],"radiusPx":41,"pointing":false,"occluded":true,"marks":false,"size":[998,640],"guide":{"kind":"port","hostInstanceId":"psu-12","placeId":"out-atx-1"}}
+PASS  turned until something is in front of that socket: no ring, no line
+INFO fan-socket1 {"target":[448,316],"centre":[438,449],"radiusPx":42,"pointing":false,"occluded":true,"marks":false,"size":[998,640],"guide":{"kind":"port","hostInstanceId":"motherboard-4","placeId":"cha-fan-1"}}
+INFO fan-socket2 {"target":[460,319],"centre":[454,454],"radiusPx":43,"pointing":false,"occluded":true,"marks":false,"size":[998,640],"guide":{"kind":"port","hostInstanceId":"motherboard-4","placeId":"cha-fan-2"}}
+INFO fan-socket3 {"target":[471,322],"centre":[469,458],"radiusPx":42,"pointing":false,"occluded":true,"marks":false,"size":[998,640],"guide":{"kind":"port","hostInstanceId":"motherboard-4","placeId":"cha-fan-3"}}
+INFO fan-socket4 {"target":[483,325],"centre":[485,463],"radiusPx":42,"pointing":false,"occluded":true,"marks":false,"size":[998,640],"guide":{"kind":"port","hostInstanceId":"motherboard-4","placeId":"cha-fan-4"}}
+PASS  each header chosen moves the robot's target to that header
+PASS  for every header: ring and line only when it can be seen, and the robot does not cover it
+INFO cpu-fan-seen {"target":[444,231],"centre":[774,159],"radiusPx":35,"pointing":true,"occluded":false,"marks":true,"size":[998,640],"guide":{"kind":"port","hostInstanceId":"motherboard-4","placeId":"cpu-fan"}}
+PASS  a header in view is pointed at, with ring or line, and not covered by the robot
+INFO zoom {"target":[424,199],"centre":[837,111],"radiusPx":36,"pointing":true,"occluded":false,"marks":true,"size":[998,640],"guide":{"kind":"port","hostInstanceId":"motherboard-4","placeId":"cpu-fan"}}
+PASS  after a zoom the same holds
+INFO resize {"target":[269,179],"centre":[637,101],"radiusPx":31,"pointing":true,"occluded":false,"marks":true,"size":[672,576],"guide":{"kind":"port","hostInstanceId":"motherboard-4","placeId":"cpu-fan"}}
+PASS  after a resize the same holds and the robot stays in the view
+INFO behind-card {"target":[545,276],"centre":[564,413],"radiusPx":44,"pointing":false,"occluded":true,"marks":false,"size":[998,640],"guide":{"kind":"port","hostInstanceId":"motherboard-4","placeId":"sata-1"}}
+PASS  a socket behind the graphics card is not pointed at
+PASS  no page errors
+9 passed, 0 failed
+
+EXIT_CODE=0

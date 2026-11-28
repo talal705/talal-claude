@@ -89,7 +89,8 @@ export interface Solid {
    * Open for later shapes: a reader skips a solid whose shape it does not know.
    */
   /** `wedge`: a right-triangle prism filling the box's x–z footprint, right angle at its −x, +z corner. */
-  shape: "box" | "cylinder" | "fins" | "rotor" | "wedge" | (string & {});
+  /** `gap`: names an empty space (a notch, a cut-out) for targets; never drawn. */
+  shape: "box" | "cylinder" | "fins" | "rotor" | "wedge" | "gap" | (string & {});
   /** Plates of a `fins` solid, blades of a `rotor`. */
   count?: number;
   finish?: Finish;

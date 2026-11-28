@@ -196,32 +196,56 @@ export const sataDataCables = (quantity: number): CableSpec =>
     quantity,
   );
 
-export const dimmSlots = (generation: "ddr3" | "ddr4" | "ddr5", slots: readonly string[] = ["a1", "a2", "b1", "b2"]): MountPointSpec[] =>
+export interface DimmClips { latches: "one_side" | "both" | "unverified"; note: string; latchEnd?: "top" | "bottom" }
+const UNVERIFIED_CLIPS: DimmClips = { latches: "unverified", note: "Clip arrangement not confirmed for this board; one moving clip is modelled at the slot's far end." };
+/**
+ * Memory slots. The notch is off centre, so a module fits one way round (ASUS FAQ 1047257: open the clip,
+ * match the notch to the slot's key, push straight down until the clip locks). `clips` says which ends move.
+ * Alignment tolerance: 1.5 mm, about the clearance a module edge has to find the slot's groove (an
+ * educational figure, not a manufacturer one).
+ */
+export const dimmSlots = (generation: "ddr3" | "ddr4" | "ddr5", slots: readonly string[] = ["a1", "a2", "b1", "b2"], clips: DimmClips = UNVERIFIED_CLIPS): MountPointSpec[] =>
   slots.map((s) => ({
     id: `dimm-${s}`,
     kind: "dimm_slot" as const,
     generation,
     moduleType: "udimm" as const,
     label: L(`Memory slot DIMM_${s.toUpperCase()} (${generation.toUpperCase()})`, `فتحة الرام DIMM_${s.toUpperCase()} (${generation.toUpperCase()})`),
-    // The notch is off centre, so a module fits one way round. Which ends of the slot have latches is not
-    // shown in the manuals read; the model draws one latch and says so.
-    retention: { id: `dimm-${s}-latch`, kind: "dimm_latch" as const, latches: "unverified" as const, note: "Latch arrangement not confirmed in the manual read; one latch is modelled." },
-    keying: { rotationDeg: 0, toleranceMm: 4, mark: "notch" as const },
+    retention: { id: `dimm-${s}-latch`, kind: "dimm_latch" as const, latches: clips.latches, note: clips.note, ...(clips.latchEnd ? { latchEnd: clips.latchEnd } : {}) },
+    keying: { rotationDeg: 0, toleranceMm: 1.5, mark: "notch" as const },
   }));
 
 /** An M.2 slot held by ASUS's tool-free Q-Latch: turned open, the drive goes in at an angle, is pressed flat and the latch turned shut. */
 export const m2QLatch = (slotId: string, note: string) => ({
   retention: { id: `${slotId}-qlatch`, kind: "m2_qlatch" as const, note },
-  keying: { rotationDeg: 0, toleranceMm: 2, mark: "notch" as const },
+  keying: M2_KEYING,
 });
+/**
+ * The angle an M.2 drive goes in at, in degrees from flat. The manuals draw an angled insertion without a
+ * figure: 15–35° is an educational approximation, not a manufacturer value.
+ */
+export const M2_INSERT_TILT_DEG: [number, number] = [15, 35];
+const M2_KEYING = { rotationDeg: 0, toleranceMm: 2, mark: "notch" as const, insertTiltDeg: M2_INSERT_TILT_DEG };
+/** An M.2 slot where the drive is held by a screw stand at its length hole and one screw (no Q-Latch). */
+export const m2ScrewStand = (slotId: string, note: string) => ({
+  retention: { id: `${slotId}-screw`, kind: "m2_screw" as const, note },
+  fastener: { kind: "m2_screw" as const, count: 1 },
+  keying: M2_KEYING,
+});
+/** A board's M.2 heatsink: held by screws, a plastic film on its thermal pad. Slots under it share the id. */
+export const m2Heatsink = (id: string, note: string, screws = 2) => ({ id, screws, padFilm: true, note });
 
 /** A PCIe x16 slot's latch and the card's alignment (connector over the slot, bracket in the case opening). */
 export const pcieSlotDetail = (note: string) => ({
   retention: { id: "pcie-x16-1-latch", kind: "pcie_latch" as const, note },
   keying: { rotationDeg: 0, toleranceMm: 3, mark: "bracket" as const },
 });
-/** A case's expansion-slot covers (they come out for a card's bracket). */
-export const SLOT_COVERS = { id: "slot-covers", kind: "slot_covers" as const, note: "Expansion-slot covers; how they are fixed (screws, tool-free) is not modelled per case." };
+/**
+ * A case's expansion-slot covers (they come out for a card's bracket), one at a time as `slot-covers:1`, `:2`.
+ * Two openings is the lab's schematic: ASUS's pages for the catalog cards give slot thickness (2 to 3.6) but not the
+ * bracket's openings, and the cases' manuals do not say how each cover is fixed (screws, tool-free) per model.
+ */
+export const SLOT_COVERS = { id: "slot-covers", kind: "slot_covers" as const, openings: 2, note: "Expansion-slot covers, taken out one at a time. Opening count and fixing are schematic (not documented per case or card)." };
 
 /** The CPU socket's retention and keying: an LGA load plate with its lever, and the corner triangle. */
 export const lgaSocketDetail = (note: string) => ({
@@ -231,7 +255,7 @@ export const lgaSocketDetail = (note: string) => ({
 
 // ---------- Case ----------
 
-export const fanMounts = (location: "front" | "top" | "rear" | "side", count: number, sizesMm: number[], en: string, ar: string): MountPointSpec[] =>
+export const fanMounts = (location: "front" | "top" | "rear" | "side", count: number, sizesMm: number[], en: string, ar: string, bank?: { id: string; capacityBySizeMm: Record<string, number> }): MountPointSpec[] =>
   Array.from({ length: count }, (_, i) => ({
     id: `fan-${location}-${i + 1}`,
     kind: "fan_mount" as const,
@@ -239,4 +263,50 @@ export const fanMounts = (location: "front" | "top" | "rear" | "side", count: nu
     sizesMm,
     label: L(`${en} fan position ${i + 1}`, `مكان مروحة ${ar} رقم ${i + 1}`),
     fastener: { kind: "fan_screw" as const, count: 4 },
+    ...(bank ? { bank } : {}),
   }));
+
+// ---------- CPU cooler mounting (from the coolers' own manuals) ----------
+
+/** Kit parts named in a cooler's packaging list. */
+export const KIT = {
+  contactFrame: { id: "contact-frame", label: L("CPU Contact Frame", "إطار التلامس للمعالج") },
+  shoulderScrew: { id: "shoulder-screw", label: L("Shoulder screw", "برغي كتف") },
+  t20Driver: { id: "t20-driver", label: L("T20 driver", "مفك T20") },
+  vrmFanModule: { id: "vrm-fan-module", label: L("VRM fan module", "مروحة وحدة الطاقة (VRM)") },
+  retentionRing: { id: "retention-ring", label: L("Intel retention ring", "حلقة التثبيت لإنتل") },
+  retentionPin: { id: "retention-pin", label: L("Retention pin", "دبوس تثبيت") },
+} as const;
+const kit = (part: { id: string; label: ReturnType<typeof L> }, count: number) => ({ id: part.id, count, label: part.label });
+
+/**
+ * ARCTIC's contact-frame mounting on Intel LGA1700 / LGA1851: the board's backplate is kept, the socket's ILM is
+ * taken off, and the frame (4 screws, engaged then tightened in a cross pattern) holds the CPU. `verifiedBody`:
+ * whether the manual's text states the cooler body's two screws and their alternate tightening.
+ */
+export const contactFrameMounting = (source: string, verifiedBody: boolean, extraKit: ReturnType<typeof kit>[] = []) => ({
+  kind: "contact_frame" as const,
+  sockets: ["lga1700" as const, "lga1851" as const],
+  backplate: "retained" as const,
+  kit: [kit(KIT.contactFrame, 1), kit(KIT.shoulderScrew, 4), kit(KIT.t20Driver, 1), ...extraKit],
+  frame: { screws: 4 },
+  bodyScrews: { count: 2, order: "alternate" as const, verified: verifiedBody },
+  source,
+});
+
+/** ARCTIC Freezer 7 X on Intel: a retention ring and 4 push pins, the mounting position set to the socket family. */
+export const retentionRingMounting = (source: string) => ({
+  kind: "retention_ring" as const,
+  sockets: ["lga1700" as const, "lga1851" as const, "lga1200" as const, "lga1150" as const],
+  backplate: "none" as const,
+  kit: [kit(KIT.retentionRing, 1), kit(KIT.retentionPin, 4)],
+  ring: {
+    pins: 4,
+    positions: [
+      { id: "1700", sockets: ["lga1700" as const, "lga1851" as const], label: L("LGA1851 / LGA1700 position", "وضع LGA1851 / LGA1700") },
+      { id: "1200", sockets: ["lga1200" as const, "lga1150" as const], label: L("LGA1200 / LGA115x position", "وضع LGA1200 / LGA115x") },
+    ],
+  },
+  source,
+});
+export const vrmModule = (count = 1) => kit(KIT.vrmFanModule, count);

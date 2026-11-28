@@ -17,8 +17,11 @@ import {
   checkLabFilter,
   checkSnapshotLabel,
   checkUpdateInput,
+  conflict,
+  corruptRecord,
   isProjectRecord,
   isProjectSnapshot,
+  notFound,
 } from "./validation";
 
 export interface GuestProjectStoreOptions {
@@ -37,19 +40,8 @@ export function randomId(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-function notFound(what: string, id: string): ProjectStoreError {
-  return new ProjectStoreError("not_found", `${what} ${id} was not found`);
-}
-
 function corrupt(what: string, id: string): ProjectStoreError {
-  return new ProjectStoreError("corrupt", `${what} ${id} is stored but failed validation; it was left in place`);
-}
-
-function conflict(expected: number, actual: number): ProjectStoreError {
-  return new ProjectStoreError(
-    "revision_conflict",
-    `expected revision ${expected} but the project is at revision ${actual}; nothing was written`,
-  );
+  return corruptRecord(`${what} ${id}`);
 }
 
 function summarize(record: ProjectRecord): ProjectSummary {

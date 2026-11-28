@@ -1,0 +1,8 @@
+
+ RUN  v5.0.3 /Users/most/Documents/Codex/VTE-completion-2026-11-25
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  21:27:49
+   Duration  245ms (transform 80%, import 16%, tests 3%, worker 1%)
