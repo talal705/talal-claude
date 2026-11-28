@@ -1,5 +1,5 @@
 // How a cooler is fitted and taken off, one documented step at a time (ARCTIC's manuals for Freezer 36, Liquid
-// Freezer III and Freezer 7 X): the toolbar, the robot, the welcome back and the old-save helper all read the same
+// Freezer III and Freezer 7 X): one-click installation, the step-by-step panel, the robot and the old-save helper all read the same
 // `nextCoolerStep`, and `applyCoolerStep` takes exactly that step, so they cannot disagree. The engine still decides
 // what is allowed; a step the learner picks by hand and the engine refuses is simply refused with its reason.
 import type { PCBuildState } from "@ytl/contracts";
@@ -279,8 +279,8 @@ export function simpleCoolerProgress(state: PCBuildState, key: SimplePartKey): C
 }
 
 /**
- * The documented sequence in one call: only for old saves (`part:` steps) and tests. The page never calls it: a
- * learner takes the steps one by one.
+ * The documented sequence in one call: only for old saves (`part:` steps) and tests. The page's one click uses
+ * one-click.ts instead, which saves every step and never moves a fan out of a radiator's place.
  */
 export function installCoolerWhole(state: PCBuildState, key: SimplePartKey): Result {
   let s = state;

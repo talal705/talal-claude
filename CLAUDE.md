@@ -7,7 +7,9 @@ Read `PROJECT_HANDOFF.md` and `docs/DECISIONS.md` for current context; older han
 - Remove verified dead code; avoid speculative abstractions, unused options, and unnecessary layers.
 - Do not minify, join statements, delete useful comments, or move code to another file merely to claim fewer lines.
 - Preserve behaviour, UI, routes, saved-data keys/formats, validation, security, accessibility, translations, and test coverage.
-- Keep every educational assembly step, the stable camera, click/tap controls, 3D quality, planner/assembly loading isolation, and the advanced lab.
+- One click installs the selected part completely (owner decision 23, 2026-11-28): orientation, place, latches, clips and screws through the engine's own steps, saved as one Undo-able action; a refusal changes nothing. Manual mechanical steps stay available as secondary controls but are never mandatory. This supersedes the earlier rule that every educational assembly step needed its own click.
+- Keep the educational explanations of those steps, click/tap controls, 3D quality, planner/assembly loading isolation, and the advanced lab.
+- The camera is the learner's: free orbit, vertical angle, pan and zoom; only their own "Focus selected part" and "Reset view" move it otherwise. Installing, selecting and re-rendering never do.
 - Long domain data and genuinely distinct rules need not be compressed. Count reductions across all affected production files, including new helpers.
 
 ## Verification and delivery

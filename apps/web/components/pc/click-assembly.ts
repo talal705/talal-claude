@@ -1,7 +1,7 @@
-// Click-based assembly for parts that are held and keyed (CPU, memory, card, M.2 drive). A click on a
-// real place brings the part in hand over that place, exactly as the learner turned it (it is never
-// turned for them); each further click or the toolbar's action then takes ONE checked mechanical step:
-// a lever, a plate, a clip, lowering, pressing home. The engine still refuses what cannot happen.
+// Click-based assembly for parts that are held and keyed (CPU, memory, card, M.2 drive), one checked mechanical
+// step at a time: a lever, a plate, a clip, lowering, pressing home. Since one-click installation (owner decision
+// 23, see one-click.ts) these are the secondary, step-by-step controls, and `nextHandStep` is also what one click
+// walks, in the installing direction only. The engine still refuses what cannot happen.
 import type { PCBuildState } from "@ytl/contracts";
 import type { SimpleSceneTarget } from "./simple-scene";
 import {
@@ -82,9 +82,9 @@ export function aimClick(state: PCBuildState, held: SimpleHeld, placeId: string)
 }
 
 /**
- * One hand step at a time, whichever input asked for it (a click in the view, the toolbar, a panel
+ * One hand step at a time, whichever input asked for it (a click in the view, the Install button, a panel
  * button, Enter or T). take() lets one step through per `ms`; calls nested inside that same input event
- * (the toolbar → the step → the mechanism) pass too, until `defer` runs at the end of the event. arm()
+ * (the button → the step → the mechanism) pass too, until `defer` runs at the end of the event. arm()
  * starts the wait without being refused itself: aiming the hand is never blocked, but a double click on
  * a slot does not also take a step.
  */
@@ -130,7 +130,7 @@ export function aimTargets(state: PCBuildState, key: SimplePartKey, held: Simple
   return [{ id: `aim:${ret.mountPointId}`, kind: "mount", hostInstanceId: ret.hostInstanceId, placeId: ret.mountPointId, role: "target" }];
 }
 
-/** The one mechanical step a click on the part's place (or the toolbar's action) takes next. */
+/** The one mechanical step the step-by-step controls take next (one click walks the same steps to the end). */
 export type HandStep =
   | { kind: "aim" }
   | { kind: "slotTaken"; slotId: string }
