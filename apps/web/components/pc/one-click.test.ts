@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { PCBuildState } from "@ytl/contracts";
 import { applyCoolerStep, coolerStepHistory, nextCoolerStep } from "./cooler-assembly";
 import { autoPlace, installPlaces, planInstall, type InstallPlan } from "./one-click";
-import { planModel, type PlannedBuild } from "./plan-model";
+import { planModel, rebaseProgress, snapshotFromHistory, type PlannedBuild } from "./plan-model";
 import {
   activateSimpleModel, createSimpleBuild, emptySimpleSnapshot, roleOf, firstAttachment, installSimplePart, lastSimpleAction, LEGACY_MODEL, liftSimplePart, parseSimpleSnapshot, setSimpleMechanism,
   simpleAllPartsIn, simpleBuildFromSnapshot, simplePartInstalled, simplePartOrder, SIMPLE_PARTS, simpleRetention, simpleSlotFilled, slotOf, startSimplePC, undoSimpleStep, unscrewSimplePart, withoutPart, withPart,
@@ -267,6 +267,48 @@ describe("grouped actions in the saved progress", () => {
     const removed = withoutPart(grouped, "cooler");
     expect(removed.groups).toEqual([[a - 1, b - 1]]);
     expect(undoSimpleStep(removed)!.history).toEqual(["part:cpu"]);
+  });
+
+  it("editing the plan keeps each installation whose steps all stay as one action; a changed part's leaves whole", () => {
+    activateSimpleModel(planModel(gaming()));
+    const saved = click(click(emptySimpleSnapshot(), "cpu"), "psu");
+    const [cpuGroup, psuGroup] = saved.groups!;
+    // No case fan any more: neither the CPU nor the power supply changes, so both stay single actions.
+    const noFan = planModel(gaming({ fans: [] }));
+    const kept = rebaseProgress(saved, planModel(gaming()), noFan);
+    activateSimpleModel(noFan);
+    const same = snapshotFromHistory(kept.history, kept.groups);
+    expect(same.history).toEqual(saved.history);
+    expect(same.groups).toEqual([cpuGroup, psuGroup]);
+    expect(undoSimpleStep(same)!.history).toEqual(saved.history.slice(0, psuGroup![0]));
+    // Another power supply: its installation leaves the progress; the CPU's is still one action.
+    activateSimpleModel(planModel(gaming()));
+    const otherPsu = planModel(gaming({ psu: "corsair-rm650e-2025" }));
+    const rebased = rebaseProgress(saved, planModel(gaming()), otherPsu);
+    activateSimpleModel(otherPsu);
+    const snap = snapshotFromHistory(rebased.history, rebased.groups);
+    expect(snap.history).toEqual(saved.history.slice(0, cpuGroup![1]));
+    expect(snap.groups).toEqual([cpuGroup]);
+    expect(undoSimpleStep(snap)!.history).toEqual([]);
+  });
+
+  it("malformed group metadata from storage never stops the plan from being rebased; the history stays, valid groups stay", () => {
+    activateSimpleModel(planModel(gaming()));
+    const saved = click(click(emptySimpleSnapshot(), "cpu"), "psu");
+    const noFan = planModel(gaming({ fans: [] }));
+    for (const groups of ["invalid", [null], [{}], [[0, 99]], [[3, 2]], [[0, 1]], { 0: [0, 2] }, [[0, 2], "x"]]) {
+      activateSimpleModel(planModel(gaming()));
+      const r = rebaseProgress({ ...saved, groups }, planModel(gaming()), noFan);
+      activateSimpleModel(noFan);
+      const snap = snapshotFromHistory(r.history, groups);
+      expect(snap.history, JSON.stringify(groups)).toEqual(saved.history);
+      expect(snap.groups, JSON.stringify(groups)).toBeUndefined();
+      expect(snapshotFromHistory(r.history, r.groups).groups, JSON.stringify(groups)).toBeUndefined();
+    }
+    activateSimpleModel(planModel(gaming()));
+    const valid = rebaseProgress(saved, planModel(gaming()), noFan);
+    activateSimpleModel(noFan);
+    expect(snapshotFromHistory(valid.history, valid.groups).groups).toEqual(saved.groups);
   });
 
   it("a running PC is not undone", () => {

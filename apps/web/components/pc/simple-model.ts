@@ -1495,15 +1495,23 @@ export const withCable = (snapshot: SimpleSnapshot, key: SimpleCableKey): Simple
 
 /** The same number of steps, rewritten one for one (a swapped CPU): grouped actions keep their ranges. */
 const withHistory = (snapshot: SimpleSnapshot, history: SimpleStep[]): SimpleSnapshot => ({ ...snapshot, history, ...deriveSimpleLists(history) });
-/** Leaves out the steps `keep` rejects; each grouped action keeps the steps it still has (one left is a plain step). */
-function keepSteps(snapshot: SimpleSnapshot, keep: (step: SimpleStep) => boolean): SimpleSnapshot {
+/**
+ * The grouped actions of a history that is filtered (`kept[i]`: step i stays), at their new places: only an action
+ * that keeps every one of its steps is still one action; one that lost a step is no longer a whole installation.
+ * `groups` may come straight from storage: it is read like a save's (`parseGroups`), so bad metadata is dropped.
+ */
+export function survivingGroups(groups: unknown, kept: readonly boolean[]): SimpleGroup[] {
   // How many kept steps come before each index (and, at the end, in all).
-  const before: number[] = [];
-  let kept = 0;
-  for (const step of snapshot.history) { before.push(kept); if (keep(step)) kept += 1; }
-  before.push(kept);
-  const groups = (snapshot.groups ?? []).map(([a, b]): SimpleGroup => [before[a]!, before[b]!]).filter(([a, b]) => b - a > 1);
-  return withGroups(withHistory(snapshot, snapshot.history.filter(keep)), groups);
+  const before = [0];
+  for (const k of kept) before.push(before.at(-1)! + (k ? 1 : 0));
+  return parseGroups(groups, kept.length)
+    .filter(([a, b]) => kept.slice(a, b).every(Boolean))
+    .map(([a, b]): SimpleGroup => [before[a]!, before[b]!]);
+}
+/** Leaves out the steps `keep` rejects, with the grouped actions that keep all their steps. */
+function keepSteps(snapshot: SimpleSnapshot, keep: (step: SimpleStep) => boolean): SimpleSnapshot {
+  const kept = snapshot.history.map(keep);
+  return withGroups(withHistory(snapshot, snapshot.history.filter((_, i) => kept[i])), survivingGroups(snapshot.groups, kept));
 }
 
 /** Whole-lead removal for older flows and tests: every step of that lead leaves the history. */

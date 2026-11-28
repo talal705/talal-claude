@@ -1,0 +1,11 @@
+PASS two one-click installations, two groups
+PASS Start again with the plan unchanged keeps the history and both groups
+PASS one Undo takes the whole memory installation back
+PASS after reload one Undo takes the whole CPU installation back
+PASS malformed groups "invalid": Start keeps every step and drops only the metadata
+PASS malformed groups [null]: Start keeps every step and drops only the metadata
+PASS malformed groups [{}]: Start keeps every step and drops only the metadata
+PASS malformed groups [[0,99]]: Start keeps every step and drops only the metadata
+PASS …and Undo then takes back one step
+PASS no uncaught page errors
+10 passed, 0 failed

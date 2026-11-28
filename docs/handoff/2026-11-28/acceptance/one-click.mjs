@@ -194,7 +194,7 @@ try {
   await oneClick(/Freezer 36/, "cooler (contact frame on the bench)");
   await oneClick(/TUF GAMING/, "motherboard");
   await oneClick(/RM850x|RM650e|RM\d+/, "power supply");
-  await oneClick(/870 EVO/, "SATA drive");
+  const sata = await oneClick(/870 EVO/, "SATA drive");
   await oneClick(/RTX 5060/, "graphics card");
   const fan = await oneClick(/P12 PWM/, "case fan");
   const all = await state();
@@ -326,6 +326,28 @@ try {
   check("no page-wide horizontal overflow at the end", await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
   await page.evaluate(() => window.scrollTo(0, 0));
   await shot("end");
+
+  // ---- Editing the plan keeps each untouched installation as one action ----
+  // (Earlier the older-save check removed the saved groups; the fan's later reinstall is grouped again.)
+  const beforeEdit = await snapshot();
+  const steps = (snap, [a, b]) => JSON.stringify(snap.history.slice(a, b));
+  const mentions = (st, key) => new RegExp(`[:@]${key}(?=[:@]|$)`).test(st);
+  check("plan edit: there is a grouped installation to keep (the fan's)", (beforeEdit.groups?.length ?? 0) > 0 && beforeEdit.history.some((st) => mentions(st, sata)));
+  await press(lab.getByRole("button", { name: P.editBuild, exact: true }));
+  await page.waitForSelector("#planner-title");
+  await press(page.getByRole("tab", { name: P.categories.storage, exact: true }));
+  await press(page.locator("#planner-catalog article").filter({ has: page.getByRole("heading", { name: /870 EVO/ }) }).first().getByRole("button", { name: new RegExp(`^${escape(P.removeFromBuild)} `) }));
+  await press(page.getByRole("button", { name: P.start, exact: true }));
+  await page.waitForSelector("canvas");
+  await settle(4000);
+  const afterEdit = await snapshot();
+  check("plan edit: the removed drive's steps leave the progress", !afterEdit.history.some((st) => mentions(st, sata)), afterEdit.history.filter((st) => mentions(st, sata)).join());
+  check("plan edit: the untouched installation is still one action with the same steps", JSON.stringify((afterEdit.groups ?? []).map((g) => steps(afterEdit, g))) === JSON.stringify(beforeEdit.groups.map((g) => steps(beforeEdit, g))), JSON.stringify({ before: beforeEdit.groups, after: afterEdit.groups }));
+  const lastGroup = afterEdit.groups.at(-1);
+  if (lastGroup[1] === afterEdit.history.length) {
+    await press(card.getByRole("button", { name: T.undo, exact: true }));
+    check("plan edit: one Undo still takes that installation back whole", (await snapshot()).history.length === lastGroup[0]);
+  } else console.log(`NOTE plan edit: ${afterEdit.history.length - lastGroup[1]} single step(s) after the group; whole-group Undo not exercised here`);
 
   // ---- The practice build (/pc?practice=1): layout, and guidance that follows the one-click plan ----
   await page.goto(`${base}/pc?practice=1`);

@@ -20,8 +20,11 @@ The repository and hosting identifiers remain `talal-claude`; saved-data keys ar
   the step-by-step controls, decision 15). Places: memory by the board manual's population, M.2/bay/fan by the plan's place,
   else the first free fitting one; the learner may choose another.
 - Saves: optional `groups` ([start, end) ranges) in the snapshot; one Undo takes back a whole group; a single step after it is
-  undone alone first. Groups are remapped when `part:` steps are filtered out, dropped when a migration rewrites the history, and a
-  malformed list is dropped without rejecting the save. Saves without groups behave as before; older code ignores the field.
+  undone alone first. When steps leave the history (a `part:` step removed, or the plan edited in the planner: `rebaseProgress` and
+  `snapshotFromHistory`), an installation that keeps every one of its steps stays one action at its new place, and one that lost a step
+  is no longer grouped (`survivingGroups`, which reads stored groups with the same `parseGroups` check as loading a save, so malformed
+  metadata is dropped and never stops Start assembly). Groups are dropped when a migration rewrites the history, and a malformed list is dropped
+  without rejecting the save. Saves without groups behave as before; older code ignores the field.
 - Page: the sidebar card (selected part, status ready/installing/installed/blocked, place chips with "recommended", "Required
   first" vs "Tip", Install selected part, Undo, robot/motion/RGB) replaces the toolbar above the view. Parts list directly under the
   card; robot, modes and power below it. Desktop: sidebar physically left in EN and AR (grid areas; Arabic content stays RTL),
@@ -33,31 +36,41 @@ The repository and hosting identifiers remain `talal-claude`; saved-data keys ar
 
 **Codex review findings fixed in this round:** pump-only AIO success removed; strict all-parts tests; 430 px grid regression
 (`.viewer` kept its named area); resume/next/help pointed at manual steps; desktop parts list started below the view; robot place
-names stayed in the previous language after switching.
+names stayed in the previous language after switching; grouped Undo lost after editing the plan; malformed stored group metadata could break Start assembly.
 
 **Verification (actual).**
 - `npm run type-check`, `npm run check:messages`, `git diff --check`, `npm run build`: passed. Vitest `apps/web packages content`:
-  **89 files, 1150 passed, 21 skipped** (skips: unconfigured DB/provider). New `one-click.test.ts`: 23 (whole fitting per part type,
+  **89 files, 1152 passed, 21 skipped** (skips: unconfigured DB/provider). New `one-click.test.ts`: 25 (whole fitting per part type,
   continuing a hand-started fitting, recommended memory slots, taken places, contact-frame direction, retention ring, refusals with no
   mutation, AIO blocked before the board and by the case fan, full AIO action and Undo, grouped Undo/reload/older saves/malformed
-  groups/remapping, and every part of five valid builds in the guide's order with no refusal except the named case fan).
-- Browser, real input on production build **`i6E_cFaNPaGOtAjWTUkmk`** (own server, port 3031), script
-  `docs/handoff/2026-11-28/acceptance/one-click.mjs`: **EN 1440 199/0, AR 1440 199/0, EN 430 196/0, AR 430 196/0** (790 passed, 0 failed).
+  groups/remapping, plan edits keeping or dropping whole installations, malformed stored metadata through rebase and Start, and every
+  part of five valid builds in the guide's order with no refusal except the named case fan).
+- Browser **matrix**, real input on production build **`XUNzlQUOqHsdqY-cc2WY5`** (own server, port 3031), script
+  `docs/handoff/2026-11-28/acceptance/one-click.mjs`: **EN 1440 202/0, AR 1440 202/0, EN 430 199/0, AR 430 199/0** (802 passed, 0 failed).
   Covers planner storage add/remove, layout rectangles (desktop left of the view; phone full-width stack without overlap), the last
   part reachable with view and card visible, blocked prerequisite with no change, every part by one click with one group each and no
   lead connected, camera unchanged by selecting/installing/choosing a place/Undo, place choice, double click, Undo, reload, an older
   save without groups, removal and a lead by their existing controls, RGB, orbit/vertical/pan/zoom/focus/reset with no recorded step,
   language switch both ways, the practice build's resume/What next/Help, and its liquid cooler (blocked before the board and by its
-  front fan with no change, the fan out by its own controls, then one action, Undo, reload).
+  front fan with no change, the fan out by its own controls, then one action, Undo, reload), and an edit in the planner (the removed
+  drive's steps leave; the untouched installation keeps the same steps as one action).
   The 430 px runs use Chromium touch emulation: **not a physical phone**.
-- Final code differs from the tested build only in comments and docs: rebuilt as `mMoCDm0tpIYeBiGmvFA7Z`, all 56 client static chunks
-  have the same SHA-256 (`evidence/build-i6E_cFaNPaGOtAjWTUkmk/chunks-*.txt`); server output not compared.
-- Harness failures kept apart (`evidence/build-i6E_cFaNPaGOtAjWTUkmk/harness-failed/`, `evidence/earlier-builds/`): tab after
-  reload, reselecting the fan, a "Settings" button sharing the locale-switch class, a view rectangle measured before a scroll. Earlier
-  builds `oP-ZFLvYPpLDicEZ9pYD5` and `qwk4gMTGMDVKoGM5dSw5g` were superseded after Codex's findings.
+- **Final build `esMaE-ShynIKrPgKJVkBf`, targeted** (`acceptance/planner-start.mjs`): the only product change from the matrix build is the
+  stored-groups guard. Start assembly with an unchanged plan keeps both installations as one Undo each, also after reload; four kinds of
+  malformed stored groups are dropped at Start with every step kept and Undo then one step: **EN 1440 10/0, AR 430 10/0**. The full matrix
+  was not repeated on this build. Codex independently checked the unchanged-plan path in the UI on `XUNzlQUOqHsdqY-cc2WY5`.
+- Harness failures kept apart (`evidence/*/harness-failed/`, `evidence/earlier-builds/`): tab after reload, reselecting the fan, a
+  "Settings" button sharing the locale-switch class, a view rectangle measured before a scroll, a plan-edit check placed after groups
+  were deliberately removed, tapping an already selected tile. Earlier builds `oP-ZFLvYPpLDicEZ9pYD5`, `qwk4gMTGMDVKoGM5dSw5g` and
+  `i6E_cFaNPaGOtAjWTUkmk` (previous matrix 790/0) were superseded after Codex's findings.
 
-**Limits / not verified.** No physical phone/tablet. Deployed preview: see the commit's Vercel status; not verified unless stated
-in the report. Editing the plan rebases progress without groups (Undo then goes step by step for earlier installs). An engine refusal
+- Deployed preview (Codex, owner's existing native Chrome session, protection unchanged): Vercel deployment
+  `2kSBDdywoFbSJJKkYAXQRreimUbW` showed Ready/Latest, Preview, source **`b6e7eca`**; the branch URL's `/pc` opened the app and the 3D
+  scene rendered. Practice build: i5 installed by one click (1/8), one Undo (0/8, CPU back), reload (0/8, CPU still selected, resume says
+  Install), EN→AR (localized socket name, sidebar physically left). This is a **bounded smoke check of `b6e7eca`**: it predates the
+  plan-edit grouping fix below and is not a remote run of the browser matrix.
+
+**Limits / not verified.** No physical phone/tablet. The deployed preview of the final commit is not yet re-checked. An engine refusal
 quoted by the robot stays in the language it was said in. In Arabic the site's floating Help button sits over the sidebar's lower-left
 corner (its existing position; the list scrolls past it). The 400-step save limit is unchanged. No `main` merge or production release.
 

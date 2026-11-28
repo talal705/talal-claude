@@ -59,12 +59,12 @@ export function PcBuilder({ aiConfigured = false }: { aiConfigured?: boolean }) 
     if (!checkBuildPlan(build.parts).ready) return;
     let next: ReturnType<typeof planModel>;
     try { next = planModel(build); } catch { setNotice(t("cannotAssemble")); return; }
-    const progress = read(PLAN_PROGRESS_KEY) as { version?: number; placed: string[]; connected: string[]; history: string[]; powered: boolean } | null;
+    const progress = read(PLAN_PROGRESS_KEY) as { version?: number; placed: string[]; connected: string[]; history: string[]; powered: boolean; groups?: unknown } | null;
     if (assembled && progress?.version === 4 && Array.isArray(progress.history) && progress.history.length > 0) {
       // Same page, other parts: keep every step the change does not affect.
       const r = rebaseProgress({ ...progress, powered: false }, planModel(assembled), next);
       activateSimpleModel(next);
-      const kept = snapshotFromHistory(r.history);
+      const kept = snapshotFromHistory(r.history, r.groups);
       write(PLAN_PROGRESS_KEY, kept);
       const undone = progress.history.length - kept.history.length;
       setNotice(undone > 0 ? t("progressKept", { kept: kept.history.length, undone }) : null);
