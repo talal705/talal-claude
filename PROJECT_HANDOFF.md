@@ -4,7 +4,7 @@ Current site brand: **بيئة التدريب الافتراضية (VTE)** in Ar
 **Virtual Training Environment (VTE)** in English. Older references below use the former name.
 The repository and hosting identifiers remain `talal-claude`; saved-data keys are unchanged.
 
-## One-click installation, left sidebar, free camera — Claude, 2026-11-28 (Codex reviewing; not merged)
+## One-click installation, left sidebar, free camera — Claude and Codex, 2026-11-28 (review complete; not merged)
 
 **Branch** `feat/one-click-install`, from production `main` at `1d744a3` (PR #6 merged by the owner). Owner decisions 23–25 in
 `docs/DECISIONS.md`; `CLAUDE.md` updated (one click supersedes "every educational step needs its own click").
@@ -70,7 +70,16 @@ names stayed in the previous language after switching; grouped Undo lost after e
   Install), EN→AR (localized socket name, sidebar physically left). This is a **bounded smoke check of `b6e7eca`**: it predates the
   plan-edit grouping fix below and is not a remote run of the browser matrix.
 
-**Limits / not verified.** No physical phone/tablet. The deployed preview of the final commit is not yet re-checked. An engine refusal
+**Final independent review.** Codex rechecked product commit **`fc9738f732a1108ecbe28d87178fbeea213d247a`**. Types, messages,
+whitespace and Vitest (1152 passed / 21 skipped) passed independently, as did all four tests in the two older preservation review configs.
+Vercel deployment `GjveCrReXr1cKK2hPDcQSWzCsXNu` visibly showed Ready/Latest, Preview, and that exact source commit. The protected
+branch URL opened through the owner's existing Chrome session without changing protection. On the deployed app: fresh Gaming plan,
+one-click CPU and RAM (2/9), Edit my build → Start assembly, one Undo removed the whole RAM action (1/9), then reload and one Undo
+removed the whole CPU action (0/9). Arabic messages named the whole undone part, selected parts and saved progress were correct,
+the sidebar was physically left, and the 3D scene rendered. This is a **bounded deployed smoke check**, not the full local matrix.
+See `docs/handoff/2026-11-28/CODEX_FINAL_REVIEW.md` for the review and release boundary. Claude acknowledged the result and stopped edits.
+
+**Limits / not verified.** No physical phone/tablet. An engine refusal
 quoted by the robot stays in the language it was said in. In Arabic the site's floating Help button sits over the sidebar's lower-left
 corner (its existing position; the list scrolls past it). The 400-step save limit is unchanged. No `main` merge or production release.
 
